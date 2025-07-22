@@ -1,85 +1,158 @@
+"""Core HR models used throughout the application."""
+
 from django.db import models
 from django.core.exceptions import ValidationError
 
 
 class Company(models.Model):
-    """A company entity"""
+    """Registered company."""
 
-    name = models.CharField(max_length=255)
+    name = models.CharField(
+        max_length=255,
+        help_text="Official company name",
+    )
+
+    class Meta:
+        verbose_name_plural = "companies"
 
     def __str__(self) -> str:
         return self.name
 
 
 class Branch(models.Model):
-    """Company branch"""
+    """Individual branch office of a company."""
 
-    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="branches")
-    name = models.CharField(max_length=255)
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="branches",
+    )
+    name = models.CharField(
+        max_length=255,
+        help_text="Branch office name",
+    )
+
+    class Meta:
+        verbose_name_plural = "branches"
 
     def __str__(self) -> str:
         return self.name
 
 
 class Designation(models.Model):
-    """Job designation tied to a company"""
+    """Job title defined per company."""
 
-    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="designations")
-    name = models.CharField(max_length=100)
-    level = models.PositiveIntegerField(null=True, blank=True)
-    description = models.TextField(blank=True)
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="designations",
+    )
+    name = models.CharField(
+        max_length=100,
+        help_text="Job title name",
+    )
+    level = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Seniority level",
+    )
+    description = models.TextField(
+        blank=True,
+        help_text="Optional description of this designation",
+    )
 
     class Meta:
-        unique_together = ("company", "name")
+        unique_together = (("company", "name"),)
+        verbose_name_plural = "designations"
 
     def __str__(self) -> str:
         return self.name
 
 
 class TradeLicense(models.Model):
-    """Trade license for a branch"""
+    """Government trade license tied to a branch."""
 
-    branch = models.ForeignKey(Branch, on_delete=models.CASCADE, related_name="licenses")
-    license_no = models.CharField(max_length=100, unique=True)
-    issued_date = models.DateField()
-    expiry_date = models.DateField()
-    max_visas = models.PositiveIntegerField()
+    branch = models.ForeignKey(
+        Branch,
+        on_delete=models.CASCADE,
+        related_name="licenses",
+    )
+    license_no = models.CharField(
+        max_length=100,
+        unique=True,
+        help_text="Official license number",
+    )
+    issued_date = models.DateField(help_text="Date license was issued")
+    expiry_date = models.DateField(help_text="Date license expires")
+    max_visas = models.PositiveIntegerField(help_text="Maximum number of visa slots")
+
+    class Meta:
+        verbose_name = "trade license"
+        verbose_name_plural = "trade licenses"
 
     def clean(self):
+        """Validate logical consistency of license dates."""
         if self.expiry_date < self.issued_date:
-            raise ValidationError("expiry_date must be after issued_date")
+            raise ValidationError("Expiry date must be after issued date")
 
     def __str__(self) -> str:
         return self.license_no
 
 
 class Department(models.Model):
-    """Department within a branch"""
+    """Organizational department within a branch."""
 
-    branch = models.ForeignKey(Branch, on_delete=models.CASCADE, related_name="departments")
-    name = models.CharField(max_length=255)
+    branch = models.ForeignKey(
+        Branch,
+        on_delete=models.CASCADE,
+        related_name="departments",
+    )
+    name = models.CharField(
+        max_length=255,
+        help_text="Department name",
+    )
+
+    class Meta:
+        verbose_name_plural = "departments"
 
     def __str__(self) -> str:
         return self.name
 
 
 class Project(models.Model):
-    """Project under a branch"""
+    """Project carried out by a branch."""
 
-    branch = models.ForeignKey(Branch, on_delete=models.CASCADE, related_name="projects")
-    name = models.CharField(max_length=255)
-    start_date = models.DateField()
-    end_date = models.DateField(null=True, blank=True)
+    branch = models.ForeignKey(
+        Branch,
+        on_delete=models.CASCADE,
+        related_name="projects",
+    )
+    name = models.CharField(
+        max_length=255,
+        help_text="Project name",
+    )
+    start_date = models.DateField(help_text="Project start date")
+    end_date = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Project end date",
+    )
+
+    class Meta:
+        verbose_name_plural = "projects"
 
     def __str__(self) -> str:
         return self.name
 
 
 class Employee(models.Model):
-    """Employee belonging to a department or project"""
+    """Employee belonging to a department or a project."""
 
     trade_license = models.ForeignKey(
-        TradeLicense, on_delete=models.PROTECT, related_name="employees"
+        TradeLicense,
+        on_delete=models.PROTECT,
+        related_name="employees",
+        help_text="Visa license assigned",
     )
     department = models.ForeignKey(
         Department,
@@ -87,6 +160,7 @@ class Employee(models.Model):
         blank=True,
         on_delete=models.SET_NULL,
         related_name="employees",
+        help_text="Department assigned",
     )
     project = models.ForeignKey(
         Project,
@@ -94,6 +168,7 @@ class Employee(models.Model):
         blank=True,
         on_delete=models.SET_NULL,
         related_name="employees",
+        help_text="Project assigned",
     )
     designation = models.ForeignKey(
         Designation,
@@ -101,6 +176,7 @@ class Employee(models.Model):
         blank=True,
         on_delete=models.SET_NULL,
         related_name="employees",
+        help_text="Job designation",
     )
     first_name = models.CharField(max_length=255)
     last_name = models.CharField(max_length=255)
@@ -124,16 +200,17 @@ class Employee(models.Model):
                 name="employee_must_have_license",
             ),
         ]
+        verbose_name_plural = "employees"
 
     def clean(self):
         if not (bool(self.department) ^ bool(self.project)):
             raise ValidationError(
-                "Employee must belong to exactly one: department or project"
+                "Employee must belong to exactly one of department or project"
             )
         if self.trade_license.employees.count() >= self.trade_license.max_visas:
-            raise ValidationError("Visa quota for this license has been reached")
+            raise ValidationError("Visa quota reached")
         if self.designation and self.designation.company != self.trade_license.branch.company:
-            raise ValidationError("Designation must belong to the same company")
+            raise ValidationError("Designation must match company")
 
     def __str__(self) -> str:
         return f"{self.first_name} {self.last_name}"
