@@ -6,3 +6,4 @@ drf-spectacular
 django-environ
 django-grappelli
 psycopg2-binary
+pytest-django
