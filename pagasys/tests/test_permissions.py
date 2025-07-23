@@ -10,8 +10,27 @@ class BulkPermissionsTests(TestCase):
     def setUp(self):
         self.client = APIClient()
         User = get_user_model()
+        from pagasys.models import Company, Branch, Department, TradeLicense
+        company = Company.objects.create(name="C")
+        branch = Branch.objects.create(company=company, name="B1")
+        department = Department.objects.create(branch=branch, name="D1")
+        license = TradeLicense.objects.create(
+            company=company,
+            license_no="L1",
+            issued_date="2024-01-01",
+            expiry_date="2025-01-01",
+            max_visas=10,
+        )
+        license.branches.set([branch])
         self.user = User.objects.create_user(
-            username="permuser", password="pass", is_staff=True, is_superuser=True
+            username="permuser",
+            password="pass",
+            is_staff=True,
+            is_superuser=True,
+            trade_license=license,
+            department=department,
+            hire_date="2024-01-01",
+            employment_type="permanent",
         )
         # Groups exist but user is not added to any
         for name in [

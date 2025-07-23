@@ -13,21 +13,6 @@ class OtherBulkActionsTests(TestCase):
     def setUp(self):
         self.client = APIClient()
         User = get_user_model()
-        self.user = User.objects.create_user(
-            username="bulkuser", password="pass", is_staff=True, is_superuser=True
-        )
-        groups = [
-            "Company Admin",
-            "Branch Manager",
-            "Department Manager",
-            "Project Manager",
-            "Payroll Manager",
-        ]
-        for name in groups:
-            grp, _ = Group.objects.get_or_create(name=name)
-            self.user.groups.add(grp)
-        self.client.force_authenticate(self.user)
-
         self.company = Company.objects.create(name="Acme")
         self.branch = Branch.objects.create(company=self.company, name="B1")
         self.department = Department.objects.create(branch=self.branch, name="D1")
@@ -41,6 +26,29 @@ class OtherBulkActionsTests(TestCase):
             max_visas=10,
         )
         self.license.branches.set([self.branch])
+
+        self.user = User.objects.create_user(
+            username="bulkuser",
+            password="pass",
+            is_staff=True,
+            is_superuser=True,
+            trade_license=self.license,
+            department=self.department,
+            hire_date="2024-01-01",
+            employment_type="permanent",
+        )
+        groups = [
+            "Company Admin",
+            "Branch Manager",
+            "Department Manager",
+            "Project Manager",
+            "Payroll Manager",
+        ]
+        for name in groups:
+            grp, _ = Group.objects.get_or_create(name=name)
+            self.user.groups.add(grp)
+        self.client.force_authenticate(self.user)
+
 
     def _run_crud_flow(self, base, model, create_payload, update_fields):
         initial = model.objects.count()
@@ -148,6 +156,8 @@ class OtherBulkActionsTests(TestCase):
     def test_employee_bulk_flow(self):
         create = [
             {
+                "username": "e1",
+                "password": "pass",
                 "trade_license": self.license.id,
                 "department": self.department.id,
                 "first_name": "A",
@@ -156,6 +166,8 @@ class OtherBulkActionsTests(TestCase):
                 "employment_type": "permanent",
             },
             {
+                "username": "e2",
+                "password": "pass",
                 "trade_license": self.license.id,
                 "department": self.department.id,
                 "first_name": "C",
