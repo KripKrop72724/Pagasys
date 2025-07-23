@@ -11,20 +11,24 @@ from .models import (
 )
 
 
+ROLE_PRIORITY = [
+    ("Company Admin", "company_admin"),
+    ("Payroll Manager", "payroll_manager"),
+    ("Branch Manager", "branch_manager"),
+    ("Department Manager", "department_manager"),
+    ("Project Manager", "project_manager"),
+    ("Employee", "employee"),
+]
+
+
 def user_role(user):
+    """Determine the highest priority role for a user."""
     if user.is_superuser:
         return "superuser"
-    groups = {g.name for g in user.groups.all()}
-    if "Company Admin" in groups:
-        return "company_admin"
-    if "Payroll Manager" in groups:
-        return "payroll_manager"
-    if "Branch Manager" in groups:
-        return "branch_manager"
-    if "Department Manager" in groups:
-        return "department_manager"
-    if "Project Manager" in groups:
-        return "project_manager"
+    user_groups = set(user.groups.values_list("name", flat=True))
+    for group_name, role in ROLE_PRIORITY:
+        if group_name in user_groups:
+            return role
     return "employee"
 
 

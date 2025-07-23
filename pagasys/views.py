@@ -9,7 +9,7 @@ from django_filters import rest_framework as filters
 
 from django.db import IntegrityError, models, transaction
 
-from .permissions import CustomObjectPermission
+from .permissions import CustomObjectPermission, GroupRequiredPermission
 from .utils import scope_queryset
 
 from .models import (
@@ -180,7 +180,8 @@ class CompanyViewSet(BulkCreateMixin, BulkUpdateMixin, BulkDeleteMixin, viewsets
 
     queryset = Company.objects.all()
     serializer_class = CompanySerializer
-    permission_classes = [IsAuthenticated, DjangoModelPermissions, CustomObjectPermission]
+    permission_classes = [IsAuthenticated, DjangoModelPermissions, GroupRequiredPermission, CustomObjectPermission]
+    required_groups = ["Super Admin"]
     filter_backends = [DjangoFilterBackend, OrderingFilter]
     filterset_fields = ["name"]
     ordering_fields = ["name"]
@@ -212,7 +213,8 @@ class BranchViewSet(BulkCreateMixin, BulkUpdateMixin, BulkDeleteMixin, viewsets.
 
     queryset = Branch.objects.all()
     serializer_class = BranchSerializer
-    permission_classes = [IsAuthenticated, DjangoModelPermissions, CustomObjectPermission]
+    permission_classes = [IsAuthenticated, DjangoModelPermissions, GroupRequiredPermission, CustomObjectPermission]
+    required_groups = ["Company Admin", "Super Admin"]
     filter_backends = [DjangoFilterBackend, OrderingFilter]
     filterset_fields = ["company", "name"]
     ordering_fields = ["name"]
@@ -244,7 +246,8 @@ class DesignationViewSet(BulkCreateMixin, BulkUpdateMixin, BulkDeleteMixin, view
 
     queryset = Designation.objects.all()
     serializer_class = DesignationSerializer
-    permission_classes = [IsAuthenticated, DjangoModelPermissions, CustomObjectPermission]
+    permission_classes = [IsAuthenticated, DjangoModelPermissions, GroupRequiredPermission, CustomObjectPermission]
+    required_groups = ["Company Admin", "Super Admin"]
     filter_backends = [DjangoFilterBackend, OrderingFilter]
     filterset_fields = ["company", "name", "level"]
     ordering_fields = ["name", "level"]
@@ -276,7 +279,8 @@ class TradeLicenseViewSet(BulkCreateMixin, BulkUpdateMixin, BulkDeleteMixin, vie
 
     queryset = TradeLicense.objects.all()
     serializer_class = TradeLicenseSerializer
-    permission_classes = [IsAuthenticated, DjangoModelPermissions, CustomObjectPermission]
+    permission_classes = [IsAuthenticated, DjangoModelPermissions, GroupRequiredPermission, CustomObjectPermission]
+    required_groups = ["Company Admin", "Super Admin"]
     filter_backends = [DjangoFilterBackend, OrderingFilter]
     filterset_fields = ["company", "branches", "license_no", "issued_date", "expiry_date"]
     ordering_fields = ["license_no", "issued_date", "expiry_date"]
@@ -308,7 +312,8 @@ class DepartmentViewSet(BulkCreateMixin, BulkUpdateMixin, BulkDeleteMixin, views
 
     queryset = Department.objects.all()
     serializer_class = DepartmentSerializer
-    permission_classes = [IsAuthenticated, DjangoModelPermissions, CustomObjectPermission]
+    permission_classes = [IsAuthenticated, DjangoModelPermissions, GroupRequiredPermission, CustomObjectPermission]
+    required_groups = ["Company Admin", "Branch Manager", "Super Admin"]
     filter_backends = [DjangoFilterBackend, OrderingFilter]
     filterset_fields = ["branch", "name"]
     ordering_fields = ["name"]
@@ -340,7 +345,8 @@ class ProjectViewSet(BulkCreateMixin, BulkUpdateMixin, BulkDeleteMixin, viewsets
 
     queryset = Project.objects.all()
     serializer_class = ProjectSerializer
-    permission_classes = [IsAuthenticated, DjangoModelPermissions, CustomObjectPermission]
+    permission_classes = [IsAuthenticated, DjangoModelPermissions, GroupRequiredPermission, CustomObjectPermission]
+    required_groups = ["Company Admin", "Branch Manager", "Super Admin"]
     filter_backends = [DjangoFilterBackend, OrderingFilter]
     filterset_fields = ["branch", "name", "start_date", "end_date"]
     ordering_fields = ["name", "start_date", "end_date"]
@@ -372,7 +378,16 @@ class EmployeeViewSet(BulkCreateMixin, BulkUpdateMixin, BulkDeleteMixin, viewset
 
     queryset = Employee.objects.all()
     serializer_class = EmployeeSerializer
-    permission_classes = [IsAuthenticated, DjangoModelPermissions, CustomObjectPermission]
+    permission_classes = [IsAuthenticated, DjangoModelPermissions, GroupRequiredPermission, CustomObjectPermission]
+    required_groups = [
+        "Company Admin",
+        "Branch Manager",
+        "Payroll Manager",
+        "Department Manager",
+        "Project Manager",
+        "Employee",
+        "Super Admin",
+    ]
     filter_backends = [DjangoFilterBackend, OrderingFilter]
     filterset_class = EmployeeFilter
     ordering_fields = ["first_name", "last_name", "hire_date"]
