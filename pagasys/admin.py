@@ -37,6 +37,17 @@ class ScopedAdminMixin:
         qs = scope_queryset(self.model.objects.filter(pk=obj.pk), request.user)
         return qs.exists()
 
+    def has_view_permission(self, request, obj=None):
+        """Restrict view access to objects within the user's scope."""
+        if not (
+            self._has_perm(request, "view") or self._has_perm(request, "change")
+        ):
+            return False
+        if obj is None:
+            return True
+        qs = scope_queryset(self.model.objects.filter(pk=obj.pk), request.user)
+        return qs.exists()
+
     def has_delete_permission(self, request, obj=None):
         if not self._has_perm(request, "delete"):
             return False
@@ -44,6 +55,14 @@ class ScopedAdminMixin:
             return True
         qs = scope_queryset(self.model.objects.filter(pk=obj.pk), request.user)
         return qs.exists()
+
+
+class ScopedInlineMixin:
+    """Mixin for inlines to apply the same queryset scoping."""
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        return scope_queryset(qs, request.user)
 
 @admin.register(Company)
 class CompanyAdmin(ScopedAdminMixin, admin.ModelAdmin):

@@ -3,8 +3,11 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.urls import reverse
 from django.core.management import call_command
+from django.test import RequestFactory
+from django.contrib import admin
 
 from pagasys.models import Company, Branch, Department, Project, TradeLicense
+from pagasys.admin import ScopedInlineMixin
 
 
 class AdminObjectPermissionTests(TestCase):
@@ -67,6 +70,18 @@ class AdminObjectPermissionTests(TestCase):
             employment_type="permanent",
         )
 
+        employee_group = Group.objects.get(name="Employee")
+        self.employee_staff = User.objects.create_user(
+            username="staffemp",
+            password="pass",
+            is_staff=True,
+            trade_license=self.lic1,
+            department=self.d1,
+            hire_date="2024-01-01",
+            employment_type="permanent",
+        )
+        self.employee_staff.groups.add(employee_group)
+
     def test_department_list_scoped(self):
         self.client.force_login(self.branch_manager)
         url = reverse("admin:pagasys_department_changelist")
@@ -109,3 +124,25 @@ class AdminObjectPermissionTests(TestCase):
         url = reverse("admin:pagasys_employee_delete", args=[self.emp1.id])
         res = self.client.get(url)
         self.assertNotEqual(res.status_code, 200)
+
+    def test_employee_view_permission_scoped(self):
+        self.client.force_login(self.employee_staff)
+        url = reverse("admin:pagasys_employee_change", args=[self.emp1.id])
+        res = self.client.get(url)
+        self.assertNotEqual(res.status_code, 200)
+        url = reverse("admin:pagasys_employee_change", args=[self.employee_staff.id])
+        res = self.client.get(url)
+        self.assertEqual(res.status_code, 200)
+
+    def test_inline_queryset_scoped(self):
+        class DeptInline(ScopedInlineMixin, admin.TabularInline):
+            model = Department
+
+        inline = DeptInline(Branch, admin.site)
+        factory = RequestFactory()
+        req = factory.get("/")
+        req.user = self.branch_manager
+
+        qs = inline.get_queryset(req)
+        self.assertIn(self.d1, qs)
+        self.assertNotIn(self.d2, qs)
