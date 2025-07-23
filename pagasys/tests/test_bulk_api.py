@@ -1,0 +1,58 @@
+from django.test import TestCase
+from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
+from rest_framework.test import APIClient
+
+from pagasys.models import Company
+
+
+class BulkActionsTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        User = get_user_model()
+        self.user = User.objects.create_user(
+            username="admin", password="pass", is_staff=True, is_superuser=True
+        )
+        group, _ = Group.objects.get_or_create(name="Company Admin")
+        self.user.groups.add(group)
+        self.client.force_authenticate(self.user)
+
+    def test_bulk_crud_flow(self):
+        create_payload = [{"name": "A"}, {"name": "B"}]
+        res = self.client.post("/api/companies/bulk/", create_payload, format="json")
+        self.assertEqual(res.status_code, 201)
+        ids = [item["id"] for item in res.data]
+        self.assertEqual(len(ids), 2)
+
+        update_payload = [
+            {"id": ids[0], "name": "A1"},
+            {"id": ids[1], "name": "B1"},
+        ]
+        res = self.client.patch(
+            "/api/companies/bulk-update/", update_payload, format="json"
+        )
+        self.assertEqual(res.status_code, 200)
+        names = [item["name"] for item in res.data]
+        self.assertEqual(names, ["A1", "B1"])
+
+        # missing id should error
+        res = self.client.patch(
+            "/api/companies/bulk-update/", [{"name": "bad"}], format="json"
+        )
+        self.assertEqual(res.status_code, 400)
+
+        # delete objects
+        res = self.client.post("/api/companies/bulk-delete/", ids, format="json")
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.data["deleted"], 2)
+        self.assertEqual(Company.objects.count(), 0)
+
+        # updating non-existent should 404
+        res = self.client.patch(
+            "/api/companies/bulk-update/", update_payload, format="json"
+        )
+        self.assertEqual(res.status_code, 404)
+
+        # non-list delete payload should error
+        res = self.client.post("/api/companies/bulk-delete/", {"id": 1}, format="json")
+        self.assertEqual(res.status_code, 400)

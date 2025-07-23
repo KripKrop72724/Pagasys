@@ -1,5 +1,11 @@
 from rest_framework import serializers
 
+
+class IdListSerializer(serializers.Serializer):
+    """Simple serializer for a list of integer IDs."""
+
+    ids = serializers.ListField(child=serializers.IntegerField())
+
 from .models import (
     Company,
     Branch,

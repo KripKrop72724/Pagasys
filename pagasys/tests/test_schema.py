@@ -39,3 +39,14 @@ class OpenAPISchemaTests(TestCase):
         self.assertIn('ordering', param_names)
         self.assertIn('page', param_names)
         self.assertIn('company', param_names)
+
+    def test_bulk_paths_present(self):
+        response = self.client.get('/api/schema/', HTTP_ACCEPT='application/json')
+        import json
+        data = json.loads(response.content)
+        self.assertIn('/api/companies/bulk/', data['paths'])
+        self.assertIn('post', data['paths']['/api/companies/bulk/'])
+        self.assertIn('/api/companies/bulk-update/', data['paths'])
+        self.assertIn('patch', data['paths']['/api/companies/bulk-update/'])
+        self.assertIn('/api/companies/bulk-delete/', data['paths'])
+        self.assertIn('post', data['paths']['/api/companies/bulk-delete/'])
