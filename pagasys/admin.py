@@ -22,6 +22,29 @@ class ScopedAdminMixin:
         qs = super().get_queryset(request)
         return scope_queryset(qs, request.user)
 
+    def _has_perm(self, request, action):
+        """Check the user's model permission for the given action."""
+        return request.user.has_perm(f"{self.opts.app_label}.{action}_{self.opts.model_name}")
+
+    def has_add_permission(self, request):
+        return self._has_perm(request, "add")
+
+    def has_change_permission(self, request, obj=None):
+        if not self._has_perm(request, "change"):
+            return False
+        if obj is None:
+            return True
+        qs = scope_queryset(self.model.objects.filter(pk=obj.pk), request.user)
+        return qs.exists()
+
+    def has_delete_permission(self, request, obj=None):
+        if not self._has_perm(request, "delete"):
+            return False
+        if obj is None:
+            return True
+        qs = scope_queryset(self.model.objects.filter(pk=obj.pk), request.user)
+        return qs.exists()
+
 @admin.register(Company)
 class CompanyAdmin(ScopedAdminMixin, admin.ModelAdmin):
     pass
