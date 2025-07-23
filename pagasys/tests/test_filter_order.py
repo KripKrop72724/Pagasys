@@ -28,6 +28,18 @@ class EmployeeFilteringOrderingTests(TestCase):
         )
         self.license.branches.set([self.branch])
 
+        self.other_company = Company.objects.create(name="OtherCo")
+        other_branch = Branch.objects.create(company=self.other_company, name="OB1")
+        other_dept = Department.objects.create(branch=other_branch, name="OD1")
+        self.other_license = TradeLicense.objects.create(
+            company=self.other_company,
+            license_no="LICO",
+            issued_date="2024-01-01",
+            expiry_date="2025-01-01",
+            max_visas=10,
+        )
+        self.other_license.branches.set([other_branch])
+
         ca_group = Group.objects.get(name="Company Admin")
         self.user = User.objects.create_user(
             username="ca",
@@ -57,6 +69,30 @@ class EmployeeFilteringOrderingTests(TestCase):
         self.emp_b = make_emp("b", self.dept2, "Bob", "Yellow", "2024-01-03")
         self.emp_c = make_emp("c", self.dept2, "Carol", "Xavier", "2024-01-01")
 
+        self.temp_emp = User.objects.create_user(
+            username="temp",
+            password="pass",
+            trade_license=self.license,
+            department=self.dept1,
+            designation=self.designation,
+            first_name="Temp",
+            last_name="Worker",
+            hire_date="2024-02-01",
+            employment_type="temporary",
+        )
+
+        self.other_emp = User.objects.create_user(
+            username="other",
+            password="pass",
+            trade_license=self.other_license,
+            department=other_dept,
+            designation=self.designation,
+            first_name="Other",
+            last_name="Company",
+            hire_date="2024-01-10",
+            employment_type="permanent",
+        )
+
     def _get_ids(self, res):
         return [obj["id"] for obj in res.data["results"]]
 
@@ -73,7 +109,16 @@ class EmployeeFilteringOrderingTests(TestCase):
         res = self.client.get(f"/api/employees/?branch={self.branch.id}")
         self.assertEqual(res.status_code, 200)
         ids = set(self._get_ids(res))
-        self.assertEqual(ids, {self.emp_a.id, self.emp_b.id, self.emp_c.id, self.user.id})
+        self.assertEqual(
+            ids,
+            {
+                self.emp_a.id,
+                self.emp_b.id,
+                self.emp_c.id,
+                self.temp_emp.id,
+                self.user.id,
+            },
+        )
 
     def test_invalid_filter_returns_empty(self):
         self.client.force_authenticate(self.user)
@@ -85,4 +130,34 @@ class EmployeeFilteringOrderingTests(TestCase):
         res = self.client.get("/api/employees/?ordering=last_name,-hire_date")
         self.assertEqual(res.status_code, 200)
         ids = [i for i in self._get_ids(res) if i != self.user.id]
-        self.assertEqual(ids, [self.emp_c.id, self.emp_b.id, self.emp_a.id])
+        self.assertEqual(
+            ids,
+            [
+                self.temp_emp.id,
+                self.emp_c.id,
+                self.emp_b.id,
+                self.emp_a.id,
+            ],
+        )
+
+    def test_filter_by_employment_type(self):
+        self.client.force_authenticate(self.user)
+        res = self.client.get("/api/employees/?employment_type=temporary")
+        self.assertEqual(res.status_code, 200)
+        ids = set(self._get_ids(res))
+        self.assertEqual(ids, {self.temp_emp.id})
+
+    def test_filter_by_company(self):
+        self.client.force_authenticate(self.user)
+        url = f"/api/employees/?trade_license__company={self.company.id}"
+        res = self.client.get(url)
+        self.assertEqual(res.status_code, 200)
+        ids = set(self._get_ids(res))
+        expected = {
+            self.user.id,
+            self.emp_a.id,
+            self.emp_b.id,
+            self.emp_c.id,
+            self.temp_emp.id,
+        }
+        self.assertEqual(ids, expected)
