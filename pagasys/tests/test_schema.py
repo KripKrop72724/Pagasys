@@ -72,3 +72,30 @@ class OpenAPISchemaTests(TestCase):
         del_schema = data['components']['schemas'][ref.split('/')[-1]]
         self.assertIn('deleted', del_schema['properties'])
         self.assertIn('errors', del_schema['properties'])
+
+    def test_model_field_definitions_sync(self):
+        """Schema components should mirror serializer fields for all models."""
+        response = self.client.get('/api/schema/', HTTP_ACCEPT='application/json')
+        self.assertEqual(response.status_code, 200)
+        import json
+        data = json.loads(response.content)
+
+        from pagasys import serializers as s
+
+        serializer_classes = [
+            s.CompanySerializer,
+            s.BranchSerializer,
+            s.DesignationSerializer,
+            s.TradeLicenseSerializer,
+            s.DepartmentSerializer,
+            s.ProjectSerializer,
+            s.EmployeeSerializer,
+        ]
+
+        for cls in serializer_classes:
+            with self.subTest(serializer=cls.__name__):
+                ser_fields = set(cls().get_fields().keys())
+                schema_fields = set(
+                    data['components']['schemas'][cls.Meta.model.__name__]['properties'].keys()
+                )
+                self.assertEqual(schema_fields, ser_fields)
