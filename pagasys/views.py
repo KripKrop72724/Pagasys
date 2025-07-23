@@ -101,12 +101,23 @@ class BulkDeleteMixin:
         if not isinstance(request.data, list):
             return Response({"detail": "Expected a list of IDs."}, status=status.HTTP_400_BAD_REQUEST)
 
-        ids = [id_ for id_ in request.data if id_ is not None]
+        ids = []
+        errors = []
+        for raw in request.data:
+            if raw is None:
+                continue
+            try:
+                int_id = int(raw)
+            except (TypeError, ValueError):
+                errors.append({"id": raw, "errors": ["Invalid id."]})
+                continue
+            ids.append(int_id)
+
         queryset = self.get_queryset().filter(id__in=ids)
         found_ids = list(queryset.values_list("id", flat=True))
         deleted, _ = queryset.delete()
         missing = [i for i in ids if i not in found_ids]
-        errors = [{"id": i, "errors": ["Not found."]} for i in missing]
+        errors += [{"id": i, "errors": ["Not found."]} for i in missing]
         status_code = status.HTTP_207_MULTI_STATUS if errors else status.HTTP_200_OK
         return Response({"deleted": deleted, "errors": errors}, status=status_code)
 
