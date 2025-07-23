@@ -21,7 +21,7 @@ class BulkActionsTests(TestCase):
         create_payload = [{"name": "A"}, {"name": "B"}]
         res = self.client.post("/api/companies/bulk/", create_payload, format="json")
         self.assertEqual(res.status_code, 201)
-        ids = [item["id"] for item in res.data]
+        ids = [item["id"] for item in res.data["created"]]
         self.assertEqual(len(ids), 2)
 
         update_payload = [
@@ -32,14 +32,15 @@ class BulkActionsTests(TestCase):
             "/api/companies/bulk-update/", update_payload, format="json"
         )
         self.assertEqual(res.status_code, 200)
-        names = [item["name"] for item in res.data]
+        names = [item["name"] for item in res.data["updated"]]
         self.assertEqual(names, ["A1", "B1"])
 
         # missing id should error
         res = self.client.patch(
             "/api/companies/bulk-update/", [{"name": "bad"}], format="json"
         )
-        self.assertEqual(res.status_code, 400)
+        self.assertEqual(res.status_code, 207)
+        self.assertEqual(len(res.data["errors"]), 1)
 
         # delete objects
         res = self.client.post("/api/companies/bulk-delete/", ids, format="json")
@@ -51,7 +52,8 @@ class BulkActionsTests(TestCase):
         res = self.client.patch(
             "/api/companies/bulk-update/", update_payload, format="json"
         )
-        self.assertEqual(res.status_code, 404)
+        self.assertEqual(res.status_code, 207)
+        self.assertEqual(len(res.data["errors"]), 2)
 
         # non-list delete payload should error
         res = self.client.post("/api/companies/bulk-delete/", {"id": 1}, format="json")
