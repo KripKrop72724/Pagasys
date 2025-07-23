@@ -3,7 +3,11 @@ from rest_framework.permissions import IsAuthenticated, DjangoModelPermissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.filters import OrderingFilter
-from drf_spectacular.utils import extend_schema, extend_schema_view
+from drf_spectacular.utils import (
+    extend_schema,
+    extend_schema_view,
+    OpenApiParameter,
+)
 from django_filters.rest_framework import DjangoFilterBackend
 from django_filters import rest_framework as filters
 
@@ -161,6 +165,22 @@ class EmployeeFilter(filters.FilterSet):
 
 
 @extend_schema_view(
+    list=extend_schema(
+        parameters=[
+            OpenApiParameter(
+                "name",
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description="Filter by company name",
+            ),
+            OpenApiParameter(
+                "ordering",
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description="Comma-separated list of fields to sort by",
+            ),
+        ]
+    ),
     bulk_create=extend_schema(
         request=CompanySerializer(many=True),
         responses=bulk_create_response_serializer(CompanySerializer),
@@ -194,6 +214,28 @@ class CompanyViewSet(BulkCreateMixin, BulkUpdateMixin, BulkDeleteMixin, viewsets
 
 
 @extend_schema_view(
+    list=extend_schema(
+        parameters=[
+            OpenApiParameter(
+                "company",
+                type=int,
+                location=OpenApiParameter.QUERY,
+                description="ID of the company to filter by",
+            ),
+            OpenApiParameter(
+                "name",
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description="Filter by branch name",
+            ),
+            OpenApiParameter(
+                "ordering",
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description="Comma-separated list of fields to sort by",
+            ),
+        ]
+    ),
     bulk_create=extend_schema(
         request=BranchSerializer(many=True),
         responses=bulk_create_response_serializer(BranchSerializer),
@@ -227,6 +269,34 @@ class BranchViewSet(BulkCreateMixin, BulkUpdateMixin, BulkDeleteMixin, viewsets.
 
 
 @extend_schema_view(
+    list=extend_schema(
+        parameters=[
+            OpenApiParameter(
+                "company",
+                type=int,
+                location=OpenApiParameter.QUERY,
+                description="ID of the company to filter by",
+            ),
+            OpenApiParameter(
+                "name",
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description="Filter by designation name",
+            ),
+            OpenApiParameter(
+                "level",
+                type=int,
+                location=OpenApiParameter.QUERY,
+                description="Filter by seniority level",
+            ),
+            OpenApiParameter(
+                "ordering",
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description="Comma-separated list of fields to sort by",
+            ),
+        ]
+    ),
     bulk_create=extend_schema(
         request=DesignationSerializer(many=True),
         responses=bulk_create_response_serializer(DesignationSerializer),
@@ -260,6 +330,46 @@ class DesignationViewSet(BulkCreateMixin, BulkUpdateMixin, BulkDeleteMixin, view
 
 
 @extend_schema_view(
+    list=extend_schema(
+        parameters=[
+            OpenApiParameter(
+                "company",
+                type=int,
+                location=OpenApiParameter.QUERY,
+                description="Company ID to filter by",
+            ),
+            OpenApiParameter(
+                "branches",
+                type=int,
+                location=OpenApiParameter.QUERY,
+                description="Branch ID that the license covers",
+            ),
+            OpenApiParameter(
+                "license_no",
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description="Filter by license number",
+            ),
+            OpenApiParameter(
+                "issued_date",
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description="Filter licenses issued on this date",
+            ),
+            OpenApiParameter(
+                "expiry_date",
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description="Filter licenses expiring on this date",
+            ),
+            OpenApiParameter(
+                "ordering",
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description="Comma-separated list of fields to sort by",
+            ),
+        ]
+    ),
     bulk_create=extend_schema(
         request=TradeLicenseSerializer(many=True),
         responses=bulk_create_response_serializer(TradeLicenseSerializer),
@@ -293,6 +403,28 @@ class TradeLicenseViewSet(BulkCreateMixin, BulkUpdateMixin, BulkDeleteMixin, vie
 
 
 @extend_schema_view(
+    list=extend_schema(
+        parameters=[
+            OpenApiParameter(
+                "branch",
+                type=int,
+                location=OpenApiParameter.QUERY,
+                description="ID of the branch to filter by",
+            ),
+            OpenApiParameter(
+                "name",
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description="Filter by department name",
+            ),
+            OpenApiParameter(
+                "ordering",
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description="Comma-separated list of fields to sort by",
+            ),
+        ]
+    ),
     bulk_create=extend_schema(
         request=DepartmentSerializer(many=True),
         responses=bulk_create_response_serializer(DepartmentSerializer),
@@ -326,6 +458,40 @@ class DepartmentViewSet(BulkCreateMixin, BulkUpdateMixin, BulkDeleteMixin, views
 
 
 @extend_schema_view(
+    list=extend_schema(
+        parameters=[
+            OpenApiParameter(
+                "branch",
+                type=int,
+                location=OpenApiParameter.QUERY,
+                description="ID of the branch to filter by",
+            ),
+            OpenApiParameter(
+                "name",
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description="Filter by project name",
+            ),
+            OpenApiParameter(
+                "start_date",
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description="Return projects starting on this date",
+            ),
+            OpenApiParameter(
+                "end_date",
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description="Return projects ending on this date",
+            ),
+            OpenApiParameter(
+                "ordering",
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description="Comma-separated list of fields to sort by",
+            ),
+        ]
+    ),
     bulk_create=extend_schema(
         request=ProjectSerializer(many=True),
         responses=bulk_create_response_serializer(ProjectSerializer),
@@ -359,6 +525,70 @@ class ProjectViewSet(BulkCreateMixin, BulkUpdateMixin, BulkDeleteMixin, viewsets
 
 
 @extend_schema_view(
+    list=extend_schema(
+        parameters=[
+            OpenApiParameter(
+                "trade_license",
+                type=int,
+                location=OpenApiParameter.QUERY,
+                description="Filter by trade license ID",
+            ),
+            OpenApiParameter(
+                "department",
+                type=int,
+                location=OpenApiParameter.QUERY,
+                description="Filter by department ID",
+            ),
+            OpenApiParameter(
+                "project",
+                type=int,
+                location=OpenApiParameter.QUERY,
+                description="Filter by project ID",
+            ),
+            OpenApiParameter(
+                "designation",
+                type=int,
+                location=OpenApiParameter.QUERY,
+                description="Filter by designation ID",
+            ),
+            OpenApiParameter(
+                "first_name",
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description="Match employees by first name",
+            ),
+            OpenApiParameter(
+                "last_name",
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description="Match employees by last name",
+            ),
+            OpenApiParameter(
+                "branch",
+                type=int,
+                location=OpenApiParameter.QUERY,
+                description="Employees assigned to this branch",
+            ),
+            OpenApiParameter(
+                "employment_type",
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description="permanent or temporary",
+            ),
+            OpenApiParameter(
+                "trade_license__company",
+                type=int,
+                location=OpenApiParameter.QUERY,
+                description="Filter employees by company ID",
+            ),
+            OpenApiParameter(
+                "ordering",
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description="Comma-separated list of fields to sort by",
+            ),
+        ]
+    ),
     bulk_create=extend_schema(
         request=EmployeeSerializer(many=True),
         responses=bulk_create_response_serializer(EmployeeSerializer),

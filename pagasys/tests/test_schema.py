@@ -99,3 +99,43 @@ class OpenAPISchemaTests(TestCase):
                     data['components']['schemas'][cls.Meta.model.__name__]['properties'].keys()
                 )
                 self.assertEqual(schema_fields, ser_fields)
+
+    def test_all_filter_parameters_documented(self):
+        """Ensure every list endpoint documents its filter parameters."""
+        response = self.client.get('/api/schema/', HTTP_ACCEPT='application/json')
+        import json
+        data = json.loads(response.content)
+
+        expected = {
+            '/api/companies/': ['name'],
+            '/api/branches/': ['company', 'name'],
+            '/api/designations/': ['company', 'name', 'level'],
+            '/api/licenses/': [
+                'company',
+                'branches',
+                'license_no',
+                'issued_date',
+                'expiry_date',
+            ],
+            '/api/departments/': ['branch', 'name'],
+            '/api/projects/': ['branch', 'name', 'start_date', 'end_date'],
+            '/api/employees/': [
+                'trade_license',
+                'department',
+                'project',
+                'designation',
+                'first_name',
+                'last_name',
+                'branch',
+                'employment_type',
+                'trade_license__company',
+            ],
+        }
+
+        for path, params in expected.items():
+            with self.subTest(path=path):
+                actual = [p['name'] for p in data['paths'][path]['get']['parameters']]
+                for name in params:
+                    self.assertIn(name, actual)
+                self.assertIn('ordering', actual)
+                self.assertIn('page', actual)
