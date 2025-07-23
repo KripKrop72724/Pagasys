@@ -198,6 +198,20 @@ class Employee(AbstractUser):
         help_text="Employment contract type",
     )
 
+    @property
+    def company(self):
+        """Convenience access to the employee's company."""
+        return self.trade_license.company
+
+    @property
+    def branch(self):
+        """Branch derived from department or project."""
+        if self.department:
+            return self.department.branch
+        if self.project:
+            return self.project.branch
+        return None
+
     class Meta:
         constraints = [
             models.CheckConstraint(
