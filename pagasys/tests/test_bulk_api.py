@@ -183,3 +183,23 @@ class BulkActionsTests(TestCase):
         self.assertEqual(len(res.data["updated"]), 0)
         self.assertEqual(len(res.data["errors"]), 1)
         self.assertIn("non_field_errors", res.data["errors"][0]["errors"])
+
+    def test_bulk_create_error_structure(self):
+        """Errors should include original data and field messages."""
+        payload = [{"name": "Valid"}, {}]
+        res = self.client.post("/api/companies/bulk/", payload, format="json")
+        self.assertEqual(res.status_code, 207)
+        err = res.data["errors"][0]
+        self.assertEqual(err["data"], {})
+        self.assertEqual(err["errors"], {"name": ["This field is required."]})
+
+    def test_bulk_update_error_structure(self):
+        """Update errors include the payload item that failed."""
+        payload = [{"name": "Missing id"}]
+        res = self.client.patch("/api/companies/bulk-update/", payload, format="json")
+        self.assertEqual(res.status_code, 207)
+        self.assertEqual(res.data["updated"], [])
+        self.assertEqual(len(res.data["errors"]), 1)
+        err = res.data["errors"][0]
+        self.assertEqual(err["data"], {"name": "Missing id"})
+        self.assertEqual(err["errors"], {"id": ["This field is required."]})
