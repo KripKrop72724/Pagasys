@@ -4,6 +4,8 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from drf_spectacular.utils import extend_schema, extend_schema_view
 
+from django.db import IntegrityError
+
 from .permissions import (
     IsBranchManager,
     IsCompanyAdmin,
@@ -50,7 +52,10 @@ class BulkCreateMixin:
         for item in request.data:
             ser = self.get_serializer(data=item)
             if ser.is_valid():
-                created_objs.append(ser.save())
+                try:
+                    created_objs.append(ser.save())
+                except IntegrityError as exc:
+                    errors.append({"data": item, "errors": {"non_field_errors": [str(exc)]}})
             else:
                 errors.append({"data": item, "errors": ser.errors})
 
@@ -70,11 +75,16 @@ class BulkUpdateMixin:
 
         updated_objs = []
         errors = []
+        seen = set()
         for item in request.data:
             obj_id = item.get("id")
             if obj_id is None:
                 errors.append({"data": item, "errors": {"id": ["This field is required."]}})
                 continue
+            if obj_id in seen:
+                errors.append({"data": item, "errors": {"id": ["Duplicate id."]}})
+                continue
+            seen.add(obj_id)
             try:
                 instance = self.get_queryset().get(id=obj_id)
             except self.get_queryset().model.DoesNotExist:
@@ -83,7 +93,10 @@ class BulkUpdateMixin:
 
             ser = self.get_serializer(instance, data=item, partial=True)
             if ser.is_valid():
-                updated_objs.append(ser.save())
+                try:
+                    updated_objs.append(ser.save())
+                except IntegrityError as exc:
+                    errors.append({"data": item, "errors": {"non_field_errors": [str(exc)]}})
             else:
                 errors.append({"data": item, "errors": ser.errors})
 

@@ -13,8 +13,10 @@ class BulkActionsTests(TestCase):
         self.user = User.objects.create_user(
             username="admin", password="pass", is_staff=True, is_superuser=True
         )
-        group, _ = Group.objects.get_or_create(name="Company Admin")
-        self.user.groups.add(group)
+        groups = ["Company Admin", "Branch Manager"]
+        for name in groups:
+            grp, _ = Group.objects.get_or_create(name=name)
+            self.user.groups.add(grp)
         self.client.force_authenticate(self.user)
 
     def test_bulk_crud_flow(self):
@@ -142,3 +144,42 @@ class BulkActionsTests(TestCase):
         self.assertEqual(res.data["updated"][0]["name"], "New")
         self.assertEqual(len(res.data["errors"]), 1)
         self.assertIn("name", res.data["errors"][0]["errors"])
+
+    def test_bulk_create_unique_conflict(self):
+        """Duplicate unique values in create payload should be reported."""
+        company = Company.objects.create(name="DupCo")
+        payload = [
+            {"company": company.id, "name": "Engineer"},
+            {"company": company.id, "name": "Engineer"},
+        ]
+        res = self.client.post("/api/designations/bulk/", payload, format="json")
+        self.assertEqual(res.status_code, 207)
+        self.assertEqual(len(res.data["created"]), 1)
+        self.assertEqual(len(res.data["errors"]), 1)
+        self.assertIn("non_field_errors", res.data["errors"][0]["errors"])
+
+    def test_bulk_update_duplicate_ids(self):
+        """Duplicate IDs in update payload should not crash and return error."""
+        c1 = Company.objects.create(name="C1")
+        payload = [
+            {"id": c1.id, "name": "A"},
+            {"id": c1.id, "name": "B"},
+        ]
+        res = self.client.patch("/api/companies/bulk-update/", payload, format="json")
+        self.assertEqual(res.status_code, 207)
+        self.assertEqual(len(res.data["updated"]), 1)
+        self.assertEqual(len(res.data["errors"]), 1)
+        self.assertIn("id", res.data["errors"][0]["errors"])
+
+    def test_bulk_update_unique_conflict(self):
+        """Updating to duplicate unique values should be reported."""
+        company = Company.objects.create(name="D")
+        from pagasys.models import Designation
+        d1 = Designation.objects.create(company=company, name="A")
+        d2 = Designation.objects.create(company=company, name="B")
+        update_payload = [{"id": d2.id, "name": "A"}]
+        res = self.client.patch("/api/designations/bulk-update/", update_payload, format="json")
+        self.assertEqual(res.status_code, 207)
+        self.assertEqual(len(res.data["updated"]), 0)
+        self.assertEqual(len(res.data["errors"]), 1)
+        self.assertIn("non_field_errors", res.data["errors"][0]["errors"])
