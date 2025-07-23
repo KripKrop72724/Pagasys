@@ -29,19 +29,22 @@ class ModelFactoryMixin:
 
     def create_license(
         self,
-        branch=None,
+        company=None,
+        branches=None,
         license_no="LIC",
         issued="2024-01-01",
         expiry="2025-01-01",
         max_visas=1,
     ):
-        return TradeLicense.objects.create(
-            branch=branch or self.branch,
+        lic = TradeLicense.objects.create(
+            company=company or self.company,
             license_no=license_no,
             issued_date=issued,
             expiry_date=expiry,
             max_visas=max_visas,
         )
+        lic.branches.set(branches or [self.branch])
+        return lic
 
     def create_department(self, branch=None, name="Dept"):
         return Department.objects.create(branch=branch or self.branch, name=name)
@@ -63,16 +66,18 @@ class ModelValidationTests(ModelFactoryMixin, TestCase):
         self.department = self.create_department(self.branch)
         self.project = self.create_project(self.branch)
         self.designation = self.create_designation(self.company, name="Engineer")
-        self.license = self.create_license(self.branch, license_no="LIC1", max_visas=1)
+        self.license = self.create_license(branches=[self.branch], license_no="LIC1", max_visas=1)
 
     def test_trade_license_date_validation(self):
         lic = TradeLicense(
-            branch=self.branch,
+            company=self.company,
             license_no="LICX",
             issued_date="2025-01-01",
             expiry_date="2024-01-01",
             max_visas=1,
         )
+        lic.save()
+        lic.branches.set([self.branch])
         with self.assertRaises(ValidationError):
             lic.full_clean()
 
@@ -134,10 +139,39 @@ class ModelValidationTests(ModelFactoryMixin, TestCase):
         with self.assertRaisesMessage(ValidationError, "Designation must match company"):
             emp.full_clean()
 
+    def test_employee_branch_must_be_covered(self):
+        other_branch = self.create_branch(self.company, name="B2")
+        dept = self.create_department(other_branch)
+        emp = Employee(
+            trade_license=self.license,
+            department=dept,
+            first_name="E",
+            last_name="F",
+            hire_date="2024-01-02",
+            employment_type="permanent",
+        )
+        with self.assertRaisesMessage(ValidationError, "not covered"):
+            emp.full_clean()
+
+    def test_employee_branch_covered_ok(self):
+        other_branch = self.create_branch(self.company, name="B2")
+        lic = self.create_license(branches=[self.branch, other_branch], license_no="LIC2")
+        dept = self.create_department(other_branch, name="Dept2")
+        emp = Employee(
+            trade_license=lic,
+            department=dept,
+            first_name="G",
+            last_name="H",
+            hire_date="2024-01-02",
+            employment_type="permanent",
+        )
+        # should not raise
+        emp.full_clean()
+
     def test_unique_constraints(self):
         with self.assertRaises(IntegrityError):
             with transaction.atomic():
-                self.create_license(self.branch, license_no="LIC1")
+                self.create_license(branches=[self.branch], license_no="LIC1")
 
         with self.assertRaises(IntegrityError):
             with transaction.atomic():
