@@ -1,3 +1,4 @@
+from functools import lru_cache
 from rest_framework import serializers
 
 
@@ -14,6 +15,7 @@ class IdListSerializer(serializers.Serializer):
     ids = serializers.ListField(child=serializers.IntegerField())
 
 
+@lru_cache()
 def bulk_create_response_serializer(item_serializer):
     """Factory for bulk-create response serializers."""
 
@@ -21,15 +23,22 @@ def bulk_create_response_serializer(item_serializer):
         created = item_serializer(many=True)
         errors = BulkErrorSerializer(many=True)
 
+        class Meta:
+            ref_name = f"{item_serializer.__name__}BulkCreateResponse"
+
     return BulkCreateResponse
 
 
+@lru_cache()
 def bulk_update_response_serializer(item_serializer):
     """Factory for bulk-update response serializers."""
 
     class BulkUpdateResponse(serializers.Serializer):
         updated = item_serializer(many=True)
         errors = BulkErrorSerializer(many=True)
+
+        class Meta:
+            ref_name = f"{item_serializer.__name__}BulkUpdateResponse"
 
     return BulkUpdateResponse
 
@@ -39,12 +48,16 @@ class BulkDeleteErrorSerializer(serializers.Serializer):
     errors = serializers.ListField(child=serializers.CharField())
 
 
+class BulkDeleteResponse(serializers.Serializer):
+    deleted = serializers.IntegerField()
+    errors = BulkDeleteErrorSerializer(many=True)
+
+    class Meta:
+        ref_name = "BulkDeleteResponse"
+
+
 def bulk_delete_response_serializer():
     """Serializer for bulk-delete results."""
-
-    class BulkDeleteResponse(serializers.Serializer):
-        deleted = serializers.IntegerField()
-        errors = BulkDeleteErrorSerializer(many=True)
 
     return BulkDeleteResponse
 
