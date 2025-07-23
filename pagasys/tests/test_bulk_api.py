@@ -58,3 +58,34 @@ class BulkActionsTests(TestCase):
         # non-list delete payload should error
         res = self.client.post("/api/companies/bulk-delete/", {"id": 1}, format="json")
         self.assertEqual(res.status_code, 400)
+
+    def test_bulk_create_partial_failures(self):
+        """Invalid objects in bulk create should return 207 with error details."""
+        payload = [{"name": "Valid"}, {}]
+        res = self.client.post("/api/companies/bulk/", payload, format="json")
+        self.assertEqual(res.status_code, 207)
+        self.assertEqual(len(res.data["created"]), 1)
+        self.assertEqual(res.data["created"][0]["name"], "Valid")
+        self.assertEqual(len(res.data["errors"]), 1)
+        self.assertIn("name", res.data["errors"][0]["errors"])
+
+    def test_bulk_delete_missing_ids(self):
+        """Deleting with non-existent ids should still succeed for existing ones."""
+        c1 = Company.objects.create(name="DelA")
+        payload = [c1.id, 9999]
+        res = self.client.post("/api/companies/bulk-delete/", payload, format="json")
+        self.assertEqual(res.status_code, 207)
+        self.assertEqual(res.data["deleted"], 1)
+        self.assertEqual(len(res.data["errors"]), 1)
+        self.assertEqual(res.data["errors"][0]["id"], 9999)
+
+    def test_non_list_payload_errors(self):
+        """Bulk actions require list payloads."""
+        res = self.client.post("/api/companies/bulk/", {"name": "X"}, format="json")
+        self.assertEqual(res.status_code, 400)
+        res = self.client.patch(
+            "/api/companies/bulk-update/",
+            {"id": 1, "name": "X"},
+            format="json",
+        )
+        self.assertEqual(res.status_code, 400)
