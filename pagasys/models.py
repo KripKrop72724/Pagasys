@@ -125,6 +125,7 @@ class Department(models.Model):
 
     class Meta:
         verbose_name_plural = "departments"
+        ordering = ["id"]
 
     def __str__(self) -> str:
         return self.name
