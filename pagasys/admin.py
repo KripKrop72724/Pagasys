@@ -2,6 +2,8 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 from django.contrib.auth.forms import UserCreationForm, UserChangeForm
 
+from .utils import scope_queryset
+
 from .models import (
     Company,
     Branch,
@@ -12,16 +14,46 @@ from .models import (
     Employee,
 )
 
-admin.site.register(Company)
-admin.site.register(Branch)
-admin.site.register(Designation)
-admin.site.register(TradeLicense)
-admin.site.register(Department)
-admin.site.register(Project)
+
+class ScopedAdminMixin:
+    """Limit admin querysets based on the logged-in user."""
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        return scope_queryset(qs, request.user)
+
+@admin.register(Company)
+class CompanyAdmin(ScopedAdminMixin, admin.ModelAdmin):
+    pass
+
+
+@admin.register(Branch)
+class BranchAdmin(ScopedAdminMixin, admin.ModelAdmin):
+    pass
+
+
+@admin.register(Designation)
+class DesignationAdmin(ScopedAdminMixin, admin.ModelAdmin):
+    pass
+
+
+@admin.register(TradeLicense)
+class TradeLicenseAdmin(ScopedAdminMixin, admin.ModelAdmin):
+    pass
+
+
+@admin.register(Department)
+class DepartmentAdmin(ScopedAdminMixin, admin.ModelAdmin):
+    pass
+
+
+@admin.register(Project)
+class ProjectAdmin(ScopedAdminMixin, admin.ModelAdmin):
+    pass
 
 
 @admin.register(Employee)
-class EmployeeAdmin(UserAdmin):
+class EmployeeAdmin(ScopedAdminMixin, UserAdmin):
     """Admin configuration for Employee model with password reset."""
 
     add_form = UserCreationForm

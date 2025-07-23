@@ -26,7 +26,7 @@ class BulkPermissionsTests(TestCase):
             username="permuser",
             password="pass",
             is_staff=True,
-            is_superuser=True,
+            is_superuser=False,
             trade_license=license,
             department=department,
             hire_date="2024-01-01",

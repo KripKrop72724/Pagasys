@@ -6,13 +6,8 @@ from drf_spectacular.utils import extend_schema, extend_schema_view
 
 from django.db import IntegrityError
 
-from .permissions import (
-    IsBranchManager,
-    IsCompanyAdmin,
-    IsPayrollManager,
-    IsDepartmentManager,
-    IsProjectManager,
-)
+from .permissions import CustomObjectPermission
+from .utils import scope_queryset
 
 from .models import (
     Company,
@@ -157,9 +152,13 @@ class CompanyViewSet(BulkCreateMixin, BulkUpdateMixin, BulkDeleteMixin, viewsets
 
     queryset = Company.objects.all()
     serializer_class = CompanySerializer
-    permission_classes = [IsAuthenticated, DjangoModelPermissions, IsCompanyAdmin]
+    permission_classes = [IsAuthenticated, DjangoModelPermissions, CustomObjectPermission]
     filterset_fields = ["name"]
     ordering_fields = ["name"]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        return scope_queryset(qs, self.request.user)
 
 
 @extend_schema_view(
@@ -184,9 +183,13 @@ class BranchViewSet(BulkCreateMixin, BulkUpdateMixin, BulkDeleteMixin, viewsets.
 
     queryset = Branch.objects.all()
     serializer_class = BranchSerializer
-    permission_classes = [IsAuthenticated, DjangoModelPermissions, IsBranchManager]
+    permission_classes = [IsAuthenticated, DjangoModelPermissions, CustomObjectPermission]
     filterset_fields = ["company", "name"]
     ordering_fields = ["name"]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        return scope_queryset(qs, self.request.user)
 
 
 @extend_schema_view(
@@ -211,9 +214,13 @@ class DesignationViewSet(BulkCreateMixin, BulkUpdateMixin, BulkDeleteMixin, view
 
     queryset = Designation.objects.all()
     serializer_class = DesignationSerializer
-    permission_classes = [IsAuthenticated, DjangoModelPermissions, IsCompanyAdmin]
+    permission_classes = [IsAuthenticated, DjangoModelPermissions, CustomObjectPermission]
     filterset_fields = ["company", "name", "level"]
     ordering_fields = ["name", "level"]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        return scope_queryset(qs, self.request.user)
 
 
 @extend_schema_view(
@@ -238,9 +245,13 @@ class TradeLicenseViewSet(BulkCreateMixin, BulkUpdateMixin, BulkDeleteMixin, vie
 
     queryset = TradeLicense.objects.all()
     serializer_class = TradeLicenseSerializer
-    permission_classes = [IsAuthenticated, DjangoModelPermissions, IsBranchManager]
+    permission_classes = [IsAuthenticated, DjangoModelPermissions, CustomObjectPermission]
     filterset_fields = ["company", "branches", "license_no", "issued_date", "expiry_date"]
     ordering_fields = ["license_no", "issued_date", "expiry_date"]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        return scope_queryset(qs, self.request.user)
 
 
 @extend_schema_view(
@@ -265,9 +276,13 @@ class DepartmentViewSet(BulkCreateMixin, BulkUpdateMixin, BulkDeleteMixin, views
 
     queryset = Department.objects.all()
     serializer_class = DepartmentSerializer
-    permission_classes = [IsAuthenticated, DjangoModelPermissions, IsDepartmentManager]
+    permission_classes = [IsAuthenticated, DjangoModelPermissions, CustomObjectPermission]
     filterset_fields = ["branch", "name"]
     ordering_fields = ["name"]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        return scope_queryset(qs, self.request.user)
 
 
 @extend_schema_view(
@@ -292,9 +307,13 @@ class ProjectViewSet(BulkCreateMixin, BulkUpdateMixin, BulkDeleteMixin, viewsets
 
     queryset = Project.objects.all()
     serializer_class = ProjectSerializer
-    permission_classes = [IsAuthenticated, DjangoModelPermissions, IsProjectManager]
+    permission_classes = [IsAuthenticated, DjangoModelPermissions, CustomObjectPermission]
     filterset_fields = ["branch", "name", "start_date", "end_date"]
     ordering_fields = ["name", "start_date", "end_date"]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        return scope_queryset(qs, self.request.user)
 
 
 @extend_schema_view(
@@ -319,7 +338,7 @@ class EmployeeViewSet(BulkCreateMixin, BulkUpdateMixin, BulkDeleteMixin, viewset
 
     queryset = Employee.objects.all()
     serializer_class = EmployeeSerializer
-    permission_classes = [IsAuthenticated, DjangoModelPermissions, IsPayrollManager]
+    permission_classes = [IsAuthenticated, DjangoModelPermissions, CustomObjectPermission]
     filterset_fields = [
         "trade_license",
         "department",
@@ -329,4 +348,8 @@ class EmployeeViewSet(BulkCreateMixin, BulkUpdateMixin, BulkDeleteMixin, viewset
         "last_name",
     ]
     ordering_fields = ["first_name", "last_name", "hire_date"]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        return scope_queryset(qs, self.request.user)
 

@@ -2,6 +2,17 @@ from rest_framework.permissions import BasePermission
 from django.contrib.auth.models import Group
 
 
+class CustomObjectPermission(BasePermission):
+    """Restrict object-level access based on scoped queryset."""
+
+    def has_permission(self, request, view):
+        return bool(request.user and request.user.is_authenticated)
+
+    def has_object_permission(self, request, view, obj):
+        qs = view.get_queryset()
+        return qs.filter(pk=getattr(obj, 'pk')).exists()
+
+
 class IsInGroup(BasePermission):
     """Base class to check if user belongs to a specific group."""
 
