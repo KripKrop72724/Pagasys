@@ -150,6 +150,8 @@ class EmployeeFilter(filters.FilterSet):
             "first_name",
             "last_name",
             "branch",
+            "employment_type",
+            "trade_license__company",
         ]
 
     def filter_branch(self, queryset, name, value):
