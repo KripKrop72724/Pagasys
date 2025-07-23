@@ -160,6 +160,24 @@ class EmployeeSerializer(serializers.ModelSerializer):
         }
 
     def validate(self, attrs):
-        instance = Employee(**attrs)
+        if self.instance is not None:
+            data = {f.name: getattr(self.instance, f.name) for f in Employee._meta.fields}
+            data.update(attrs)
+            instance = Employee(**data)
+        else:
+            instance = Employee(**attrs)
         instance.clean()
         return attrs
+
+    def create(self, validated_data):
+        password = validated_data.pop('password')
+        user = Employee.objects.create_user(password=password, **validated_data)
+        return user
+
+    def update(self, instance, validated_data):
+        password = validated_data.pop('password', None)
+        user = super().update(instance, validated_data)
+        if password:
+            user.set_password(password)
+            user.save()
+        return user

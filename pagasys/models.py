@@ -235,7 +235,8 @@ class Employee(AbstractUser):
             raise ValidationError(
                 "Employee must belong to exactly one of department or project"
             )
-        if self.trade_license.employees.count() >= self.trade_license.max_visas:
+        current = self.trade_license.employees.exclude(pk=self.pk).count()
+        if current >= self.trade_license.max_visas:
             raise ValidationError("Visa quota reached")
         if self.designation and self.designation.company != self.trade_license.company:
             raise ValidationError("Designation must match company")
@@ -253,3 +254,17 @@ class Employee(AbstractUser):
 
     def __str__(self) -> str:
         return f"{self.first_name} {self.last_name}"
+
+    def save(self, *args, **kwargs):
+        """Ensure visa quota checks are performed atomically."""
+        from django.db import transaction
+
+        with transaction.atomic():
+            lic = (
+                TradeLicense.objects.select_for_update()
+                .get(pk=self.trade_license_id)
+            )
+            current = lic.employees.exclude(pk=self.pk).count()
+            if current >= lic.max_visas:
+                raise ValidationError("Visa quota reached")
+            super().save(*args, **kwargs)
