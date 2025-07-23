@@ -10,8 +10,27 @@ class BulkActionsTests(TestCase):
     def setUp(self):
         self.client = APIClient()
         User = get_user_model()
+        from pagasys.models import Company, Branch, Department, TradeLicense
+        user_company = Company.objects.create(name="UserCo")
+        branch = Branch.objects.create(company=user_company, name="UB1")
+        department = Department.objects.create(branch=branch, name="UD1")
+        license = TradeLicense.objects.create(
+            company=user_company,
+            license_no="L1",
+            issued_date="2024-01-01",
+            expiry_date="2025-01-01",
+            max_visas=10,
+        )
+        license.branches.set([branch])
         self.user = User.objects.create_user(
-            username="admin", password="pass", is_staff=True, is_superuser=True
+            username="admin",
+            password="pass",
+            is_staff=True,
+            is_superuser=True,
+            trade_license=license,
+            department=department,
+            hire_date="2024-01-01",
+            employment_type="permanent",
         )
         groups = ["Company Admin", "Branch Manager"]
         for name in groups:
@@ -48,7 +67,7 @@ class BulkActionsTests(TestCase):
         res = self.client.post("/api/companies/bulk-delete/", ids, format="json")
         self.assertEqual(res.status_code, 200)
         self.assertEqual(res.data["deleted"], 2)
-        self.assertEqual(Company.objects.count(), 0)
+        self.assertEqual(Company.objects.count(), 1)
 
         # updating non-existent should 404
         res = self.client.patch(

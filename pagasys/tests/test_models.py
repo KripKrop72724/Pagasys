@@ -83,6 +83,8 @@ class ModelValidationTests(ModelFactoryMixin, TestCase):
 
     def test_employee_visa_quota_enforced(self):
         Employee.objects.create(
+            username="emp1",
+            password="pass",
             trade_license=self.license,
             department=self.department,
             first_name="A",
@@ -91,6 +93,8 @@ class ModelValidationTests(ModelFactoryMixin, TestCase):
             employment_type="permanent",
         )
         emp = Employee(
+            username="emp2",
+            password="pass",
             trade_license=self.license,
             department=self.department,
             first_name="C",
@@ -103,6 +107,8 @@ class ModelValidationTests(ModelFactoryMixin, TestCase):
 
     def test_department_project_exclusive(self):
         emp = Employee(
+            username="emp3",
+            password="pass",
             trade_license=self.license,
             department=self.department,
             project=self.project,
@@ -115,6 +121,8 @@ class ModelValidationTests(ModelFactoryMixin, TestCase):
             emp.full_clean()
 
         emp2 = Employee(
+            username="emp4",
+            password="pass",
             trade_license=self.license,
             first_name="C",
             last_name="D",
@@ -128,6 +136,8 @@ class ModelValidationTests(ModelFactoryMixin, TestCase):
         other_company = self.create_company("Other")
         wrong_des = self.create_designation(other_company, "OtherDes")
         emp = Employee(
+            username="emp5",
+            password="pass",
             trade_license=self.license,
             department=self.department,
             designation=wrong_des,
@@ -143,6 +153,8 @@ class ModelValidationTests(ModelFactoryMixin, TestCase):
         other_branch = self.create_branch(self.company, name="B2")
         dept = self.create_department(other_branch)
         emp = Employee(
+            username="emp6",
+            password="pass",
             trade_license=self.license,
             department=dept,
             first_name="E",
@@ -158,6 +170,8 @@ class ModelValidationTests(ModelFactoryMixin, TestCase):
         lic = self.create_license(branches=[self.branch, other_branch], license_no="LIC2")
         dept = self.create_department(other_branch, name="Dept2")
         emp = Employee(
+            username="emp7",
+            password="pass",
             trade_license=lic,
             department=dept,
             first_name="G",
@@ -182,6 +196,8 @@ class ModelValidationTests(ModelFactoryMixin, TestCase):
         with self.assertRaises(IntegrityError):
             with transaction.atomic():
                 Employee.objects.create(
+                    username="emp8",
+                    password="pass",
                     trade_license=self.license,
                     department=self.department,
                     project=self.project,
@@ -196,6 +212,8 @@ class ModelValidationTests(ModelFactoryMixin, TestCase):
                 Employee.objects.bulk_create(
                     [
                         Employee(
+                            username="emp9",
+                            password="pass",
                             trade_license=self.license,
                             first_name="Q",
                             last_name="W",

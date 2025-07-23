@@ -2,6 +2,7 @@
 
 from django.db import models
 from django.core.exceptions import ValidationError
+from django.contrib.auth.models import AbstractUser
 
 
 class Company(models.Model):
@@ -155,8 +156,9 @@ class Project(models.Model):
         return self.name
 
 
-class Employee(models.Model):
-    """Employee belonging to a department or a project."""
+
+class Employee(AbstractUser):
+    """User account combined with employment info."""
 
     trade_license = models.ForeignKey(
         TradeLicense,
@@ -188,8 +190,6 @@ class Employee(models.Model):
         related_name="employees",
         help_text="Job designation",
     )
-    first_name = models.CharField(max_length=255, help_text="Given name")
-    last_name = models.CharField(max_length=255, help_text="Family name")
     hire_date = models.DateField(help_text="Date hired")
     employment_type = models.CharField(
         max_length=20,
@@ -200,20 +200,21 @@ class Employee(models.Model):
     class Meta:
         constraints = [
             models.CheckConstraint(
-                condition=(
+                check=(
                     models.Q(department__isnull=False, project__isnull=True)
                     | models.Q(department__isnull=True, project__isnull=False)
                 ),
                 name="employee_one_of_dept_or_proj",
             ),
             models.CheckConstraint(
-                condition=~models.Q(trade_license=None),
+                check=~models.Q(trade_license=None),
                 name="employee_must_have_license",
             ),
         ]
         verbose_name_plural = "employees"
 
     def clean(self):
+        super().clean()
         if not (bool(self.department) ^ bool(self.project)):
             raise ValidationError(
                 "Employee must belong to exactly one of department or project"

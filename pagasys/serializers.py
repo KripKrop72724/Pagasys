@@ -133,9 +133,31 @@ class ProjectSerializer(serializers.ModelSerializer):
 class EmployeeSerializer(serializers.ModelSerializer):
     """Serializer for Employee"""
 
+    username = serializers.CharField(help_text="Login name")
+    password = serializers.CharField(write_only=True, help_text="Password")
+    first_name = serializers.CharField(required=False, allow_blank=True, help_text="Given name")
+    last_name = serializers.CharField(required=False, allow_blank=True, help_text="Family name")
+    email = serializers.EmailField(required=False, allow_blank=True, help_text="Email address")
+
     class Meta:
         model = Employee
-        fields = '__all__'
+        fields = [
+            'id',
+            'username',
+            'password',
+            'first_name',
+            'last_name',
+            'email',
+            'trade_license',
+            'department',
+            'project',
+            'designation',
+            'hire_date',
+            'employment_type',
+        ]
+        extra_kwargs = {
+            'password': {'write_only': True},
+        }
 
     def validate(self, attrs):
         instance = Employee(**attrs)
