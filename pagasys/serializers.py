@@ -1,10 +1,52 @@
 from rest_framework import serializers
 
 
+class BulkErrorSerializer(serializers.Serializer):
+    """Information about an object that failed validation."""
+
+    data = serializers.DictField()
+    errors = serializers.DictField()
+
+
 class IdListSerializer(serializers.Serializer):
     """Simple serializer for a list of integer IDs."""
 
     ids = serializers.ListField(child=serializers.IntegerField())
+
+
+def bulk_create_response_serializer(item_serializer):
+    """Factory for bulk-create response serializers."""
+
+    class BulkCreateResponse(serializers.Serializer):
+        created = item_serializer(many=True)
+        errors = BulkErrorSerializer(many=True)
+
+    return BulkCreateResponse
+
+
+def bulk_update_response_serializer(item_serializer):
+    """Factory for bulk-update response serializers."""
+
+    class BulkUpdateResponse(serializers.Serializer):
+        updated = item_serializer(many=True)
+        errors = BulkErrorSerializer(many=True)
+
+    return BulkUpdateResponse
+
+
+class BulkDeleteErrorSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    errors = serializers.ListField(child=serializers.CharField())
+
+
+def bulk_delete_response_serializer():
+    """Serializer for bulk-delete results."""
+
+    class BulkDeleteResponse(serializers.Serializer):
+        deleted = serializers.IntegerField()
+        errors = BulkDeleteErrorSerializer(many=True)
+
+    return BulkDeleteResponse
 
 from .models import (
     Company,
