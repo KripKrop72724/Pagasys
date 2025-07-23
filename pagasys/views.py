@@ -50,7 +50,10 @@ class BulkCreateMixin:
         for item in request.data:
             ser = self.get_serializer(data=item)
             if ser.is_valid():
-                created_objs.append(ser.save())
+                try:
+                    created_objs.append(ser.save())
+                except Exception as exc:
+                    errors.append({"data": item, "errors": {"non_field_errors": [str(exc)]}})
             else:
                 errors.append({"data": item, "errors": ser.errors})
 
@@ -70,11 +73,16 @@ class BulkUpdateMixin:
 
         updated_objs = []
         errors = []
+        seen_ids = set()
         for item in request.data:
             obj_id = item.get("id")
             if obj_id is None:
                 errors.append({"data": item, "errors": {"id": ["This field is required."]}})
                 continue
+            if obj_id in seen_ids:
+                errors.append({"data": item, "errors": {"id": ["Duplicate id."]}})
+                continue
+            seen_ids.add(obj_id)
             try:
                 instance = self.get_queryset().get(id=obj_id)
             except self.get_queryset().model.DoesNotExist:
@@ -83,7 +91,10 @@ class BulkUpdateMixin:
 
             ser = self.get_serializer(instance, data=item, partial=True)
             if ser.is_valid():
-                updated_objs.append(ser.save())
+                try:
+                    updated_objs.append(ser.save())
+                except Exception as exc:
+                    errors.append({"data": item, "errors": {"non_field_errors": [str(exc)]}})
             else:
                 errors.append({"data": item, "errors": ser.errors})
 

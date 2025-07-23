@@ -89,3 +89,47 @@ class BulkActionsTests(TestCase):
             format="json",
         )
         self.assertEqual(res.status_code, 400)
+
+    def test_bulk_create_unique_conflicts(self):
+        comp = Company.objects.create(name="C1")
+        payload = [
+            {"company": comp.id, "name": "Role"},
+            {"company": comp.id, "name": "Role"},
+        ]
+        res = self.client.post("/api/designations/bulk/", payload, format="json")
+        self.assertEqual(res.status_code, 207)
+        self.assertEqual(len(res.data["created"]), 1)
+        self.assertEqual(len(res.data["errors"]), 1)
+        self.assertIn("non_field_errors", res.data["errors"][0]["errors"])
+
+    def test_bulk_update_duplicate_ids(self):
+        c = Company.objects.create(name="D")
+        payload_create = [
+            {"name": "X"},
+            {"name": "Y"},
+        ]
+        res = self.client.post("/api/companies/bulk/", payload_create, format="json")
+        ids = [item["id"] for item in res.data["created"]]
+        update_payload = [
+            {"id": ids[0], "name": "X1"},
+            {"id": ids[0], "name": "X2"},
+        ]
+        res = self.client.patch("/api/companies/bulk-update/", update_payload, format="json")
+        self.assertEqual(res.status_code, 207)
+        self.assertEqual(len(res.data["updated"]), 1)
+        self.assertEqual(len(res.data["errors"]), 1)
+        self.assertIn("id", res.data["errors"][0]["errors"])
+
+    def test_bulk_update_unique_conflict(self):
+        comp = Company.objects.create(name="C2")
+        d1 = self.client.post("/api/designations/bulk/", [{"company": comp.id, "name": "A"}, {"company": comp.id, "name": "B"}], format="json")
+        ids = [item["id"] for item in d1.data["created"]]
+        payload = [
+            {"id": ids[0], "name": "Same"},
+            {"id": ids[1], "name": "Same"},
+        ]
+        res = self.client.patch("/api/designations/bulk-update/", payload, format="json")
+        self.assertEqual(res.status_code, 207)
+        self.assertEqual(len(res.data["updated"]), 1)
+        self.assertEqual(len(res.data["errors"]), 1)
+        self.assertIn("non_field_errors", res.data["errors"][0]["errors"])
