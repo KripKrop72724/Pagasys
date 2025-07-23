@@ -200,14 +200,14 @@ class Employee(models.Model):
     class Meta:
         constraints = [
             models.CheckConstraint(
-                check=(
+                condition=(
                     models.Q(department__isnull=False, project__isnull=True)
                     | models.Q(department__isnull=True, project__isnull=False)
                 ),
                 name="employee_one_of_dept_or_proj",
             ),
             models.CheckConstraint(
-                check=~models.Q(trade_license=None),
+                condition=~models.Q(trade_license=None),
                 name="employee_must_have_license",
             ),
         ]
