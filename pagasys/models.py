@@ -26,6 +26,7 @@ class Branch(models.Model):
         Company,
         on_delete=models.CASCADE,
         related_name="branches",
+        help_text="Parent company",
     )
     name = models.CharField(
         max_length=255,
@@ -46,6 +47,7 @@ class Designation(models.Model):
         Company,
         on_delete=models.CASCADE,
         related_name="designations",
+        help_text="Company that defines the designation",
     )
     name = models.CharField(
         max_length=100,
@@ -76,6 +78,7 @@ class TradeLicense(models.Model):
         Company,
         on_delete=models.CASCADE,
         related_name="licenses",
+        help_text="License owning company",
     )
     branches = models.ManyToManyField(
         Branch,
@@ -111,6 +114,7 @@ class Department(models.Model):
         Branch,
         on_delete=models.CASCADE,
         related_name="departments",
+        help_text="Branch that houses the department",
     )
     name = models.CharField(
         max_length=255,
@@ -131,6 +135,7 @@ class Project(models.Model):
         Branch,
         on_delete=models.CASCADE,
         related_name="projects",
+        help_text="Branch executing the project",
     )
     name = models.CharField(
         max_length=255,
@@ -183,12 +188,13 @@ class Employee(models.Model):
         related_name="employees",
         help_text="Job designation",
     )
-    first_name = models.CharField(max_length=255)
-    last_name = models.CharField(max_length=255)
-    hire_date = models.DateField()
+    first_name = models.CharField(max_length=255, help_text="Given name")
+    last_name = models.CharField(max_length=255, help_text="Family name")
+    hire_date = models.DateField(help_text="Date hired")
     employment_type = models.CharField(
         max_length=20,
         choices=[("permanent", "Permanent"), ("temporary", "Temporary")],
+        help_text="Employment contract type",
     )
 
     class Meta:
