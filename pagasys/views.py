@@ -65,7 +65,7 @@ class TradeLicenseViewSet(viewsets.ModelViewSet):
     queryset = TradeLicense.objects.all()
     serializer_class = TradeLicenseSerializer
     permission_classes = [IsAuthenticated, DjangoModelPermissions, IsBranchManager]
-    filterset_fields = ["branch", "license_no", "issued_date", "expiry_date"]
+    filterset_fields = ["company", "branches", "license_no", "issued_date", "expiry_date"]
     ordering_fields = ["license_no", "issued_date", "expiry_date"]
 
 

@@ -70,12 +70,17 @@ class Designation(models.Model):
 
 
 class TradeLicense(models.Model):
-    """Government trade license tied to a branch."""
+    """Government trade license issued to a company covering branches."""
 
-    branch = models.ForeignKey(
-        Branch,
+    company = models.ForeignKey(
+        Company,
         on_delete=models.CASCADE,
         related_name="licenses",
+    )
+    branches = models.ManyToManyField(
+        Branch,
+        related_name="licenses",
+        help_text="Which branches this license covers",
     )
     license_no = models.CharField(
         max_length=100,
@@ -209,8 +214,19 @@ class Employee(models.Model):
             )
         if self.trade_license.employees.count() >= self.trade_license.max_visas:
             raise ValidationError("Visa quota reached")
-        if self.designation and self.designation.company != self.trade_license.branch.company:
+        if self.designation and self.designation.company != self.trade_license.company:
             raise ValidationError("Designation must match company")
+
+        # ensure employee's branch is covered by their license
+        if self.department:
+            emp_branch = self.department.branch
+        else:
+            emp_branch = self.project.branch
+
+        if emp_branch not in self.trade_license.branches.all():
+            raise ValidationError(
+                f"Branch {emp_branch.name!r} is not covered by license {self.trade_license.license_no!r}"
+            )
 
     def __str__(self) -> str:
         return f"{self.first_name} {self.last_name}"
