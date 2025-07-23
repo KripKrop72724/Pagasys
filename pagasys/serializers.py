@@ -111,7 +111,12 @@ class TradeLicenseSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         attrs = super().validate(attrs)
-        instance = TradeLicense(**attrs)
+        if self.instance is not None:
+            data = {f.name: getattr(self.instance, f.name) for f in TradeLicense._meta.fields}
+            data.update({k: v for k, v in attrs.items() if k != 'branches'})
+        else:
+            data = {k: v for k, v in attrs.items() if k != 'branches'}
+        instance = TradeLicense(**data)
         instance.clean()
         return attrs
 

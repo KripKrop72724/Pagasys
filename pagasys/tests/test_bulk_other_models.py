@@ -189,3 +189,109 @@ class OtherBulkActionsTests(TestCase):
             },
         ]
         self._run_crud_flow("employees", Employee, create, updates)
+
+    def test_license_bulk_create_with_branches(self):
+        """Creating licenses with branch relations works in bulk."""
+        payload = [
+            {
+                "company": self.company.id,
+                "branches": [self.branch.id],
+                "license_no": "L3",
+                "issued_date": "2024-01-01",
+                "expiry_date": "2025-01-01",
+                "max_visas": 5,
+            },
+            {
+                "company": self.company.id,
+                "branches": [self.branch.id],
+                "license_no": "L4",
+                "issued_date": "2024-01-01",
+                "expiry_date": "2025-01-01",
+                "max_visas": 6,
+            },
+        ]
+        res = self.client.post("/api/licenses/bulk/", payload, format="json")
+        self.assertEqual(res.status_code, 201)
+        ids = [obj["id"] for obj in res.data["created"]]
+        self.assertEqual(len(ids), 2)
+        for lic_id in ids:
+            lic = TradeLicense.objects.get(id=lic_id)
+            self.assertEqual(list(lic.branches.all()), [self.branch])
+
+    def test_license_bulk_update_branches(self):
+        """Updating license branch relations works in bulk."""
+        lic = TradeLicense.objects.create(
+            company=self.company,
+            license_no="L5",
+            issued_date="2024-01-01",
+            expiry_date="2025-01-01",
+            max_visas=5,
+        )
+        lic.branches.set([self.branch])
+        new_branch = Branch.objects.create(company=self.company, name="B2")
+
+        payload = [
+            {
+                "id": lic.id,
+                "branches": [new_branch.id],
+                "max_visas": 10,
+            }
+        ]
+        res = self.client.patch("/api/licenses/bulk-update/", payload, format="json")
+        self.assertEqual(res.status_code, 200)
+        lic.refresh_from_db()
+        self.assertEqual(list(lic.branches.all()), [new_branch])
+
+    def test_license_bulk_create_invalid_branch(self):
+        """Invalid branch references should not create licenses."""
+        payload = [
+            {
+                "company": self.company.id,
+                "branches": [9999],
+                "license_no": "BAD1",
+                "issued_date": "2024-01-01",
+                "expiry_date": "2025-01-01",
+                "max_visas": 5,
+            }
+        ]
+        res = self.client.post("/api/licenses/bulk/", payload, format="json")
+        self.assertEqual(res.status_code, 207)
+        self.assertEqual(res.data["created"], [])
+        self.assertEqual(TradeLicense.objects.filter(license_no="BAD1").count(), 0)
+        self.assertIn("branches", res.data["errors"][0]["errors"])
+
+    def test_license_bulk_create_duplicate_number(self):
+        """Duplicate license numbers trigger partial failure without persistence."""
+        existing = TradeLicense.objects.create(
+            company=self.company,
+            license_no="DUPE",
+            issued_date="2024-01-01",
+            expiry_date="2025-01-01",
+            max_visas=5,
+        )
+        existing.branches.set([self.branch])
+
+        payload = [
+            {
+                "company": self.company.id,
+                "branches": [self.branch.id],
+                "license_no": "DUPE2",
+                "issued_date": "2024-01-01",
+                "expiry_date": "2025-01-01",
+                "max_visas": 5,
+            },
+            {
+                "company": self.company.id,
+                "branches": [self.branch.id],
+                "license_no": "DUPE",
+                "issued_date": "2024-01-01",
+                "expiry_date": "2025-01-01",
+                "max_visas": 5,
+            },
+        ]
+        res = self.client.post("/api/licenses/bulk/", payload, format="json")
+        self.assertEqual(res.status_code, 207)
+        self.assertEqual(len(res.data["created"]), 1)
+        self.assertEqual(TradeLicense.objects.filter(license_no="DUPE").count(), 1)
+        err_keys = res.data["errors"][0]["errors"].keys()
+        self.assertTrue("non_field_errors" in err_keys or "license_no" in err_keys)

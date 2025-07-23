@@ -7,7 +7,7 @@ from drf_spectacular.utils import extend_schema, extend_schema_view
 from django_filters.rest_framework import DjangoFilterBackend
 from django_filters import rest_framework as filters
 
-from django.db import IntegrityError, models
+from django.db import IntegrityError, models, transaction
 
 from .permissions import CustomObjectPermission
 from .utils import scope_queryset
@@ -51,7 +51,8 @@ class BulkCreateMixin:
             ser = self.get_serializer(data=item)
             if ser.is_valid():
                 try:
-                    created_objs.append(ser.save())
+                    with transaction.atomic():
+                        created_objs.append(ser.save())
                 except IntegrityError as exc:
                     errors.append({"data": item, "errors": {"non_field_errors": [str(exc)]}})
             else:
@@ -92,7 +93,8 @@ class BulkUpdateMixin:
             ser = self.get_serializer(instance, data=item, partial=True)
             if ser.is_valid():
                 try:
-                    updated_objs.append(ser.save())
+                    with transaction.atomic():
+                        updated_objs.append(ser.save())
                 except IntegrityError as exc:
                     errors.append({"data": item, "errors": {"non_field_errors": [str(exc)]}})
             else:
