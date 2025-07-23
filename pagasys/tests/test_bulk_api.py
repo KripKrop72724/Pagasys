@@ -203,3 +203,19 @@ class BulkActionsTests(TestCase):
         err = res.data["errors"][0]
         self.assertEqual(err["data"], {"name": "Missing id"})
         self.assertEqual(err["errors"], {"id": ["This field is required."]})
+
+    def test_bulk_update_partial_missing(self):
+        """Updates return 207 when some ids are missing while others succeed."""
+        c1 = Company.objects.create(name="Exists")
+        payload = [
+            {"id": c1.id, "name": "Updated"},
+            {"id": 9999, "name": "Missing"},
+        ]
+        res = self.client.patch("/api/companies/bulk-update/", payload, format="json")
+        self.assertEqual(res.status_code, 207)
+        self.assertEqual(len(res.data["updated"]), 1)
+        self.assertEqual(res.data["updated"][0]["id"], c1.id)
+        self.assertEqual(len(res.data["errors"]), 1)
+        self.assertEqual(res.data["errors"][0]["data"], {"id": 9999, "name": "Missing"})
+        self.assertIn("id", res.data["errors"][0]["errors"])
+
