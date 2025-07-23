@@ -96,6 +96,7 @@ class DesignationSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
     def validate(self, attrs):
+        attrs = super().validate(attrs)
         instance = Designation(**attrs)
         instance.clean()
         return attrs
@@ -109,6 +110,7 @@ class TradeLicenseSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
     def validate(self, attrs):
+        attrs = super().validate(attrs)
         instance = TradeLicense(**attrs)
         instance.clean()
         return attrs
@@ -160,6 +162,7 @@ class EmployeeSerializer(serializers.ModelSerializer):
         }
 
     def validate(self, attrs):
+        attrs = super().validate(attrs)
         if self.instance is not None:
             data = {f.name: getattr(self.instance, f.name) for f in Employee._meta.fields}
             data.update(attrs)
