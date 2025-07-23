@@ -50,3 +50,25 @@ class OpenAPISchemaTests(TestCase):
         self.assertIn('patch', data['paths']['/api/companies/bulk-update/'])
         self.assertIn('/api/companies/bulk-delete/', data['paths'])
         self.assertIn('post', data['paths']['/api/companies/bulk-delete/'])
+
+    def test_bulk_response_schemas(self):
+        """Bulk endpoints should reference dynamic response serializers."""
+        response = self.client.get('/api/schema/', HTTP_ACCEPT='application/json')
+        import json
+        data = json.loads(response.content)
+
+        # bulk create
+        bulk_post = data['paths']['/api/companies/bulk/']['post']
+        first_code, first_resp = next(iter(bulk_post['responses'].items()))
+        ref = first_resp['content']['application/json']['schema']['$ref']
+        create_schema = data['components']['schemas'][ref.split('/')[-1]]
+        self.assertIn('created', create_schema['properties'])
+        self.assertIn('errors', create_schema['properties'])
+
+        # bulk delete
+        bulk_del = data['paths']['/api/companies/bulk-delete/']['post']
+        del_code, del_resp = next(iter(bulk_del['responses'].items()))
+        ref = del_resp['content']['application/json']['schema']['$ref']
+        del_schema = data['components']['schemas'][ref.split('/')[-1]]
+        self.assertIn('deleted', del_schema['properties'])
+        self.assertIn('errors', del_schema['properties'])
