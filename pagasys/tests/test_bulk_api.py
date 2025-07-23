@@ -79,6 +79,34 @@ class BulkActionsTests(TestCase):
         self.assertEqual(len(res.data["errors"]), 1)
         self.assertEqual(res.data["errors"][0]["id"], 9999)
 
+    def test_bulk_delete_multiple_missing_ids(self):
+        """A mix of valid and invalid ids should return 207 and detail each missing id."""
+        c1 = Company.objects.create(name="DelA")
+        payload = [c1.id, 1111, 2222]
+        res = self.client.post("/api/companies/bulk-delete/", payload, format="json")
+        self.assertEqual(res.status_code, 207)
+        self.assertEqual(res.data["deleted"], 1)
+        self.assertEqual(len(res.data["errors"]), 2)
+        missing_ids = {err["id"] for err in res.data["errors"]}
+        self.assertEqual(missing_ids, {1111, 2222})
+
+    def test_bulk_delete_empty_list(self):
+        """Deleting with an empty list succeeds with no action."""
+        res = self.client.post("/api/companies/bulk-delete/", [], format="json")
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.data["deleted"], 0)
+        self.assertEqual(res.data["errors"], [])
+
+    def test_bulk_delete_invalid_ids(self):
+        """Invalid id values should be reported without raising errors."""
+        c1 = Company.objects.create(name="DelA")
+        payload = [c1.id, "bad", None]
+        res = self.client.post("/api/companies/bulk-delete/", payload, format="json")
+        self.assertEqual(res.status_code, 207)
+        self.assertEqual(res.data["deleted"], 1)
+        self.assertEqual(len(res.data["errors"]), 1)
+        self.assertEqual(res.data["errors"][0]["id"], "bad")
+
     def test_non_list_payload_errors(self):
         """Bulk actions require list payloads."""
         res = self.client.post("/api/companies/bulk/", {"name": "X"}, format="json")
