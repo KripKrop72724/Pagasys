@@ -89,3 +89,28 @@ class BulkActionsTests(TestCase):
             format="json",
         )
         self.assertEqual(res.status_code, 400)
+
+    def test_bulk_create_invalid_types(self):
+        """Invalid field types should be reported and skip creation."""
+        payload = [{"name": "Good"}, {"name": []}]
+        res = self.client.post("/api/companies/bulk/", payload, format="json")
+        self.assertEqual(res.status_code, 207)
+        self.assertEqual(len(res.data["created"]), 1)
+        self.assertEqual(res.data["created"][0]["name"], "Good")
+        self.assertEqual(len(res.data["errors"]), 1)
+        self.assertIn("name", res.data["errors"][0]["errors"])
+
+    def test_bulk_update_invalid_types(self):
+        """Mixed valid and invalid updates should partially succeed."""
+        c1 = Company.objects.create(name="Old")
+        c2 = Company.objects.create(name="Bad")
+        payload = [
+            {"id": c1.id, "name": "New"},
+            {"id": c2.id, "name": []},
+        ]
+        res = self.client.patch("/api/companies/bulk-update/", payload, format="json")
+        self.assertEqual(res.status_code, 207)
+        self.assertEqual(len(res.data["updated"]), 1)
+        self.assertEqual(res.data["updated"][0]["name"], "New")
+        self.assertEqual(len(res.data["errors"]), 1)
+        self.assertIn("name", res.data["errors"][0]["errors"])
