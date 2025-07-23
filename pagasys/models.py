@@ -227,6 +227,7 @@ class Employee(AbstractUser):
             ),
         ]
         verbose_name_plural = "employees"
+        ordering = ["id"]
 
     def clean(self):
         super().clean()
