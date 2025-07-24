@@ -179,7 +179,8 @@ class EmployeeFilter(filters.FilterSet):
                 location=OpenApiParameter.QUERY,
                 description="Comma-separated list of fields to sort by",
             ),
-        ]
+        ],
+        description="Combine multiple query parameters for compound company filtering.",
     ),
     bulk_create=extend_schema(
         request=CompanySerializer(many=True),
@@ -234,7 +235,8 @@ class CompanyViewSet(BulkCreateMixin, BulkUpdateMixin, BulkDeleteMixin, viewsets
                 location=OpenApiParameter.QUERY,
                 description="Comma-separated list of fields to sort by",
             ),
-        ]
+        ],
+        description="Combine parameters like company and name for compound branch queries.",
     ),
     bulk_create=extend_schema(
         request=BranchSerializer(many=True),
@@ -295,7 +297,11 @@ class BranchViewSet(BulkCreateMixin, BulkUpdateMixin, BulkDeleteMixin, viewsets.
                 location=OpenApiParameter.QUERY,
                 description="Comma-separated list of fields to sort by",
             ),
-        ]
+        ],
+        description=(
+            "Filter designations by any combination of company, name and level"
+            " parameters."
+        ),
     ),
     bulk_create=extend_schema(
         request=DesignationSerializer(many=True),
@@ -368,7 +374,8 @@ class DesignationViewSet(BulkCreateMixin, BulkUpdateMixin, BulkDeleteMixin, view
                 location=OpenApiParameter.QUERY,
                 description="Comma-separated list of fields to sort by",
             ),
-        ]
+        ],
+        description="Combine company, branches or dates to narrow down licenses.",
     ),
     bulk_create=extend_schema(
         request=TradeLicenseSerializer(many=True),
@@ -423,7 +430,8 @@ class TradeLicenseViewSet(BulkCreateMixin, BulkUpdateMixin, BulkDeleteMixin, vie
                 location=OpenApiParameter.QUERY,
                 description="Comma-separated list of fields to sort by",
             ),
-        ]
+        ],
+        description="Branch and name filters may be combined for departments.",
     ),
     bulk_create=extend_schema(
         request=DepartmentSerializer(many=True),
@@ -490,7 +498,8 @@ class DepartmentViewSet(BulkCreateMixin, BulkUpdateMixin, BulkDeleteMixin, views
                 location=OpenApiParameter.QUERY,
                 description="Comma-separated list of fields to sort by",
             ),
-        ]
+        ],
+        description="Projects can be filtered by combining branch, dates and name.",
     ),
     bulk_create=extend_schema(
         request=ProjectSerializer(many=True),
@@ -587,7 +596,8 @@ class ProjectViewSet(BulkCreateMixin, BulkUpdateMixin, BulkDeleteMixin, viewsets
                 location=OpenApiParameter.QUERY,
                 description="Comma-separated list of fields to sort by",
             ),
-        ]
+        ],
+        description="Employees support compound filtering across all parameters.",
     ),
     bulk_create=extend_schema(
         request=EmployeeSerializer(many=True),
