@@ -34,7 +34,6 @@ class SeedCommandTests(TestCase):
         self.assertEqual(admin.email, "fytfytfyt420@gmail.com")
 
         expected_groups = {
-            "Super Admin",
             "Company Admin",
             "Branch Manager",
             "Payroll Manager",

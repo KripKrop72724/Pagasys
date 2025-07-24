@@ -9,18 +9,6 @@ class Command(BaseCommand):
 
     # Mapping of role to (models, perms)
     ROLE_CONFIG = {
-        "Super Admin": {
-            "models": [
-                "Company",
-                "Branch",
-                "Designation",
-                "TradeLicense",
-                "Department",
-                "Project",
-                "Employee",
-            ],
-            "perms": ["add", "change", "delete", "view"],
-        },
         "Company Admin": {
             "models": [
                 "Branch",
