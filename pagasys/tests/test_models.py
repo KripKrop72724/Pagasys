@@ -223,3 +223,65 @@ class ModelValidationTests(ModelFactoryMixin, TestCase):
                     ]
                 )
 
+
+class ModelStringTests(ModelFactoryMixin, TestCase):
+    """Ensure __str__ methods include related model info."""
+
+    def setUp(self):
+        self.company = self.create_company("Comp")
+        self.branch = self.create_branch(self.company, "B1")
+        self.department = self.create_department(self.branch, "Dept1")
+        self.project = self.create_project(self.branch, "Proj1")
+        self.designation = self.create_designation(self.company, "Engineer")
+        self.license = self.create_license(company=self.company, branches=[self.branch], license_no="LICA")
+
+    def test_branch_str(self):
+        self.assertEqual(str(self.branch), "B1 - Comp")
+
+    def test_department_str(self):
+        self.assertEqual(str(self.department), "Dept1 - B1 - Comp")
+
+    def test_designation_str(self):
+        self.assertEqual(str(self.designation), "Engineer - Comp")
+
+    def test_project_str(self):
+        self.assertEqual(str(self.project), "Proj1 - B1 - Comp")
+
+    def test_tradelicense_str_single_branch(self):
+        self.assertEqual(str(self.license), "LICA - Comp - B1")
+
+    def test_tradelicense_str_multiple_branches(self):
+        b2 = self.create_branch(self.company, "B2")
+        lic = self.create_license(company=self.company, branches=[self.branch, b2], license_no="LICB")
+        self.assertEqual(str(lic), "LICB - Comp - B1, B2")
+
+    def test_employee_str_department(self):
+        emp = Employee.objects.create(
+            username="emp1",
+            password="pass",
+            trade_license=self.license,
+            department=self.department,
+            designation=self.designation,
+            first_name="A",
+            last_name="B",
+            hire_date="2024-01-02",
+            employment_type="permanent",
+        )
+        self.assertEqual(str(emp), "A B - Comp - B1 - Dept1 - LICA - Engineer")
+
+    def test_employee_str_project_no_designation(self):
+        b2 = self.create_branch(self.company, "B2")
+        proj = self.create_project(b2, "Proj2")
+        lic = self.create_license(company=self.company, branches=[b2], license_no="LICC")
+        emp = Employee.objects.create(
+            username="emp2",
+            password="pass",
+            trade_license=lic,
+            project=proj,
+            first_name="C",
+            last_name="D",
+            hire_date="2024-01-02",
+            employment_type="permanent",
+        )
+        self.assertEqual(str(emp), "C D - Comp - B2 - Proj2 - LICC")
+

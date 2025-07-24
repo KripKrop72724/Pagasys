@@ -45,7 +45,7 @@ class Branch(models.Model):
         ]
 
     def __str__(self) -> str:
-        return self.name
+        return f"{self.name} - {self.company.name}"
 
 
 class Designation(models.Model):
@@ -79,7 +79,7 @@ class Designation(models.Model):
         ]
 
     def __str__(self) -> str:
-        return self.name
+        return f"{self.name} - {self.company.name}"
 
 
 class TradeLicense(models.Model):
@@ -119,7 +119,8 @@ class TradeLicense(models.Model):
             raise ValidationError("Expiry date must be after issued date")
 
     def __str__(self) -> str:
-        return self.license_no
+        branches = ", ".join(b.name for b in self.branches.all())
+        return f"{self.license_no} - {self.company.name}" + (f" - {branches}" if branches else "")
 
 
 class Department(models.Model):
@@ -144,7 +145,7 @@ class Department(models.Model):
         ]
 
     def __str__(self) -> str:
-        return self.name
+        return f"{self.name} - {self.branch.name} - {self.branch.company.name}"
 
 
 class Project(models.Model):
@@ -175,7 +176,7 @@ class Project(models.Model):
         ]
 
     def __str__(self) -> str:
-        return self.name
+        return f"{self.name} - {self.branch.name} - {self.branch.company.name}"
 
 
 
@@ -293,7 +294,18 @@ class Employee(AbstractUser):
             )
 
     def __str__(self) -> str:
-        return f"{self.first_name} {self.last_name}"
+        parts = [f"{self.first_name} {self.last_name}"]
+        parts.append(self.trade_license.company.name)
+        if self.department:
+            parts.append(self.department.branch.name)
+            parts.append(self.department.name)
+        elif self.project:
+            parts.append(self.project.branch.name)
+            parts.append(self.project.name)
+        parts.append(self.trade_license.license_no)
+        if self.designation:
+            parts.append(self.designation.name)
+        return " - ".join(parts)
 
     def save(self, *args, **kwargs):
         """Ensure visa quota checks are performed atomically."""
