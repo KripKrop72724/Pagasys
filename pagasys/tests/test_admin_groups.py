@@ -1,8 +1,9 @@
-from django.test import TestCase
+from django.test import TestCase, RequestFactory
 from django.contrib.auth import get_user_model
 from django.urls import reverse
 from django.core.management import call_command
-from django.contrib.auth.models import Group
+from django.contrib.admin.sites import AdminSite
+from pagasys.admin import EmployeeAdmin
 
 from pagasys.models import Company, Branch, Department, TradeLicense
 
@@ -30,6 +31,8 @@ class EmployeeAdminFieldTests(TestCase):
             employment_type="permanent",
         )
         self.client.force_login(self.admin)
+        self.factory = RequestFactory()
+        self.site = AdminSite()
 
     def _create_employee(self, **kwargs):
         User = get_user_model()
@@ -63,4 +66,30 @@ class EmployeeAdminFieldTests(TestCase):
         res = self.client.get(url)
         self.assertContains(res, "id_groups")
         self.assertNotContains(res, "id_user_permissions")
+
+    def test_superuser_edit_does_not_affect_regular_forms(self):
+        super_emp = self._create_employee(is_superuser=True, is_staff=True)
+        url = reverse("admin:pagasys_employee_change", args=[super_emp.id])
+        self.client.get(url)
+
+        emp = self._create_employee(username="emp2")
+        url = reverse("admin:pagasys_employee_change", args=[emp.id])
+        res = self.client.get(url)
+        self.assertContains(res, "id_groups")
+
+    def test_post_is_superuser_hides_groups(self):
+        emp_admin = EmployeeAdmin(get_user_model(), AdminSite())
+        factory = RequestFactory()
+        req = factory.post("/", {"is_superuser": "on"})
+        req.user = self.admin
+        fieldsets = emp_admin.get_fieldsets(req, self._create_employee())
+        self.assertNotIn("groups", fieldsets[2][1]["fields"])
+
+    def test_post_without_superuser_shows_groups(self):
+        emp_admin = EmployeeAdmin(get_user_model(), AdminSite())
+        factory = RequestFactory()
+        req = factory.post("/", {})
+        req.user = self.admin
+        fieldsets = emp_admin.get_fieldsets(req, self._create_employee())
+        self.assertIn("groups", fieldsets[2][1]["fields"])
 

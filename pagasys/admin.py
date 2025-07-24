@@ -2,6 +2,7 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 from django.contrib.auth.forms import AdminUserCreationForm, UserChangeForm
 from django.core.exceptions import ValidationError
+from copy import deepcopy
 
 from .utils import scope_queryset
 
@@ -173,7 +174,7 @@ class EmployeeAdmin(CleanSaveModelMixin, ScopedAdminMixin, UserAdmin):
         js = ["pagasys/js/employee_admin.js"]
 
     def get_fieldsets(self, request, obj=None):
-        fieldsets = [list(fs) for fs in super().get_fieldsets(request, obj)]
+        fieldsets = deepcopy(super().get_fieldsets(request, obj))
         if (obj and obj.is_superuser) or request.POST.get("is_superuser"):
             perms = list(fieldsets[2][1]["fields"])
             if "groups" in perms:
