@@ -1,5 +1,6 @@
 from functools import lru_cache
 from rest_framework import serializers
+from django.contrib.auth.models import Group
 
 
 class BulkErrorSerializer(serializers.Serializer):
@@ -150,6 +151,10 @@ class EmployeeSerializer(serializers.ModelSerializer):
 
     username = serializers.CharField(help_text="Login name")
     password = serializers.CharField(write_only=True, help_text="Password")
+    groups = serializers.PrimaryKeyRelatedField(
+        queryset=Group.objects.all(), many=True, required=False,
+        help_text="Group IDs for this employee"
+    )
     first_name = serializers.CharField(required=False, allow_blank=True, help_text="Given name")
     last_name = serializers.CharField(required=False, allow_blank=True, help_text="Family name")
     email = serializers.EmailField(required=False, allow_blank=True, help_text="Email address")
@@ -169,12 +174,14 @@ class EmployeeSerializer(serializers.ModelSerializer):
             'designation',
             'hire_date',
             'employment_type',
+            'groups',
         ]
         extra_kwargs = {
             'password': {'write_only': True},
         }
 
     def validate(self, attrs):
+        groups = attrs.pop('groups', None)
         attrs = super().validate(attrs)
         if self.instance is not None:
             data = {f.name: getattr(self.instance, f.name) for f in Employee._meta.fields}
@@ -183,17 +190,34 @@ class EmployeeSerializer(serializers.ModelSerializer):
         else:
             instance = Employee(**attrs)
         instance.clean()
+        if groups is not None:
+            attrs['groups'] = groups
         return attrs
 
     def create(self, validated_data):
         password = validated_data.pop('password')
-        user = Employee.objects.create_user(password=password, **validated_data)
+        groups = validated_data.pop('groups', [])
+        if validated_data.get("is_superuser"):
+            user = Employee.objects.create_superuser(password=password, **validated_data)
+        else:
+            user = Employee.objects.create_user(password=password, **validated_data)
+        if not user.is_superuser:
+            user.groups.set(groups)
         return user
 
     def update(self, instance, validated_data):
         password = validated_data.pop('password', None)
+        groups = validated_data.pop('groups', None)
         user = super().update(instance, validated_data)
         if password:
             user.set_password(password)
             user.save()
+        if groups is not None and not user.is_superuser:
+            user.groups.set(groups)
         return user
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        if instance.is_superuser:
+            data.pop('groups', None)
+        return data

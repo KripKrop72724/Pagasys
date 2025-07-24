@@ -116,7 +116,13 @@ class EmployeeAdmin(CleanSaveModelMixin, ScopedAdminMixin, UserAdmin):
     form = UserChangeForm
     model = Employee
 
-    fieldsets = UserAdmin.fieldsets + (
+    base_fieldsets = list(UserAdmin.fieldsets)
+    perms = list(base_fieldsets[2][1]["fields"])
+    if "user_permissions" in perms:
+        perms.remove("user_permissions")
+    base_fieldsets[2][1]["fields"] = tuple(perms)
+
+    fieldsets = tuple(base_fieldsets) + (
         (
             "Employment Info",
             {
@@ -132,7 +138,22 @@ class EmployeeAdmin(CleanSaveModelMixin, ScopedAdminMixin, UserAdmin):
         ),
     )
 
-    add_fieldsets = UserAdmin.add_fieldsets + (
+    add_fieldsets = (
+        (
+            None,
+            {
+                "classes": ("wide",),
+                "fields": (
+                    "username",
+                    "password1",
+                    "password2",
+                    "is_active",
+                    "is_staff",
+                    "is_superuser",
+                    "groups",
+                ),
+            },
+        ),
         (
             "Employment Info",
             {
@@ -147,5 +168,17 @@ class EmployeeAdmin(CleanSaveModelMixin, ScopedAdminMixin, UserAdmin):
             },
         ),
     )
+
+    class Media:
+        js = ["pagasys/js/employee_admin.js"]
+
+    def get_fieldsets(self, request, obj=None):
+        fieldsets = [list(fs) for fs in super().get_fieldsets(request, obj)]
+        if (obj and obj.is_superuser) or request.POST.get("is_superuser"):
+            perms = list(fieldsets[2][1]["fields"])
+            if "groups" in perms:
+                perms.remove("groups")
+            fieldsets[2][1]["fields"] = tuple(perms)
+        return fieldsets
 
 
