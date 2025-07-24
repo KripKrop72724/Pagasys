@@ -103,13 +103,20 @@ class DesignationSerializer(serializers.ModelSerializer):
 
 
 class TradeLicenseSerializer(serializers.ModelSerializer):
-    """Serializer for TradeLicense"""
+    """Serializer for :class:`~pagasys.models.TradeLicense`.
+
+    The ``branches`` many-to-many relation is kept in ``fields`` via
+    ``"__all__"`` so that DRF's ``save()`` automatically calls
+    ``save_m2m()`` during bulk operations.
+    """
 
     class Meta:
         model = TradeLicense
         fields = '__all__'
 
     def validate(self, attrs):
+        """Run model validation and hook for branch rules."""
+
         attrs = super().validate(attrs)
         if self.instance is not None:
             data = {f.name: getattr(self.instance, f.name) for f in TradeLicense._meta.fields}
@@ -118,6 +125,7 @@ class TradeLicenseSerializer(serializers.ModelSerializer):
             data = {k: v for k, v in attrs.items() if k != 'branches'}
         instance = TradeLicense(**data)
         instance.clean()
+        # Add custom branch logic here if needed.
         return attrs
 
 
