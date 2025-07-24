@@ -7,6 +7,7 @@ from pagasys.admin import EmployeeAdmin
 
 from pagasys.models import Company, Branch, Department, TradeLicense
 
+
 class EmployeeAdminFieldTests(TestCase):
     def setUp(self):
         call_command("initgroups", verbosity=0)
@@ -93,3 +94,33 @@ class EmployeeAdminFieldTests(TestCase):
         fieldsets = emp_admin.get_fieldsets(req, self._create_employee())
         self.assertIn("groups", fieldsets[2][1]["fields"])
 
+    def test_add_post_is_superuser_hides_groups(self):
+        emp_admin = EmployeeAdmin(get_user_model(), AdminSite())
+        factory = RequestFactory()
+        req = factory.post("/", {"is_superuser": "on"})
+        req.user = self.admin
+        fieldsets = emp_admin.get_fieldsets(req)
+        self.assertFalse(any("groups" in fs[1]["fields"] for fs in fieldsets))
+
+    def test_create_superuser_ignores_group_assignment(self):
+        url = reverse("admin:pagasys_employee_add")
+        group_id = self.admin.groups.first().id if self.admin.groups.exists() else None
+        data = {
+            "username": "sup",
+            "password1": "strongpass",
+            "password2": "strongpass",
+            "is_active": "on",
+            "is_staff": "on",
+            "is_superuser": "on",
+            "trade_license": self.license.id,
+            "department": self.department.id,
+            "hire_date": "2024-01-03",
+            "employment_type": "permanent",
+        }
+        if group_id:
+            data["groups"] = [group_id]
+        res = self.client.post(url, data)
+        self.assertEqual(res.status_code, 302)
+        emp = get_user_model().objects.get(username="sup")
+        self.assertTrue(emp.is_superuser)
+        self.assertEqual(emp.groups.count(), 0)

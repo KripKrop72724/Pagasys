@@ -26,7 +26,9 @@ class ScopedAdminMixin:
 
     def _has_perm(self, request, action):
         """Check the user's model permission for the given action."""
-        return request.user.has_perm(f"{self.opts.app_label}.{action}_{self.opts.model_name}")
+        return request.user.has_perm(
+            f"{self.opts.app_label}.{action}_{self.opts.model_name}"
+        )
 
     def has_add_permission(self, request):
         return self._has_perm(request, "add")
@@ -41,9 +43,7 @@ class ScopedAdminMixin:
 
     def has_view_permission(self, request, obj=None):
         """Restrict view access to objects within the user's scope."""
-        if not (
-            self._has_perm(request, "view") or self._has_perm(request, "change")
-        ):
+        if not (self._has_perm(request, "view") or self._has_perm(request, "change")):
             return False
         if obj is None:
             return True
@@ -78,6 +78,7 @@ class CleanSaveModelMixin:
                 form.add_error(None, exc)
             raise
         super().save_model(request, obj, form, change)
+
 
 @admin.register(Company)
 class CompanyAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
@@ -176,10 +177,9 @@ class EmployeeAdmin(CleanSaveModelMixin, ScopedAdminMixin, UserAdmin):
     def get_fieldsets(self, request, obj=None):
         fieldsets = deepcopy(super().get_fieldsets(request, obj))
         if (obj and obj.is_superuser) or request.POST.get("is_superuser"):
-            perms = list(fieldsets[2][1]["fields"])
-            if "groups" in perms:
-                perms.remove("groups")
-            fieldsets[2][1]["fields"] = tuple(perms)
+            for name, opts in fieldsets:
+                fields = list(opts.get("fields", ()))
+                if "groups" in fields:
+                    fields.remove("groups")
+                    opts["fields"] = tuple(fields)
         return fieldsets
-
-
