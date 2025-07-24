@@ -18,18 +18,6 @@ class InitGroupsCommandTests(TestCase):
         self._run_command()
 
         expected = {
-            "Super Admin": {
-                "perms": {"add", "change", "delete", "view"},
-                "models": [
-                    "company",
-                    "branch",
-                    "designation",
-                    "tradelicense",
-                    "department",
-                    "project",
-                    "employee",
-                ],
-            },
             "Company Admin": {
                 "perms": {"add", "change", "view"},
                 "models": [

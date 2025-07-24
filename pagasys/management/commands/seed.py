@@ -14,7 +14,6 @@ from pagasys.models import (
 
 
 ROLE_PERMS = {
-    "Super Admin": "all",
     "Company Admin": [Company, Designation],
     "Branch Manager": [Branch, TradeLicense],
     "Payroll Manager": [Employee],
