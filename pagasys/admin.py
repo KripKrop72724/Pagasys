@@ -1,6 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 from django.contrib.auth.forms import UserCreationForm, UserChangeForm
+from django.core.exceptions import ValidationError
 
 from .utils import scope_queryset
 
@@ -64,38 +65,51 @@ class ScopedInlineMixin:
         qs = super().get_queryset(request)
         return scope_queryset(qs, request.user)
 
+
+class CleanSaveModelMixin:
+    """Ensure model.clean() is triggered when saving through the admin."""
+
+    def save_model(self, request, obj, form, change):
+        try:
+            obj.full_clean()
+        except ValidationError as exc:
+            if form is not None:
+                form.add_error(None, exc)
+            raise
+        super().save_model(request, obj, form, change)
+
 @admin.register(Company)
-class CompanyAdmin(ScopedAdminMixin, admin.ModelAdmin):
+class CompanyAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
     pass
 
 
 @admin.register(Branch)
-class BranchAdmin(ScopedAdminMixin, admin.ModelAdmin):
+class BranchAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
     pass
 
 
 @admin.register(Designation)
-class DesignationAdmin(ScopedAdminMixin, admin.ModelAdmin):
+class DesignationAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
     pass
 
 
 @admin.register(TradeLicense)
-class TradeLicenseAdmin(ScopedAdminMixin, admin.ModelAdmin):
+class TradeLicenseAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
     pass
 
 
 @admin.register(Department)
-class DepartmentAdmin(ScopedAdminMixin, admin.ModelAdmin):
+class DepartmentAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
     pass
 
 
 @admin.register(Project)
-class ProjectAdmin(ScopedAdminMixin, admin.ModelAdmin):
+class ProjectAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
     pass
 
 
 @admin.register(Employee)
-class EmployeeAdmin(ScopedAdminMixin, UserAdmin):
+class EmployeeAdmin(CleanSaveModelMixin, ScopedAdminMixin, UserAdmin):
     """Admin configuration for Employee model with password reset."""
 
     add_form = UserCreationForm
