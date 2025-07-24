@@ -74,3 +74,9 @@ class ValidateSuperCallTests(TestCase):
             ser.validate(data)
             parent.assert_called()
 
+
+class TradeLicenseSerializerFieldTests(TestCase):
+    def test_branches_field_present(self):
+        fields = TradeLicenseSerializer().get_fields()
+        assert 'branches' in fields
+
