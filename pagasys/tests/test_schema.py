@@ -137,6 +137,25 @@ class OpenAPISchemaTests(TestCase):
         descriptions = [p['description'] for p in params]
         self.assertTrue(any('compound filtering' in d for d in descriptions))
 
+    def test_filter_examples_in_description(self):
+        response = self.client.get('/api/schema/', HTTP_ACCEPT='application/json')
+        import json
+        data = json.loads(response.content)
+
+        from pagasys import views as v
+        from pagasys.openapi_utils import _build_example_query
+
+        cases = {
+            '/api/companies/': v.CompanyViewSet,
+            '/api/branches/': v.BranchViewSet,
+        }
+
+        for path, viewset in cases.items():
+            with self.subTest(path=path):
+                desc = data['paths'][path]['get']['description']
+                example = _build_example_query(viewset)
+                self.assertIn(example, desc)
+
     def test_dynamic_viewset_filters_documented(self):
         from rest_framework import serializers, viewsets, routers
         from django_filters.rest_framework import DjangoFilterBackend

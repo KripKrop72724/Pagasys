@@ -40,7 +40,23 @@ def _generate_parameters(viewset) -> List[OpenApiParameter]:
     return params
 
 
+def _build_example_query(viewset) -> str:
+    """Return a generic example query string for compounding filters."""
+    fields = _get_filter_fields(viewset)
+    if not fields:
+        return ""
+    parts = [f"{name}=<value>" for name in fields[:2]]
+    return "?" + "&".join(parts)
+
+
 def document_filters(viewset):
     """Attach dynamic filter documentation to a viewset's list action."""
     params = _generate_parameters(viewset)
-    return extend_schema_view(list=extend_schema(parameters=params))(viewset)
+    example = _build_example_query(viewset)
+    description = (
+        "Compound filtering is supported."
+        + (f" Example: {example}" if example else "")
+    )
+    return extend_schema_view(
+        list=extend_schema(parameters=params, description=description)
+    )(viewset)
