@@ -1,5 +1,6 @@
 from django.test import TestCase
 from rest_framework.test import APIClient
+from pagasys.openapi_utils import _get_filter_fields, document_filters
 
 class OpenAPISchemaTests(TestCase):
     """Validate generated OpenAPI schema and docs."""
@@ -106,36 +107,59 @@ class OpenAPISchemaTests(TestCase):
         import json
         data = json.loads(response.content)
 
-        expected = {
-            '/api/companies/': ['name'],
-            '/api/branches/': ['company', 'name'],
-            '/api/designations/': ['company', 'name', 'level'],
-            '/api/licenses/': [
-                'company',
-                'branches',
-                'license_no',
-                'issued_date',
-                'expiry_date',
-            ],
-            '/api/departments/': ['branch', 'name'],
-            '/api/projects/': ['branch', 'name', 'start_date', 'end_date'],
-            '/api/employees/': [
-                'trade_license',
-                'department',
-                'project',
-                'designation',
-                'first_name',
-                'last_name',
-                'branch',
-                'employment_type',
-                'trade_license__company',
-            ],
+        from pagasys import views as v
+        from pagasys.openapi_utils import _get_filter_fields
+
+        viewsets = {
+            '/api/companies/': v.CompanyViewSet,
+            '/api/branches/': v.BranchViewSet,
+            '/api/designations/': v.DesignationViewSet,
+            '/api/licenses/': v.TradeLicenseViewSet,
+            '/api/departments/': v.DepartmentViewSet,
+            '/api/projects/': v.ProjectViewSet,
+            '/api/employees/': v.EmployeeViewSet,
         }
 
-        for path, params in expected.items():
+        for path, viewset in viewsets.items():
             with self.subTest(path=path):
                 actual = [p['name'] for p in data['paths'][path]['get']['parameters']]
-                for name in params:
+                expected = _get_filter_fields(viewset)
+                for name in expected:
                     self.assertIn(name, actual)
                 self.assertIn('ordering', actual)
                 self.assertIn('page', actual)
+
+    def test_filter_parameter_description_mentions_compound(self):
+        response = self.client.get('/api/schema/', HTTP_ACCEPT='application/json')
+        import json
+        data = json.loads(response.content)
+        params = data['paths']['/api/companies/']['get']['parameters']
+        descriptions = [p['description'] for p in params]
+        self.assertTrue(any('compound filtering' in d for d in descriptions))
+
+    def test_dynamic_viewset_filters_documented(self):
+        from rest_framework import serializers, viewsets, routers
+        from django_filters.rest_framework import DjangoFilterBackend
+        from drf_spectacular.generators import SchemaGenerator
+        from pagasys.openapi_utils import document_filters
+
+        class DummySerializer(serializers.Serializer):
+            id = serializers.IntegerField()
+
+        class DummyViewSet(viewsets.ReadOnlyModelViewSet):
+            queryset = []
+            serializer_class = DummySerializer
+            filter_backends = [DjangoFilterBackend]
+            filterset_fields = ['foo', 'bar']
+
+        document_filters(DummyViewSet)
+
+        router = routers.SimpleRouter()
+        router.register('dummy', DummyViewSet, basename='dummy')
+
+        generator = SchemaGenerator(patterns=router.urls)
+        schema = generator.get_schema(request=None, public=True)
+        params = schema['paths']['/dummy/']['get']['parameters']
+        names = [p['name'] for p in params]
+        self.assertIn('foo', names)
+        self.assertIn('bar', names)
