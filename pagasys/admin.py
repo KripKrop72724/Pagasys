@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from django.contrib.auth.forms import UserCreationForm, UserChangeForm
+from django.contrib.auth.forms import AdminUserCreationForm, UserChangeForm
 from django.core.exceptions import ValidationError
 
 from .utils import scope_queryset
@@ -112,7 +112,7 @@ class ProjectAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
 class EmployeeAdmin(CleanSaveModelMixin, ScopedAdminMixin, UserAdmin):
     """Admin configuration for Employee model with password reset."""
 
-    add_form = UserCreationForm
+    add_form = AdminUserCreationForm
     form = UserChangeForm
     model = Employee
 
