@@ -16,6 +16,9 @@ class Company(models.Model):
     class Meta:
         verbose_name_plural = "companies"
         ordering = ["id"]
+        indexes = [
+            models.Index(fields=["name"], name="company_name_idx")
+        ]
 
     def __str__(self) -> str:
         return self.name
@@ -37,6 +40,9 @@ class Branch(models.Model):
 
     class Meta:
         verbose_name_plural = "branches"
+        indexes = [
+            models.Index(fields=["company", "name"], name="branch_company_name_idx")
+        ]
 
     def __str__(self) -> str:
         return self.name
@@ -68,6 +74,9 @@ class Designation(models.Model):
     class Meta:
         unique_together = (("company", "name"),)
         verbose_name_plural = "designations"
+        indexes = [
+            models.Index(fields=["company", "name", "level"], name="designation_comp_name_lvl_idx")
+        ]
 
     def __str__(self) -> str:
         return self.name
@@ -99,6 +108,10 @@ class TradeLicense(models.Model):
     class Meta:
         verbose_name = "trade license"
         verbose_name_plural = "trade licenses"
+        indexes = [
+            models.Index(fields=["company", "license_no"], name="license_company_no_idx"),
+            models.Index(fields=["company", "issued_date", "expiry_date"], name="license_date_range_idx"),
+        ]
 
     def clean(self):
         """Validate logical consistency of license dates."""
@@ -126,6 +139,9 @@ class Department(models.Model):
     class Meta:
         verbose_name_plural = "departments"
         ordering = ["id"]
+        indexes = [
+            models.Index(fields=["branch", "name"], name="dept_branch_name_idx")
+        ]
 
     def __str__(self) -> str:
         return self.name
@@ -153,6 +169,10 @@ class Project(models.Model):
 
     class Meta:
         verbose_name_plural = "projects"
+        indexes = [
+            models.Index(fields=["branch", "name"], name="project_branch_name_idx"),
+            models.Index(fields=["branch", "start_date", "end_date"], name="project_date_range_idx"),
+        ]
 
     def __str__(self) -> str:
         return self.name
@@ -229,6 +249,25 @@ class Employee(AbstractUser):
         ]
         verbose_name_plural = "employees"
         ordering = ["id"]
+        indexes = [
+            models.Index(
+                fields=["trade_license", "department", "employment_type"],
+                name="emp_lic_dept_type_idx",
+            ),
+            models.Index(
+                fields=["trade_license", "project", "employment_type"],
+                name="emp_lic_proj_type_idx",
+            ),
+            models.Index(
+                fields=["department", "designation", "employment_type"],
+                name="emp_dept_desig_type_idx",
+            ),
+            models.Index(
+                fields=["project", "designation", "employment_type"],
+                name="emp_proj_desig_type_idx",
+            ),
+            models.Index(fields=["first_name", "last_name"], name="emp_name_idx"),
+        ]
 
     def clean(self):
         super().clean()
