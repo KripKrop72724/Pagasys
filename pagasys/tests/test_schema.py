@@ -137,6 +137,13 @@ class OpenAPISchemaTests(TestCase):
         descriptions = [p['description'] for p in params]
         self.assertTrue(any('compound filtering' in d for d in descriptions))
 
+    def test_is_superuser_default_false_documented(self):
+        response = self.client.get('/api/schema/', HTTP_ACCEPT='application/json')
+        import json
+        data = json.loads(response.content)
+        field = data['components']['schemas']['Employee']['properties']['is_superuser']
+        self.assertEqual(field.get('default'), False)
+
     def test_filter_examples_in_description(self):
         response = self.client.get('/api/schema/', HTTP_ACCEPT='application/json')
         import json
