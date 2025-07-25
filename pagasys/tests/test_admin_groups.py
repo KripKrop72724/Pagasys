@@ -3,6 +3,7 @@ from django.contrib.auth import get_user_model
 from django.urls import reverse
 from django.core.management import call_command
 from django.contrib.admin.sites import AdminSite
+from django.contrib.auth.models import Group
 from pagasys.admin import EmployeeAdmin
 
 from pagasys.models import Company, Branch, Department, TradeLicense
@@ -151,3 +152,17 @@ class EmployeeAdminFieldTests(TestCase):
         emp.refresh_from_db()
         self.assertTrue(emp.is_superuser)
         self.assertEqual(emp.groups.count(), 0)
+
+    def test_non_superuser_forms_hide_is_superuser(self):
+        from django.contrib.auth.models import Group
+        non_su = self._create_employee(username="nosu", is_staff=True)
+        grp = Group.objects.get(name="Company Admin")
+        non_su.groups.add(grp)
+        self.client.force_login(non_su)
+        url = reverse("admin:pagasys_employee_add")
+        res = self.client.get(url)
+        self.assertNotContains(res, "id_is_superuser")
+        emp = self._create_employee(username="emp3")
+        url = reverse("admin:pagasys_employee_change", args=[emp.id])
+        res = self.client.get(url)
+        self.assertNotContains(res, "id_is_superuser")
