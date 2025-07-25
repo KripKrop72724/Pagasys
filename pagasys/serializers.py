@@ -1,7 +1,28 @@
 from functools import lru_cache
 from rest_framework import serializers
 from rest_framework.exceptions import PermissionDenied
+from django.db import models
 from django.contrib.auth.models import Group
+
+from .utils import ensure_in_scope
+
+
+class ScopedSerializerMixin:
+    """Validate that related objects reside within the request user's scope."""
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        if user is not None:
+            for field, value in attrs.items():
+                if isinstance(value, models.Model):
+                    ensure_in_scope(value, user, field)
+                elif isinstance(value, (list, tuple)):
+                    for item in value:
+                        if isinstance(item, models.Model):
+                            ensure_in_scope(item, user, field)
+        return attrs
 
 
 class BulkErrorSerializer(serializers.Serializer):
@@ -74,7 +95,7 @@ from .models import (
 )
 
 
-class CompanySerializer(serializers.ModelSerializer):
+class CompanySerializer(ScopedSerializerMixin, serializers.ModelSerializer):
     """Serializer for Company"""
 
     class Meta:
@@ -82,7 +103,7 @@ class CompanySerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
-class BranchSerializer(serializers.ModelSerializer):
+class BranchSerializer(ScopedSerializerMixin, serializers.ModelSerializer):
     """Serializer for Branch"""
 
     class Meta:
@@ -90,7 +111,7 @@ class BranchSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
-class DesignationSerializer(serializers.ModelSerializer):
+class DesignationSerializer(ScopedSerializerMixin, serializers.ModelSerializer):
     """Serializer for Designation"""
 
     class Meta:
@@ -104,7 +125,7 @@ class DesignationSerializer(serializers.ModelSerializer):
         return attrs
 
 
-class TradeLicenseSerializer(serializers.ModelSerializer):
+class TradeLicenseSerializer(ScopedSerializerMixin, serializers.ModelSerializer):
     """Serializer for :class:`~pagasys.models.TradeLicense`.
 
     The ``branches`` many-to-many relation is kept in ``fields`` via
@@ -131,7 +152,7 @@ class TradeLicenseSerializer(serializers.ModelSerializer):
         return attrs
 
 
-class DepartmentSerializer(serializers.ModelSerializer):
+class DepartmentSerializer(ScopedSerializerMixin, serializers.ModelSerializer):
     """Serializer for Department"""
 
     class Meta:
@@ -139,7 +160,7 @@ class DepartmentSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
-class ProjectSerializer(serializers.ModelSerializer):
+class ProjectSerializer(ScopedSerializerMixin, serializers.ModelSerializer):
     """Serializer for Project"""
 
     class Meta:
@@ -147,7 +168,7 @@ class ProjectSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
-class EmployeeSerializer(serializers.ModelSerializer):
+class EmployeeSerializer(ScopedSerializerMixin, serializers.ModelSerializer):
     """Serializer for Employee"""
 
     username = serializers.CharField(help_text="Login name")
