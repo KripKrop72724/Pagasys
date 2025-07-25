@@ -152,8 +152,15 @@ class EmployeeSerializer(serializers.ModelSerializer):
     username = serializers.CharField(help_text="Login name")
     password = serializers.CharField(write_only=True, help_text="Password")
     groups = serializers.PrimaryKeyRelatedField(
-        queryset=Group.objects.all(), many=True, required=False,
-        help_text="Group IDs for this employee"
+        queryset=Group.objects.all(),
+        many=True,
+        required=False,
+        help_text="Group IDs for this employee",
+    )
+    is_superuser = serializers.BooleanField(
+        required=False,
+        default=False,
+        help_text="Give the user all permissions. Defaults to false when omitted",
     )
     first_name = serializers.CharField(required=False, allow_blank=True, help_text="Given name")
     last_name = serializers.CharField(required=False, allow_blank=True, help_text="Family name")
@@ -165,6 +172,7 @@ class EmployeeSerializer(serializers.ModelSerializer):
             'id',
             'username',
             'password',
+            'is_superuser',
             'first_name',
             'last_name',
             'email',
@@ -182,6 +190,9 @@ class EmployeeSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         groups = attrs.pop('groups', None)
+        is_super = attrs.get('is_superuser', getattr(self.instance, 'is_superuser', False))
+        if is_super and groups:
+            raise serializers.ValidationError({'groups': ['Superuser cannot belong to groups.']})
         attrs = super().validate(attrs)
         if self.instance is not None:
             data = {f.name: getattr(self.instance, f.name) for f in Employee._meta.fields}

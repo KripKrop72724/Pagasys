@@ -102,8 +102,49 @@ class EmployeeSerializerGroupTests(TestCase):
             employment_type="permanent",
         )
         ser = EmployeeSerializer(emp, data={"groups": [self.g1.id]}, partial=True)
+        self.assertFalse(ser.is_valid())
+        self.assertIn("groups", ser.errors)
+
+    def test_create_defaults_to_regular_user(self):
+        data = {
+            "username": "nosu",
+            "password": "pass",
+            "trade_license": self.license.id,
+            "department": self.department.id,
+            "hire_date": "2024-01-02",
+            "employment_type": "permanent",
+        }
+        ser = EmployeeSerializer(data=data)
         self.assertTrue(ser.is_valid(), ser.errors)
         emp = ser.save()
-        self.assertEqual(list(emp.groups.all()), [])
+        self.assertFalse(emp.is_superuser)
 
 
+
+    def test_create_superuser_with_groups_errors(self):
+        data = {
+            "username": "su4",
+            "password": "pass",
+            "trade_license": self.license.id,
+            "department": self.department.id,
+            "hire_date": "2024-01-02",
+            "employment_type": "permanent",
+            "is_superuser": True,
+            "groups": [self.g1.id],
+        }
+        ser = EmployeeSerializer(data=data)
+        self.assertFalse(ser.is_valid())
+        self.assertIn("groups", ser.errors)
+
+    def test_update_to_superuser_with_groups_errors(self):
+        emp = Employee.objects.create_user(
+            username="reg",
+            password="pass",
+            trade_license=self.license,
+            department=self.department,
+            hire_date="2024-01-02",
+            employment_type="permanent",
+        )
+        ser = EmployeeSerializer(emp, data={"is_superuser": True, "groups": [self.g1.id]}, partial=True)
+        self.assertFalse(ser.is_valid())
+        self.assertIn("groups", ser.errors)
