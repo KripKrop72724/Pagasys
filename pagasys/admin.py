@@ -183,3 +183,8 @@ class EmployeeAdmin(CleanSaveModelMixin, ScopedAdminMixin, UserAdmin):
                     fields.remove("groups")
                     opts["fields"] = tuple(fields)
         return fieldsets
+
+    def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
+        if obj.is_superuser:
+            obj.groups.clear()

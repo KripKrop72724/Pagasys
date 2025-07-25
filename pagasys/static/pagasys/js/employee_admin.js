@@ -1,11 +1,28 @@
-(function($) {
+(function() {
   function toggleGroupField() {
-    var isSuper = $('#id_is_superuser').is(':checked');
-    $('#id_groups').closest('.form-row').toggle(!isSuper);
-    $('#id_groups').prop('disabled', isSuper);
+    var superBox = document.querySelector('#id_is_superuser');
+    var groupField = document.querySelector('#id_groups');
+    if (!superBox || !groupField) return;
+    var row = groupField.closest('.form-row') || groupField.closest('.form-group');
+    if (superBox.checked) {
+      if (row) row.style.display = 'none';
+      groupField.disabled = true;
+    } else {
+      if (row) row.style.display = '';
+      groupField.disabled = false;
+    }
   }
-  $(document).ready(function() {
-    $('#id_is_superuser').change(toggleGroupField);
+
+  function init() {
+    var superBox = document.querySelector('#id_is_superuser');
+    if (!superBox) return;
+    superBox.addEventListener('change', toggleGroupField);
     toggleGroupField();
-  });
-})(django.jQuery);
+  }
+
+  if (document.readyState !== 'loading') {
+    init();
+  } else {
+    document.addEventListener('DOMContentLoaded', init);
+  }
+})();

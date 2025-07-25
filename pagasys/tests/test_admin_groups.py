@@ -124,3 +124,63 @@ class EmployeeAdminFieldTests(TestCase):
         emp = get_user_model().objects.get(username="sup")
         self.assertTrue(emp.is_superuser)
         self.assertEqual(emp.groups.count(), 0)
+
+    def test_update_to_superuser_ignores_groups(self):
+        emp = self._create_employee(username="upemp")
+        from django.contrib.auth.models import Group
+        g = Group.objects.create(name="t1")
+        emp.groups.add(g)
+        emp.is_superuser = True
+        admin = EmployeeAdmin(get_user_model(), self.site)
+        req = self.factory.post("/")
+        req.user = self.admin
+        admin.save_model(req, emp, None, True)
+        emp.refresh_from_db()
+        self.assertTrue(emp.is_superuser)
+        self.assertEqual(emp.groups.count(), 0)
+
+    def test_edit_superuser_cannot_add_groups(self):
+        emp = self._create_employee(is_superuser=True, is_staff=True, username="su_edit")
+        from django.contrib.auth.models import Group
+        g = Group.objects.create(name="t2")
+        admin = EmployeeAdmin(get_user_model(), self.site)
+        req = self.factory.post("/")
+        req.user = self.admin
+        emp.groups.add(g)
+        admin.save_model(req, emp, None, True)
+        emp.refresh_from_db()
+        self.assertTrue(emp.is_superuser)
+        self.assertEqual(emp.groups.count(), 0)
+
+
+class EmployeeAdminJSTests(TestCase):
+    def _run_js(self, checked):
+        import json, subprocess, pathlib
+        js_path = pathlib.Path(__file__).resolve().parent.parent / "static/pagasys/js/employee_admin.js"
+        html = (
+            "<html><body><div class='form-row'><select id='id_groups'></select></div>"
+            f"<input type='checkbox' id='id_is_superuser' {'checked' if checked else ''}></body></html>"
+        )
+        script = f"""
+const fs = require('fs');
+const {{JSDOM}} = require('jsdom');
+const code = fs.readFileSync('{js_path}', 'utf8');
+const dom = new JSDOM({json.dumps(html)}, {{ runScripts: 'outside-only' }});
+const vm = require('vm');
+vm.runInContext(code, vm.createContext({{window: dom.window, document: dom.window.document}}));
+dom.window.document.dispatchEvent(new dom.window.Event('DOMContentLoaded'));
+const group = dom.window.document.querySelector('#id_groups');
+console.log(JSON.stringify({{disabled: group.disabled, hidden: group.closest('.form-row').style.display === 'none'}}));
+"""
+        out = subprocess.check_output(['node', '-e', script])
+        return json.loads(out.decode())
+
+    def test_js_shows_groups_for_regular_user(self):
+        res = self._run_js(False)
+        self.assertFalse(res['disabled'])
+        self.assertFalse(res['hidden'])
+
+    def test_js_hides_groups_for_superuser(self):
+        res = self._run_js(True)
+        self.assertTrue(res['disabled'])
+        self.assertTrue(res['hidden'])
