@@ -1,4 +1,5 @@
 from django.db import models
+from rest_framework.exceptions import PermissionDenied
 
 from .models import (
     Company,
@@ -9,6 +10,16 @@ from .models import (
     Project,
     Employee,
 )
+
+SCOPED_MODELS = {
+    Company,
+    Branch,
+    Designation,
+    TradeLicense,
+    Department,
+    Project,
+    Employee,
+}
 
 
 ROLE_PRIORITY = [
@@ -101,4 +112,14 @@ def scope_queryset(queryset, user):
         return queryset.filter(pk=user.pk)
 
     return queryset
+
+
+def ensure_in_scope(obj, user, field_name=""):
+    """Raise PermissionDenied if object is outside the user's scope."""
+    if obj.__class__ not in SCOPED_MODELS:
+        return
+    qs = scope_queryset(obj.__class__.objects.filter(pk=obj.pk), user)
+    if not qs.exists():
+        prefix = f"{field_name}: " if field_name else ""
+        raise PermissionDenied(f"{prefix}object not in allowed scope")
 

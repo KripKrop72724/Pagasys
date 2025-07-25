@@ -41,6 +41,32 @@ class ScopedAdminMixin:
         qs = scope_queryset(self.model.objects.filter(pk=obj.pk), request.user)
         return qs.exists()
 
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        """Restrict FK dropdowns to objects within the user's scope."""
+        related_model = db_field.remote_field.model
+        target_models = {
+            Company,
+            Branch,
+            Designation,
+            TradeLicense,
+            Department,
+            Project,
+            Employee,
+        }
+        if related_model in target_models:
+            qs = scope_queryset(related_model.objects.all(), request.user)
+            kwargs["queryset"] = qs
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
+    def formfield_for_manytomany(self, db_field, request, **kwargs):
+        """Restrict M2M dropdowns to objects within the user's scope."""
+        related_model = db_field.remote_field.model
+        target_models = {Branch, Employee}
+        if related_model in target_models:
+            qs = scope_queryset(related_model.objects.all(), request.user)
+            kwargs["queryset"] = qs
+        return super().formfield_for_manytomany(db_field, request, **kwargs)
+
     def has_view_permission(self, request, obj=None):
         """Restrict view access to objects within the user's scope."""
         if not (self._has_perm(request, "view") or self._has_perm(request, "change")):
