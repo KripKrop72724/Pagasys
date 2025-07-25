@@ -124,3 +124,30 @@ class EmployeeAdminFieldTests(TestCase):
         emp = get_user_model().objects.get(username="sup")
         self.assertTrue(emp.is_superuser)
         self.assertEqual(emp.groups.count(), 0)
+
+    def test_update_to_superuser_ignores_groups(self):
+        emp = self._create_employee(username="upemp")
+        from django.contrib.auth.models import Group
+        g = Group.objects.create(name="t1")
+        emp.groups.add(g)
+        emp.is_superuser = True
+        admin = EmployeeAdmin(get_user_model(), self.site)
+        req = self.factory.post("/")
+        req.user = self.admin
+        admin.save_model(req, emp, None, True)
+        emp.refresh_from_db()
+        self.assertTrue(emp.is_superuser)
+        self.assertEqual(emp.groups.count(), 0)
+
+    def test_edit_superuser_cannot_add_groups(self):
+        emp = self._create_employee(is_superuser=True, is_staff=True, username="su_edit")
+        from django.contrib.auth.models import Group
+        g = Group.objects.create(name="t2")
+        admin = EmployeeAdmin(get_user_model(), self.site)
+        req = self.factory.post("/")
+        req.user = self.admin
+        emp.groups.add(g)
+        admin.save_model(req, emp, None, True)
+        emp.refresh_from_db()
+        self.assertTrue(emp.is_superuser)
+        self.assertEqual(emp.groups.count(), 0)
