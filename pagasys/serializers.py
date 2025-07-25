@@ -1,5 +1,6 @@
 from functools import lru_cache
 from rest_framework import serializers
+from rest_framework.exceptions import PermissionDenied
 from django.contrib.auth.models import Group
 
 
@@ -187,6 +188,12 @@ class EmployeeSerializer(serializers.ModelSerializer):
         extra_kwargs = {
             'password': {'write_only': True},
         }
+
+    def validate_is_superuser(self, value):
+        request = self.context.get('request')
+        if request and value and not request.user.is_superuser:
+            raise PermissionDenied('Only superusers can assign superuser status.')
+        return value
 
     def validate(self, attrs):
         groups = attrs.pop('groups', None)

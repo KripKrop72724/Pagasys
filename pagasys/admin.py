@@ -176,6 +176,12 @@ class EmployeeAdmin(CleanSaveModelMixin, ScopedAdminMixin, UserAdmin):
 
     def get_fieldsets(self, request, obj=None):
         fieldsets = deepcopy(super().get_fieldsets(request, obj))
+        if not request.user.is_superuser:
+            for name, opts in fieldsets:
+                fields = list(opts.get("fields", ()))
+                if "is_superuser" in fields:
+                    fields.remove("is_superuser")
+                opts["fields"] = tuple(fields)
         if (obj and obj.is_superuser) or request.POST.get("is_superuser"):
             for name, opts in fieldsets:
                 fields = list(opts.get("fields", ()))

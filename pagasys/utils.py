@@ -86,6 +86,8 @@ def scope_queryset(queryset, user):
         return queryset.none()
 
     if model is Employee:
+        if not user.is_superuser:
+            queryset = queryset.filter(is_superuser=False)
         if role in ("company_admin", "payroll_manager"):
             return queryset.filter(trade_license__company=company)
         if role == "branch_manager" and branch:
