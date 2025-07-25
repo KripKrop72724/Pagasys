@@ -1,21 +1,16 @@
-(function(factory) {
-  var $ = window.django && window.django.jQuery ? window.django.jQuery : window.jQuery;
-  if ($) {
-    factory($);
-  } else {
-    document.addEventListener('DOMContentLoaded', function() {
-      var $ = window.django && window.django.jQuery ? window.django.jQuery : window.jQuery;
-      if ($) factory($);
-    });
-  }
-})(function($) {
+document.addEventListener('DOMContentLoaded', function () {
+  const isSuperEl = document.getElementById('id_is_superuser');
+  const groupsField = document.getElementById('id_groups');
+  if (!isSuperEl || !groupsField) return;
+
+  const row = groupsField.closest('.form-row');
+
   function toggleGroupField() {
-    var isSuper = $('#id_is_superuser').is(':checked');
-    $('#id_groups').closest('.form-row').toggle(!isSuper);
-    $('#id_groups').prop('disabled', isSuper);
+    const isSuper = isSuperEl.checked;
+    if (row) row.style.display = isSuper ? 'none' : '';
+    groupsField.disabled = isSuper;
   }
-  $(function() {
-    $('#id_is_superuser').on('change', toggleGroupField);
-    toggleGroupField();
-  });
+
+  isSuperEl.addEventListener('change', toggleGroupField);
+  toggleGroupField();
 });
