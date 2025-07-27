@@ -31,6 +31,7 @@ class EmployeeAdminFieldTests(TestCase):
             department=self.department,
             hire_date="2024-01-01",
             employment_type="permanent",
+            visa_type="company",
         )
         self.client.force_login(self.admin)
         self.factory = RequestFactory()
@@ -45,6 +46,7 @@ class EmployeeAdminFieldTests(TestCase):
             "department": self.department,
             "hire_date": "2024-01-02",
             "employment_type": "permanent",
+            "visa_type": "company",
             "is_staff": True,
         }
         data.update(kwargs)
@@ -114,6 +116,7 @@ class EmployeeAdminFieldTests(TestCase):
             "is_staff": "on",
             "is_superuser": "on",
             "trade_license": self.license.id,
+            "visa_type": "company",
             "department": self.department.id,
             "hire_date": "2024-01-03",
             "employment_type": "permanent",

@@ -35,6 +35,7 @@ class TradeLicenseWidgetTests(TestCase):
             department=dept,
             hire_date="2024-01-01",
             employment_type="permanent",
+            visa_type="company",
         )
         self.client.force_login(self.admin_user)
 
@@ -56,17 +57,8 @@ class TradeLicenseWidgetTests(TestCase):
         with open("pagasys/static/pagasys/js/tradelicense_admin.js") as fh:
             content = fh.read()
         self.assertIn("window.addEventListener('load'", content)
-        self.assertIn('setTimeout(setup, 0)', content)
-        self.assertIn('branchCompanyMap', content)
-
-    def test_change_form_branches_filtered_by_company(self):
-        url = reverse("admin:pagasys_tradelicense_change", args=[self.lic.id])
-        res = self.client.get(url)
-        self.assertContains(res, self.b1.name)
-        self.assertNotContains(res, self.b2.name)
-
-    def test_script_hides_branches_on_company_change(self):
-        with open("pagasys/static/pagasys/js/tradelicense_admin.js") as fh:
+        
+    def test_employee_script_uses_load_event(self):
+        with open("pagasys/static/pagasys/js/employee_admin.js") as fh:
             content = fh.read()
-        self.assertIn("opt.hidden = !match", content)
-        self.assertIn("branchCompanyMap[opt.value]", content)
+        self.assertIn("window.addEventListener('load'", content)

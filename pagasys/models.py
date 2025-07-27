@@ -194,8 +194,22 @@ class Project(models.Model):
 class Employee(AbstractUser):
     """User account combined with employment info."""
 
+    VISA_TYPE_CHOICES = [
+        ("company", "Company"),
+        ("personal", "Personal"),
+    ]
+
+    visa_type = models.CharField(
+        max_length=20,
+        choices=VISA_TYPE_CHOICES,
+        default="company",
+        help_text="Whether the employee uses a company or personal visa",
+    )
+
     trade_license = models.ForeignKey(
         TradeLicense,
+        null=True,
+        blank=True,
         on_delete=models.PROTECT,
         related_name="employees",
         help_text="Visa license assigned",
@@ -234,7 +248,13 @@ class Employee(AbstractUser):
     @property
     def company(self):
         """Convenience access to the employee's company."""
-        return self.trade_license.company
+        if self.trade_license:
+            return self.trade_license.company
+        if self.department:
+            return self.department.branch.company
+        if self.project:
+            return self.project.branch.company
+        return None
 
     @property
     def branch(self):
@@ -255,8 +275,11 @@ class Employee(AbstractUser):
                 name="employee_one_of_dept_or_proj",
             ),
             models.CheckConstraint(
-                condition=~models.Q(trade_license=None),
-                name="employee_must_have_license",
+                check=(
+                    models.Q(visa_type="company", trade_license__isnull=False)
+                    | models.Q(visa_type="personal", trade_license__isnull=True)
+                ),
+                name="employee_license_matches_visa_type",
             ),
         ]
         verbose_name_plural = "employees"
@@ -287,33 +310,45 @@ class Employee(AbstractUser):
             raise ValidationError(
                 "Employee must belong to exactly one of department or project"
             )
-        current = self.trade_license.employees.exclude(pk=self.pk).count()
-        if current >= self.trade_license.max_visas:
-            raise ValidationError("Visa quota reached")
-        if self.designation and self.designation.company != self.trade_license.company:
+
+        branch = self.department.branch if self.department else self.project.branch
+
+        if self.visa_type == "company":
+            if not self.trade_license:
+                raise ValidationError({"trade_license": ["This field is required for company visas"]})
+
+            current = self.trade_license.employees.exclude(pk=self.pk).count()
+            if current >= self.trade_license.max_visas:
+                raise ValidationError("Visa quota reached")
+
+            if self.designation and self.designation.company != self.trade_license.company:
+                raise ValidationError("Designation must match company")
+
+            if self.trade_license.company != branch.company:
+                raise ValidationError("License company must match branch company")
+
+        else:  # personal visa
+            if self.trade_license:
+                raise ValidationError({"trade_license": ["Trade license must be empty for personal visa"]})
+
+        # When personal visa but designation set with company mismatch? We still ensure designation matches branch.company
+        if self.designation and self.designation.company != branch.company:
             raise ValidationError("Designation must match company")
-
-        # ensure employee's branch is covered by their license
-        if self.department:
-            emp_branch = self.department.branch
-        else:
-            emp_branch = self.project.branch
-
-        if emp_branch not in self.trade_license.branches.all():
-            raise ValidationError(
-                f"Branch {emp_branch.name!r} is not covered by license {self.trade_license.license_no!r}"
-            )
 
     def __str__(self) -> str:
         parts = [f"{self.first_name} {self.last_name}"]
-        parts.append(self.trade_license.company.name)
+        if self.trade_license:
+            parts.append(self.trade_license.company.name)
+        elif self.branch:
+            parts.append(self.branch.company.name)
         if self.department:
             parts.append(self.department.branch.name)
             parts.append(self.department.name)
         elif self.project:
             parts.append(self.project.branch.name)
             parts.append(self.project.name)
-        parts.append(self.trade_license.license_no)
+        if self.trade_license:
+            parts.append(self.trade_license.license_no)
         if self.designation:
             parts.append(self.designation.name)
         return " - ".join(parts)
@@ -322,12 +357,15 @@ class Employee(AbstractUser):
         """Ensure visa quota checks are performed atomically."""
         from django.db import transaction
 
-        with transaction.atomic():
-            lic = (
-                TradeLicense.objects.select_for_update()
-                .get(pk=self.trade_license_id)
-            )
-            current = lic.employees.exclude(pk=self.pk).count()
-            if current >= lic.max_visas:
-                raise ValidationError("Visa quota reached")
+        if self.visa_type == "company" and self.trade_license_id:
+            with transaction.atomic():
+                lic = (
+                    TradeLicense.objects.select_for_update()
+                    .get(pk=self.trade_license_id)
+                )
+                current = lic.employees.exclude(pk=self.pk).count()
+                if current >= lic.max_visas:
+                    raise ValidationError("Visa quota reached")
+                super().save(*args, **kwargs)
+        else:
             super().save(*args, **kwargs)

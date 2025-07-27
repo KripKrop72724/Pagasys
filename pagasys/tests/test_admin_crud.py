@@ -39,6 +39,7 @@ class AdminCRUDTests(ModelFactoryMixin, TestCase):
             department=self.department,
             hire_date="2024-01-01",
             employment_type="permanent",
+            visa_type="company",
         )
         self.client.force_login(self.superuser)
 
@@ -177,6 +178,7 @@ class AdminCRUDTests(ModelFactoryMixin, TestCase):
             "department": self.department.id,
             "hire_date": "2024-02-01",
             "employment_type": "permanent",
+            "visa_type": "company",
         }
         res = self.client.post(add_url, data)
         self.assertEqual(res.status_code, 302)

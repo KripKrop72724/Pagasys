@@ -205,6 +205,7 @@ class EmployeeAdmin(CleanSaveModelMixin, ScopedAdminMixin, UserAdmin):
             {
                 "fields": (
                     "trade_license",
+                    "visa_type",
                     "department",
                     "project",
                     "designation",
@@ -236,6 +237,7 @@ class EmployeeAdmin(CleanSaveModelMixin, ScopedAdminMixin, UserAdmin):
             {
                 "fields": (
                     "trade_license",
+                    "visa_type",
                     "department",
                     "project",
                     "designation",

@@ -36,6 +36,7 @@ class AdminDropdownScopeTests(TestCase):
             department=self.d1,
             hire_date="2024-01-01",
             employment_type="permanent",
+            visa_type="company",
         )
         self.user.groups.add(bm_group)
         self.client.force_login(self.user)
@@ -75,6 +76,7 @@ class APICreateScopeTests(TestCase):
             department=self.d1,
             hire_date="2024-01-01",
             employment_type="permanent",
+            visa_type="company",
         )
         self.user.groups.add(bm_group)
         self.client.force_authenticate(self.user)
@@ -87,6 +89,7 @@ class APICreateScopeTests(TestCase):
             "department": dept,
             "hire_date": "2024-02-01",
             "employment_type": "permanent",
+            "visa_type": "company",
         }
 
     def test_cannot_create_employee_outside_scope(self):

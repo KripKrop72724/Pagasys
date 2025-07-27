@@ -29,6 +29,7 @@ class AdminFullCleanTests(TestCase):
             department=self.department,
             hire_date="2024-01-01",
             employment_type="permanent",
+            visa_type="company",
         )
 
     def _get_request(self):

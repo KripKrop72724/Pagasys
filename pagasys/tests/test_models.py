@@ -181,24 +181,25 @@ class ModelValidationTests(ModelFactoryMixin, TestCase):
             emp.full_clean()
 
     def test_employee_branch_must_be_covered(self):
-        other_branch = self.create_branch(self.company, name="B2")
-        dept = self.create_department(other_branch)
+        other_company = self.create_company("OtherCo")
+        other_branch = self.create_branch(other_company, name="OB")
+        other_license = self.create_license(company=other_company, branches=[other_branch], license_no="O1")
         emp = Employee(
             username="emp6",
             password="pass",
-            trade_license=self.license,
-            department=dept,
+            trade_license=other_license,
+            department=self.department,
             first_name="E",
             last_name="F",
-            hire_date="2024-01-02",
+            hire_date="2024-02-01",
             employment_type="permanent",
         )
-        with self.assertRaisesMessage(ValidationError, "not covered"):
+        with self.assertRaisesMessage(ValidationError, "License company must match branch company"):
             emp.full_clean()
 
-    def test_employee_branch_covered_ok(self):
+    def test_employee_license_other_branch_same_company_ok(self):
         other_branch = self.create_branch(self.company, name="B2")
-        lic = self.create_license(branches=[self.branch, other_branch], license_no="LIC2")
+        lic = self.create_license(branches=[self.branch], license_no="LIC2")
         dept = self.create_department(other_branch, name="Dept2")
         emp = Employee(
             username="emp7",

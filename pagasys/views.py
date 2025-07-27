@@ -155,6 +155,7 @@ class EmployeeFilter(filters.FilterSet):
             "last_name",
             "branch",
             "employment_type",
+            "visa_type",
             "trade_license__company",
         ]
 

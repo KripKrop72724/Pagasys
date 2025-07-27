@@ -44,6 +44,7 @@ class AdminScopeTests(TestCase):
             department=department,
             hire_date="2024-01-01",
             employment_type="permanent",
+            visa_type="company",
         )
         self.admin_user.groups.add(ca_group)
 
@@ -54,6 +55,7 @@ class AdminScopeTests(TestCase):
             department=other_department,
             hire_date="2024-01-01",
             employment_type="permanent",
+            visa_type="company",
         )
 
     def test_admin_queryset_scoped(self):

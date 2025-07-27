@@ -39,6 +39,7 @@ class PaginationWarningTests(TestCase):
             department=self.department,
             hire_date="2024-01-01",
             employment_type="permanent",
+            visa_type="company",
         )
         groups = [
             "Company Admin",
@@ -73,6 +74,7 @@ class PaginationWarningTests(TestCase):
             department=self.department,
             hire_date="2024-01-02",
             employment_type="permanent",
+            visa_type="company",
         )
         User.objects.create_user(
             username="emp2",
@@ -81,6 +83,7 @@ class PaginationWarningTests(TestCase):
             department=self.department,
             hire_date="2024-01-03",
             employment_type="permanent",
+            visa_type="company",
         )
 
     def _check_endpoint(self, url):
