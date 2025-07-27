@@ -81,6 +81,37 @@ class ModelValidationTests(ModelFactoryMixin, TestCase):
         with self.assertRaises(ValidationError):
             lic.full_clean()
 
+    def test_trade_license_branches_must_match_company(self):
+        other_company = self.create_company("Other")
+        other_branch = self.create_branch(other_company, "OB")
+        lic = TradeLicense(
+            company=self.company,
+            license_no="LICY",
+            issued_date="2024-01-01",
+            expiry_date="2025-01-01",
+            max_visas=1,
+        )
+        lic.save()
+        lic.branches.set([other_branch])
+        with self.assertRaisesMessage(ValidationError, "license company"):
+            lic.full_clean()
+
+    def test_trade_license_multiple_branch_mismatch(self):
+        other_company = self.create_company("Other2")
+        other_branch = self.create_branch(other_company, "OB2")
+        b2 = self.create_branch(self.company, "B2")
+        lic = TradeLicense(
+            company=self.company,
+            license_no="LICZ",
+            issued_date="2024-01-01",
+            expiry_date="2025-01-01",
+            max_visas=1,
+        )
+        lic.save()
+        lic.branches.set([self.branch, other_branch, b2])
+        with self.assertRaises(ValidationError):
+            lic.full_clean()
+
     def test_employee_visa_quota_enforced(self):
         Employee.objects.create(
             username="emp1",

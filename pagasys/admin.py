@@ -2,6 +2,8 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 from django.contrib.auth.forms import AdminUserCreationForm, UserChangeForm
 from django.core.exceptions import ValidationError
+from django import forms
+from django.contrib.admin.widgets import FilteredSelectMultiple
 from copy import deepcopy
 
 from .utils import scope_queryset
@@ -106,6 +108,30 @@ class CleanSaveModelMixin:
         super().save_model(request, obj, form, change)
 
 
+class BranchSelectMultiple(FilteredSelectMultiple):
+    """Select box that annotates options with the branch company."""
+
+    def create_option(self, name, value, label, selected, index, subindex=None, attrs=None):
+        option = super().create_option(name, value, label, selected, index, subindex=subindex, attrs=attrs)
+        try:
+            option["attrs"]["data-company"] = str(value.instance.company_id)
+        except Exception:
+            pass
+        return option
+
+
+class TradeLicenseForm(forms.ModelForm):
+    class Meta:
+        model = TradeLicense
+        fields = "__all__"
+        widgets = {"branches": BranchSelectMultiple("branches", False)}
+
+    def clean(self):
+        cleaned = super().clean()
+        self.instance._branches_for_validation = cleaned.get("branches")
+        return cleaned
+
+
 @admin.register(Company)
 class CompanyAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
     pass
@@ -123,7 +149,15 @@ class DesignationAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
 
 @admin.register(TradeLicense)
 class TradeLicenseAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
-    pass
+    form = TradeLicenseForm
+    filter_horizontal = ["branches"]
+
+    class Media:
+        js = ["pagasys/js/tradelicense_admin.js"]
+
+    def save_model(self, request, obj, form, change):
+        obj._branches_for_validation = form.cleaned_data.get("branches")
+        super().save_model(request, obj, form, change)
 
 
 @admin.register(Department)
