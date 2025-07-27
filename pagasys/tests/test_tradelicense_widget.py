@@ -56,3 +56,17 @@ class TradeLicenseWidgetTests(TestCase):
         with open("pagasys/static/pagasys/js/tradelicense_admin.js") as fh:
             content = fh.read()
         self.assertIn("window.addEventListener('load'", content)
+        self.assertIn('setTimeout(setup, 0)', content)
+        self.assertIn('branchCompanyMap', content)
+
+    def test_change_form_branches_filtered_by_company(self):
+        url = reverse("admin:pagasys_tradelicense_change", args=[self.lic.id])
+        res = self.client.get(url)
+        self.assertContains(res, self.b1.name)
+        self.assertNotContains(res, self.b2.name)
+
+    def test_script_hides_branches_on_company_change(self):
+        with open("pagasys/static/pagasys/js/tradelicense_admin.js") as fh:
+            content = fh.read()
+        self.assertIn("opt.hidden = !match", content)
+        self.assertIn("branchCompanyMap[opt.value]", content)
