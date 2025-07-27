@@ -67,4 +67,4 @@ class TradeLicenseWidgetTests(TestCase):
     def test_script_hides_branches_on_company_change(self):
         with open("pagasys/static/pagasys/js/tradelicense_admin.js") as fh:
             content = fh.read()
-        self.assertIn("fromBox.appendChild", content)
+        self.assertIn("opt.hidden = !match", content)
