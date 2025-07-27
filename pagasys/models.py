@@ -40,6 +40,7 @@ class Branch(models.Model):
 
     class Meta:
         verbose_name_plural = "branches"
+        ordering = ["id"]
         indexes = [
             models.Index(fields=["company", "name"], name="branch_company_name_idx")
         ]
@@ -74,6 +75,7 @@ class Designation(models.Model):
     class Meta:
         unique_together = (("company", "name"),)
         verbose_name_plural = "designations"
+        ordering = ["id"]
         indexes = [
             models.Index(fields=["company", "name", "level"], name="designation_comp_name_lvl_idx")
         ]
@@ -108,6 +110,7 @@ class TradeLicense(models.Model):
     class Meta:
         verbose_name = "trade license"
         verbose_name_plural = "trade licenses"
+        ordering = ["id"]
         indexes = [
             models.Index(fields=["company", "license_no"], name="license_company_no_idx"),
             models.Index(fields=["company", "issued_date", "expiry_date"], name="license_date_range_idx"),
@@ -170,6 +173,7 @@ class Project(models.Model):
 
     class Meta:
         verbose_name_plural = "projects"
+        ordering = ["id"]
         indexes = [
             models.Index(fields=["branch", "name"], name="project_branch_name_idx"),
             models.Index(fields=["branch", "start_date", "end_date"], name="project_date_range_idx"),
