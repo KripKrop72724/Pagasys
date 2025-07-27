@@ -1,4 +1,4 @@
-window.addEventListener('load', function () {
+function initEmployeeAdmin() {
   const isSuperEl = document.getElementById('id_is_superuser');
   const groupsField = document.getElementById('id_groups');
   const visaTypeEl = document.getElementById('id_visa_type');
@@ -27,4 +27,7 @@ window.addEventListener('load', function () {
     visaTypeEl.addEventListener('change', toggleLicenseField);
     toggleLicenseField();
   }
-});
+}
+
+window.addEventListener('load', initEmployeeAdmin);
+window.addEventListener('DOMContentLoaded', initEmployeeAdmin);
