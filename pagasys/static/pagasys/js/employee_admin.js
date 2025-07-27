@@ -3,7 +3,9 @@ function initEmployeeAdmin() {
   const groupsField = document.getElementById('id_groups');
   const visaTypeEl = document.getElementById('id_visa_type');
   const licenseField = document.getElementById('id_trade_license');
-  const licenseRow = document.querySelector('.form-row.field-trade_license');
+  const licenseRow = licenseField
+    ? licenseField.closest('.form-row')
+    : document.querySelector('.form-row.field-trade_license');
 
   if (isSuperEl && groupsField) {
     const row = groupsField.closest('.form-row');
@@ -20,7 +22,12 @@ function initEmployeeAdmin() {
     if (!visaTypeEl) return;
     const personal = visaTypeEl.value === 'personal';
     if (licenseRow) licenseRow.style.display = personal ? 'none' : '';
-    if (licenseField) licenseField.disabled = personal;
+    if (licenseField) {
+      licenseField.disabled = personal;
+      if (personal) {
+        licenseField.value = '';
+      }
+    }
   }
 
   if (visaTypeEl) {
