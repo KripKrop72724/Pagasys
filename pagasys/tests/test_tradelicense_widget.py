@@ -35,6 +35,7 @@ class TradeLicenseWidgetTests(TestCase):
             department=dept,
             hire_date="2024-01-01",
             employment_type="permanent",
+            visa_type="company",
         )
         self.client.force_login(self.admin_user)
 

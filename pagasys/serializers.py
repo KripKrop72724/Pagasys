@@ -204,6 +204,7 @@ class EmployeeSerializer(ScopedSerializerMixin, serializers.ModelSerializer):
             'username',
             'password',
             'is_superuser',
+            'visa_type',
             'first_name',
             'last_name',
             'email',

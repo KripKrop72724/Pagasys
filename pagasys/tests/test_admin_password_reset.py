@@ -27,6 +27,7 @@ class AdminPasswordResetTests(TestCase):
             department=self.department,
             hire_date="2024-01-01",
             employment_type="permanent",
+            visa_type="company",
         )
 
         self.employee = User.objects.create_user(
@@ -36,6 +37,7 @@ class AdminPasswordResetTests(TestCase):
             department=self.department,
             hire_date="2024-01-01",
             employment_type="permanent",
+            visa_type="company",
         )
 
     def test_superuser_can_access_password_change_view(self):

@@ -36,6 +36,7 @@ class OtherBulkActionsTests(TestCase):
             department=self.department,
             hire_date="2024-01-01",
             employment_type="permanent",
+            visa_type="company",
         )
         groups = [
             "Company Admin",
