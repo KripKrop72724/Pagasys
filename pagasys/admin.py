@@ -159,6 +159,11 @@ class TradeLicenseAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin)
         obj._branches_for_validation = form.cleaned_data.get("branches")
         super().save_model(request, obj, form, change)
 
+    def formfield_for_manytomany(self, db_field, request, **kwargs):
+        if db_field.name == "branches":
+            kwargs["widget"] = BranchSelectMultiple(db_field.verbose_name, False)
+        return super().formfield_for_manytomany(db_field, request, **kwargs)
+
 
 @admin.register(Department)
 class DepartmentAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
