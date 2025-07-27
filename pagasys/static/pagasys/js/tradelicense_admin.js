@@ -1,4 +1,4 @@
-document.addEventListener('DOMContentLoaded', function () {
+window.addEventListener('load', function () {
   const companyField = document.getElementById('id_company');
   const fromBox = document.getElementById('id_branches_from');
   const toBox = document.getElementById('id_branches_to');

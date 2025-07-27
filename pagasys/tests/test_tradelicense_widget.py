@@ -51,3 +51,8 @@ class TradeLicenseWidgetTests(TestCase):
         res = self.client.get(url)
         self.assertContains(res, f'data-company="{self.c1.id}"')
         self.assertContains(res, f'data-company="{self.c2.id}"')
+
+    def test_script_waits_for_page_load(self):
+        with open("pagasys/static/pagasys/js/tradelicense_admin.js") as fh:
+            content = fh.read()
+        self.assertIn("window.addEventListener('load'", content)
