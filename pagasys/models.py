@@ -117,9 +117,16 @@ class TradeLicense(models.Model):
         ]
 
     def clean(self):
-        """Validate logical consistency of license dates."""
+        """Validate logical consistency and branch-company rules."""
         if self.expiry_date < self.issued_date:
             raise ValidationError("Expiry date must be after issued date")
+
+        branches = getattr(self, "_branches_for_validation", None)
+        if branches is None:
+            branches = self.branches.all()
+        invalid = [b for b in branches if b.company_id != self.company_id]
+        if invalid:
+            raise ValidationError("Branches must belong to the license company")
 
     def __str__(self) -> str:
         branches = ", ".join(b.name for b in self.branches.all())

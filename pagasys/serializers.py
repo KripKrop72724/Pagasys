@@ -141,14 +141,23 @@ class TradeLicenseSerializer(ScopedSerializerMixin, serializers.ModelSerializer)
         """Run model validation and hook for branch rules."""
 
         attrs = super().validate(attrs)
+
+        company = attrs.get("company") or getattr(self.instance, "company", None)
+        branches = attrs.get("branches")
+
         if self.instance is not None:
             data = {f.name: getattr(self.instance, f.name) for f in TradeLicense._meta.fields}
-            data.update({k: v for k, v in attrs.items() if k != 'branches'})
+            data.update({k: v for k, v in attrs.items() if k != "branches"})
         else:
-            data = {k: v for k, v in attrs.items() if k != 'branches'}
+            data = {k: v for k, v in attrs.items() if k != "branches"}
+
         instance = TradeLicense(**data)
+        instance._branches_for_validation = branches or list(getattr(self.instance, "branches", []).all() if self.instance else [])
         instance.clean()
-        # Add custom branch logic here if needed.
+
+        if branches is not None and any(b.company_id != company.id for b in branches):
+            raise serializers.ValidationError({"branches": ["Branch company mismatch"]})
+
         return attrs
 
 
