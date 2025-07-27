@@ -1,3 +1,13 @@
+const branchCompanyMap = {};
+document.addEventListener('DOMContentLoaded', function () {
+  const original = document.getElementById('id_branches');
+  if (original) {
+    original.querySelectorAll('option').forEach(opt => {
+      branchCompanyMap[opt.value] = opt.dataset.company;
+    });
+  }
+});
+
 window.addEventListener('load', function () {
   const companyField = document.getElementById('id_company');
 
@@ -8,7 +18,8 @@ window.addEventListener('load', function () {
 
     function filterOne(opt) {
       const comp = companyField.value;
-      const match = !comp || opt.dataset.company === comp;
+      const company = branchCompanyMap[opt.value];
+      const match = !comp || company === comp;
       if (!match && opt.selected) {
         opt.selected = false;
       }
