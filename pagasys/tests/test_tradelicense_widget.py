@@ -57,7 +57,7 @@ class TradeLicenseWidgetTests(TestCase):
         with open("pagasys/static/pagasys/js/tradelicense_admin.js") as fh:
             content = fh.read()
         self.assertIn("window.addEventListener('load'", content)
-
+        
     def test_employee_script_uses_load_event(self):
         with open("pagasys/static/pagasys/js/employee_admin.js") as fh:
             content = fh.read()

@@ -126,6 +126,16 @@ class TradeLicenseForm(forms.ModelForm):
         fields = "__all__"
         widgets = {"branches": BranchSelectMultiple("branches", False)}
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        company_id = (
+            self.data.get("company")
+            or self.initial.get("company")
+            or getattr(self.instance, "company_id", None)
+        )
+        if company_id:
+            self.fields["branches"].queryset = Branch.objects.filter(company_id=company_id)
+
     def clean(self):
         cleaned = super().clean()
         self.instance._branches_for_validation = cleaned.get("branches")
