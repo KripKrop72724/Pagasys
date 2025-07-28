@@ -4,8 +4,10 @@ function initEmployeeAdmin() {
   const visaTypeEl = document.getElementById('id_visa_type');
   const licenseField = document.getElementById('id_trade_license');
   const licenseRow = licenseField
-    ? licenseField.closest('.form-row')
-    : document.querySelector('.form-row.field-trade_license');
+    ? licenseField.closest('.form-row, .grp-row')
+    : document.querySelector(
+        '.form-row.field-trade_license, .grp-row.field-trade_license'
+      );
 
   if (isSuperEl && groupsField) {
     const row = groupsField.closest('.form-row');
