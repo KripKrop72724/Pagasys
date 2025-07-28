@@ -62,3 +62,11 @@ class TradeLicenseWidgetTests(TestCase):
         with open("pagasys/static/pagasys/js/employee_admin.js") as fh:
             content = fh.read()
         self.assertIn("window.addEventListener('load'", content)
+
+    def test_employee_script_toggles_license_field(self):
+        with open("pagasys/static/pagasys/js/employee_admin.js") as fh:
+            content = fh.read()
+        self.assertIn("licenseRow.style.display = personal ? 'none' : ''", content)
+        self.assertIn("licenseField.disabled = personal", content)
+        self.assertIn("licenseField.value = ''", content)
+        self.assertIn(".grp-row", content)
