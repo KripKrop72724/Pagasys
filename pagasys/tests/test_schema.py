@@ -1,4 +1,5 @@
 from django.test import TestCase
+from django.db import models
 from rest_framework.test import APIClient
 from pagasys.openapi_utils import _get_filter_fields, document_filters
 
@@ -189,3 +190,40 @@ class OpenAPISchemaTests(TestCase):
         names = [p['name'] for p in params]
         self.assertIn('foo', names)
         self.assertIn('bar', names)
+
+    def test_all_field_filters_documented(self):
+        from rest_framework import serializers, viewsets, routers
+        from django_filters.rest_framework import DjangoFilterBackend
+        from drf_spectacular.generators import SchemaGenerator
+        from pagasys.openapi_utils import document_filters, _get_filter_fields
+
+        class DummyModel(models.Model):
+            a = models.CharField(max_length=10)
+            b = models.IntegerField()
+
+            class Meta:
+                app_label = 'pagasys'
+
+        class DummySerializer(serializers.ModelSerializer):
+            class Meta:
+                model = DummyModel
+                fields = ['id', 'a', 'b']
+
+        class DummyViewSet(viewsets.ReadOnlyModelViewSet):
+            queryset = DummyModel.objects.all()
+            serializer_class = DummySerializer
+            filter_backends = [DjangoFilterBackend]
+            filterset_fields = "__all__"
+
+        document_filters(DummyViewSet)
+
+        router = routers.SimpleRouter()
+        router.register('dummy2', DummyViewSet, basename='dummy2')
+
+        generator = SchemaGenerator(patterns=router.urls)
+        schema = generator.get_schema(request=None, public=True)
+        params = schema['paths']['/dummy2/']['get']['parameters']
+        names = [p['name'] for p in params]
+        expected = _get_filter_fields(DummyViewSet)
+        for name in expected:
+            self.assertIn(name, names)

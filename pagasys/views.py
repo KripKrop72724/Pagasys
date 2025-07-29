@@ -140,24 +140,20 @@ class BulkDeleteMixin:
 
 
 class EmployeeFilter(filters.FilterSet):
-    """Custom filters for the Employee viewset."""
+    """Filters exposing every Employee field plus branch and groups."""
 
     branch = filters.NumberFilter(method="filter_branch")
+    groups = filters.NumberFilter(field_name="groups")
 
     class Meta:
         model = Employee
         fields = [
-            "trade_license",
-            "department",
-            "project",
-            "designation",
-            "first_name",
-            "last_name",
-            "branch",
-            "employment_type",
-            "visa_type",
-            "trade_license__company",
-        ]
+            f.name
+            for f in Employee._meta.get_fields()
+            if (getattr(f, "concrete", False) or f.many_to_many)
+            and not f.auto_created
+            and f.name != "password"
+        ] + ["branch", "groups"]
 
     def filter_branch(self, queryset, name, value):
         return queryset.filter(
@@ -190,7 +186,7 @@ class CompanyViewSet(BulkCreateMixin, BulkUpdateMixin, BulkDeleteMixin, viewsets
     permission_classes = [IsAuthenticated, DjangoModelPermissions, GroupRequiredPermission, CustomObjectPermission]
     required_groups = []
     filter_backends = [DjangoFilterBackend, OrderingFilter]
-    filterset_fields = ["name"]
+    filterset_fields = "__all__"
     ordering_fields = ["name"]
 
     def get_queryset(self):
@@ -229,7 +225,7 @@ class BranchViewSet(BulkCreateMixin, BulkUpdateMixin, BulkDeleteMixin, viewsets.
     permission_classes = [IsAuthenticated, DjangoModelPermissions, GroupRequiredPermission, CustomObjectPermission]
     required_groups = ["Company Admin"]
     filter_backends = [DjangoFilterBackend, OrderingFilter]
-    filterset_fields = ["company", "name"]
+    filterset_fields = "__all__"
     ordering_fields = ["name"]
 
     def get_queryset(self):
@@ -262,7 +258,7 @@ class DesignationViewSet(BulkCreateMixin, BulkUpdateMixin, BulkDeleteMixin, view
     permission_classes = [IsAuthenticated, DjangoModelPermissions, GroupRequiredPermission, CustomObjectPermission]
     required_groups = ["Company Admin"]
     filter_backends = [DjangoFilterBackend, OrderingFilter]
-    filterset_fields = ["company", "name", "level"]
+    filterset_fields = "__all__"
     ordering_fields = ["name", "level"]
 
     def get_queryset(self):
@@ -295,7 +291,7 @@ class TradeLicenseViewSet(BulkCreateMixin, BulkUpdateMixin, BulkDeleteMixin, vie
     permission_classes = [IsAuthenticated, DjangoModelPermissions, GroupRequiredPermission, CustomObjectPermission]
     required_groups = ["Company Admin"]
     filter_backends = [DjangoFilterBackend, OrderingFilter]
-    filterset_fields = ["company", "branches", "license_no", "issued_date", "expiry_date"]
+    filterset_fields = "__all__"
     ordering_fields = ["license_no", "issued_date", "expiry_date"]
 
     def get_queryset(self):
@@ -328,7 +324,7 @@ class DepartmentViewSet(BulkCreateMixin, BulkUpdateMixin, BulkDeleteMixin, views
     permission_classes = [IsAuthenticated, DjangoModelPermissions, GroupRequiredPermission, CustomObjectPermission]
     required_groups = ["Company Admin", "Branch Manager"]
     filter_backends = [DjangoFilterBackend, OrderingFilter]
-    filterset_fields = ["branch", "name"]
+    filterset_fields = "__all__"
     ordering_fields = ["name"]
 
     def get_queryset(self):
@@ -361,7 +357,7 @@ class ProjectViewSet(BulkCreateMixin, BulkUpdateMixin, BulkDeleteMixin, viewsets
     permission_classes = [IsAuthenticated, DjangoModelPermissions, GroupRequiredPermission, CustomObjectPermission]
     required_groups = ["Company Admin", "Branch Manager"]
     filter_backends = [DjangoFilterBackend, OrderingFilter]
-    filterset_fields = ["branch", "name", "start_date", "end_date"]
+    filterset_fields = "__all__"
     ordering_fields = ["name", "start_date", "end_date"]
 
     def get_queryset(self):

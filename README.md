@@ -10,4 +10,7 @@ visas the trade license field is hidden in the admin and must remain empty.
 
 ## API Filtering
 
-All list endpoints support filtering via query parameters. Available filter fields are documented in the OpenAPI schema and Swagger UI. Multiple filters can be combined to perform compound queries, e.g. `?branch=1&employment_type=temporary`. The documentation is generated dynamically from the viewset configuration, so any changes to filter fields automatically appear in the schema.
+All list endpoints support filtering via query parameters. Every API viewset exposes filters for **all** of its model fields, so you can chain together any combination to narrow results. Available fields are documented in the OpenAPI schema and Swagger UI. For example `?branch=1&employment_type=temporary`. Because the documentation is generated from the viewset configuration, any change to filter fields automatically appears in the schema.
+## Admin Filtering
+
+All models expose comprehensive filters in the Django admin interface. Use the sidebar filters to quickly narrow results by any field.

@@ -144,23 +144,41 @@ class TradeLicenseForm(forms.ModelForm):
 
 @admin.register(Company)
 class CompanyAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
-    pass
+    """Admin configuration for companies with comprehensive filters."""
+
+    list_filter = ["name"]
+
+
 
 
 @admin.register(Branch)
 class BranchAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
-    pass
+    """Admin configuration for branches with comprehensive filters."""
+
+    list_filter = ["company", "name"]
+
+
 
 
 @admin.register(Designation)
 class DesignationAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
-    pass
+    """Admin configuration for designations with comprehensive filters."""
+
+    list_filter = ["company", "name", "level"]
 
 
 @admin.register(TradeLicense)
 class TradeLicenseAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
     form = TradeLicenseForm
     filter_horizontal = ["branches"]
+    list_filter = [
+        "company",
+        "branches",
+        "license_no",
+        "issued_date",
+        "expiry_date",
+        "max_visas",
+    ]
 
     class Media:
         js = ["pagasys/js/tradelicense_admin.js"]
@@ -177,12 +195,16 @@ class TradeLicenseAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin)
 
 @admin.register(Department)
 class DepartmentAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
-    pass
+    """Admin configuration for departments with comprehensive filters."""
+
+    list_filter = ["branch", "name"]
 
 
 @admin.register(Project)
 class ProjectAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
-    pass
+    """Admin configuration for projects with comprehensive filters."""
+
+    list_filter = ["branch", "name", "start_date", "end_date"]
 
 
 @admin.register(Employee)
@@ -192,6 +214,15 @@ class EmployeeAdmin(CleanSaveModelMixin, ScopedAdminMixin, UserAdmin):
     add_form = AdminUserCreationForm
     form = UserChangeForm
     model = Employee
+
+    list_filter = UserAdmin.list_filter + (
+        "visa_type",
+        "employment_type",
+        "trade_license",
+        "department",
+        "project",
+        "designation",
+    )
 
     base_fieldsets = list(UserAdmin.fieldsets)
     perms = list(base_fieldsets[2][1]["fields"])
