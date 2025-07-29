@@ -6,9 +6,21 @@ from drf_spectacular.types import OpenApiTypes
 def _get_filter_fields(viewset) -> List[str]:
     """Return filter field names for a viewset."""
     fields = []
-    if getattr(viewset, "filterset_fields", None):
+    if getattr(viewset, "filterset_fields", None) is not None:
         fs = viewset.filterset_fields
-        if isinstance(fs, dict):
+        if fs == "__all__":
+            model = getattr(viewset, "queryset", None)
+            if model is not None:
+                model = model.model
+            else:
+                model = viewset.serializer_class.Meta.model
+            fields = [
+                f.name
+                for f in model._meta.get_fields()
+                if (getattr(f, "concrete", False) or f.many_to_many)
+                and not f.auto_created
+            ]
+        elif isinstance(fs, dict):
             fields = list(fs.keys())
         else:
             fields = list(fs)
