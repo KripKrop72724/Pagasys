@@ -6,7 +6,11 @@ node_modules/
 *.py[cod]
 *.sqlite3
 .env
-Dockerfile
+.vscode/
+.idea/
+coverage/
+htmlcov/
+.pytest_cache/
 
 dist/
 build/
