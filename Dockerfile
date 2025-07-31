@@ -28,7 +28,7 @@ ENV PATH=/root/.local/bin:$PATH
 
 # Copy project
 COPY . .
-RUN chmod +x /entrypoint.sh
+RUN chmod +x entrypoint.sh
 
 # Run entrypoint
-ENTRYPOINT ["/entrypoint.sh"]
+ENTRYPOINT ["./entrypoint.sh"]
