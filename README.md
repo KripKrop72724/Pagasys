@@ -35,4 +35,4 @@ pip install -r requirements.txt
 pytest
 ```
 
-`pytest-docker` automatically starts the services defined in `pagasys/tests/docker-compose.yml` and configures the necessary environment variables for Django.
+`pytest-docker` automatically starts the services defined in `tests/docker-compose.yml` and configures the necessary environment variables for Django.
