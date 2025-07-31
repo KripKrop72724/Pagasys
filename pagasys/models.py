@@ -275,7 +275,7 @@ class Employee(AbstractUser):
                 name="employee_one_of_dept_or_proj",
             ),
             models.CheckConstraint(
-                check=(
+                condition=(
                     models.Q(visa_type="company", trade_license__isnull=False)
                     | models.Q(visa_type="personal", trade_license__isnull=True)
                 ),
