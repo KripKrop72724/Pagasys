@@ -28,10 +28,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = env('SECRET_KEY')
+# Provide fallbacks for unit tests if environment variables are not set.
+SECRET_KEY = env("SECRET_KEY", default="test-secret")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = env('DEBUG')
+DEBUG = env("DEBUG", default=True)
 
 ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=['localhost'])
 
@@ -88,7 +89,10 @@ WSGI_APPLICATION = "config.wsgi.application"
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
 DATABASES = {
-    "default": env.db(),
+    "default": env.db(
+        "DATABASE_URL",
+        default="sqlite:///db.sqlite3",
+    ),
 }
 
 
