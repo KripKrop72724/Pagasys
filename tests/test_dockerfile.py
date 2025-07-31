@@ -38,4 +38,4 @@ def test_dockerfile_not_ignored():
 
 def test_entrypoint_used():
     dockerfile = Path('Dockerfile').read_text()
-    assert 'ENTRYPOINT ["/entrypoint.sh"]' in dockerfile
+    assert 'ENTRYPOINT ["./entrypoint.sh"]' in dockerfile
