@@ -1,0 +1,13 @@
+Django>=4.2
+whitenoise
+gunicorn
+djangorestframework
+djangorestframework-simplejwt
+django-filter
+drf-spectacular
+django-environ
+django-grappelli
+psycopg2-binary
+pytest-django
+pytest-docker
+pytest

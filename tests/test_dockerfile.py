@@ -34,3 +34,8 @@ def test_dockerfile_not_ignored():
     assert 'Dockerfile' not in {line.strip() for line in dockerignore}, (
         'Dockerfile should not be ignored in .dockerignore'
     )
+
+
+def test_entrypoint_used():
+    dockerfile = Path('Dockerfile').read_text()
+    assert 'ENTRYPOINT ["/entrypoint.sh"]' in dockerfile
