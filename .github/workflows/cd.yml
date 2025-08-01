@@ -1,0 +1,75 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [ main ]
+
+concurrency:
+  group: pagasys-deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    env:
+      DJANGO_SETTINGS_MODULE: config.settings.test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache pip
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Lint with flake8
+        run: flake8 .
+
+      - name: Run tests
+        run: pytest -q --disable-warnings --maxfail=1
+
+  deploy-to-eb:
+    name: Deploy to Elastic Beanstalk
+    needs: lint-and-test
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:           me-central-1
+
+      - name: Package application
+        run: zip -r deployment-package.zip . -x '*.git*' '*.venv*'
+
+      - name: Deploy to Elastic Beanstalk
+        uses: einaregilsson/beanstalk-deploy@v22
+        with:
+          aws_access_key:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws_secret_key:     ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          application_name:   pagasys-dev
+          environment_name:   pagasys-dev-env
+          version_label:      ${{ github.sha }}
+          region:             me-central-1
+          deployment_package: deployment-package.zip
+
+      - name: Smoke test
+        run: |
+          URL=$(aws elasticbeanstalk describe-environments \
+            --environment-names pagasys-dev-env \
+            --query "Environments[0].CNAME" --output text)
+          curl --fail http://$URL/healthz
