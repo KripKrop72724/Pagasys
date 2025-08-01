@@ -140,4 +140,4 @@ They can be run with `python manage.py <command>`.
 
 ## License
 
-This project is provided for demonstration purposes only.
+This project is product owned by Sigmoid Solutions LLC.
