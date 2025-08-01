@@ -152,7 +152,11 @@ class TradeLicenseSerializer(ScopedSerializerMixin, serializers.ModelSerializer)
             data = {k: v for k, v in attrs.items() if k != "branches"}
 
         instance = TradeLicense(**data)
-        instance._branches_for_validation = branches or list(getattr(self.instance, "branches", []).all() if self.instance else [])
+        instance._branches_for_validation = (
+            branches or list(
+                getattr(self.instance, "branches", []).all() if self.instance else []
+            )
+        )
         instance.clean()
 
         if branches is not None and any(b.company_id != company.id for b in branches):

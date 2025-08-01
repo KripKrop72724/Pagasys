@@ -131,7 +131,6 @@ class EmployeeAdminFieldTests(TestCase):
 
     def test_update_to_superuser_ignores_groups(self):
         emp = self._create_employee(username="upemp")
-        from django.contrib.auth.models import Group
         g = Group.objects.create(name="t1")
         emp.groups.add(g)
         emp.is_superuser = True
@@ -145,7 +144,6 @@ class EmployeeAdminFieldTests(TestCase):
 
     def test_edit_superuser_cannot_add_groups(self):
         emp = self._create_employee(is_superuser=True, is_staff=True, username="su_edit")
-        from django.contrib.auth.models import Group
         g = Group.objects.create(name="t2")
         admin = EmployeeAdmin(get_user_model(), self.site)
         req = self.factory.post("/")
@@ -157,7 +155,6 @@ class EmployeeAdminFieldTests(TestCase):
         self.assertEqual(emp.groups.count(), 0)
 
     def test_non_superuser_forms_hide_is_superuser(self):
-        from django.contrib.auth.models import Group
         non_su = self._create_employee(username="nosu", is_staff=True)
         grp = Group.objects.get(name="Company Admin")
         non_su.groups.add(grp)

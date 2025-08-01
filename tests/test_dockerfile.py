@@ -1,5 +1,5 @@
-import re
 from pathlib import Path
+
 
 def test_multi_stage_build():
     dockerfile = Path('Dockerfile').read_text().lower()

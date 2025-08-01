@@ -122,4 +122,3 @@ def ensure_in_scope(obj, user, field_name=""):
     if not qs.exists():
         prefix = f"{field_name}: " if field_name else ""
         raise PermissionDenied(f"{prefix}object not in allowed scope")
-
