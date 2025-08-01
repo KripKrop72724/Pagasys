@@ -39,3 +39,10 @@ def test_dockerfile_not_ignored():
 def test_entrypoint_used():
     dockerfile = Path('Dockerfile').read_text()
     assert 'ENTRYPOINT ["./entrypoint.sh"]' in dockerfile
+
+
+def test_exposes_port_before_entrypoint():
+    lines = Path('Dockerfile').read_text().splitlines()
+    expose = next(i for i, l in enumerate(lines) if 'EXPOSE 8000' in l)
+    entry = next(i for i, l in enumerate(lines) if 'ENTRYPOINT' in l)
+    assert expose < entry, 'EXPOSE 8000 should come before ENTRYPOINT'

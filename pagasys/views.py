@@ -3,6 +3,7 @@ from rest_framework.permissions import IsAuthenticated, DjangoModelPermissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.filters import OrderingFilter
+from django.http import HttpResponse
 from drf_spectacular.utils import (
     extend_schema,
     extend_schema_view,
@@ -408,3 +409,8 @@ document_filters(TradeLicenseViewSet)
 document_filters(DepartmentViewSet)
 document_filters(ProjectViewSet)
 document_filters(EmployeeViewSet)
+
+
+def healthz(request):
+    """Simple health check returning HTTP 200."""
+    return HttpResponse("ok")
