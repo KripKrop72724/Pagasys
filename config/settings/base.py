@@ -171,4 +171,3 @@ SIMPLE_JWT = {
     'SIGNING_KEY': env('SIMPLE_JWT_SIGNING_KEY', default=SECRET_KEY),
     'ALGORITHM': env('SIMPLE_JWT_ALGORITHM', default='HS256'),
 }
-

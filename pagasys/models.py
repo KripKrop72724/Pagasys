@@ -331,7 +331,8 @@ class Employee(AbstractUser):
             if self.trade_license:
                 raise ValidationError({"trade_license": ["Trade license must be empty for personal visa"]})
 
-        # When personal visa but designation set with company mismatch? We still ensure designation matches branch.company
+        # Personal visa with designation company mismatch:
+        # ensure designation matches branch.company
         if self.designation and self.designation.company != branch.company:
             raise ValidationError("Designation must match company")
 

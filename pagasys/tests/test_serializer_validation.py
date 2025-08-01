@@ -130,4 +130,3 @@ class TradeLicenseSerializerBranchTests(TestCase):
         ser = TradeLicenseSerializer(lic, data=data, partial=True)
         self.assertFalse(ser.is_valid())
         self.assertIn("non_field_errors", ser.errors)
-

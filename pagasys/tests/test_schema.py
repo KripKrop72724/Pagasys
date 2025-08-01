@@ -109,7 +109,6 @@ class OpenAPISchemaTests(TestCase):
         data = json.loads(response.content)
 
         from pagasys import views as v
-        from pagasys.openapi_utils import _get_filter_fields
 
         viewsets = {
             '/api/companies/': v.CompanyViewSet,
@@ -168,7 +167,6 @@ class OpenAPISchemaTests(TestCase):
         from rest_framework import serializers, viewsets, routers
         from django_filters.rest_framework import DjangoFilterBackend
         from drf_spectacular.generators import SchemaGenerator
-        from pagasys.openapi_utils import document_filters
 
         class DummySerializer(serializers.Serializer):
             id = serializers.IntegerField()
@@ -195,7 +193,6 @@ class OpenAPISchemaTests(TestCase):
         from rest_framework import serializers, viewsets, routers
         from django_filters.rest_framework import DjangoFilterBackend
         from drf_spectacular.generators import SchemaGenerator
-        from pagasys.openapi_utils import document_filters, _get_filter_fields
 
         class DummyModel(models.Model):
             a = models.CharField(max_length=10)

@@ -11,4 +11,3 @@ class PagasysConfig(AppConfig):
         admin.site.site_header = "Pagasys Payroll administration"
         admin.site.site_title = "Pagasys Payroll admin"
         admin.site.index_title = "Pagasys Payroll administration"
-

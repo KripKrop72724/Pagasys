@@ -196,10 +196,6 @@ class CompanyViewSet(BulkCreateMixin, BulkUpdateMixin, BulkDeleteMixin, viewsets
 
 
 
-
-
-
-
 @extend_schema_view(
     bulk_create=extend_schema(
         request=BranchSerializer(many=True),
@@ -403,6 +399,7 @@ class EmployeeViewSet(BulkCreateMixin, BulkUpdateMixin, BulkDeleteMixin, viewset
     def get_queryset(self):
         qs = super().get_queryset()
         return scope_queryset(qs, self.request.user)
+
 
 document_filters(CompanyViewSet)
 document_filters(BranchViewSet)
