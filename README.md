@@ -69,7 +69,8 @@ docker-compose up
 
 This launches both the Django application and a PostgreSQL container. Database
 migrations and static file collection are executed automatically via
-`entrypoint.sh`. The service is available at `http://localhost:8000`.
+`entrypoint.sh`. The service is available at `http://localhost:8000` and the Docker
+image exposes this port by default.
 
 ## API Endpoints
 
@@ -92,6 +93,7 @@ parameter. Additional paths include:
 * `/api/token/refresh/` – refresh a JWT access token
 * `/api/schema/` – machine readable OpenAPI schema
 * `/api/docs/` – interactive Swagger UI
+* `/healthz` – liveness endpoint returning `ok`
 
 ## Admin Interface
 

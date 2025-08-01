@@ -30,5 +30,8 @@ ENV PATH=/root/.local/bin:$PATH
 COPY . .
 RUN chmod +x entrypoint.sh
 
+# Expose default application port
+EXPOSE 8000
+
 # Run entrypoint
 ENTRYPOINT ["./entrypoint.sh"]
