@@ -1,6 +1,9 @@
 services:
   web:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
     command: ./entrypoint.sh
     volumes:
       - .:/app
@@ -11,7 +14,7 @@ services:
     depends_on:
       - postgres
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/healthz"]
+      test: ["CMD", "/usr/bin/curl", "-f", "http://localhost:8000/healthz"]
       interval: 10s
       timeout: 5s
       retries: 3
