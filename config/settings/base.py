@@ -34,7 +34,10 @@ SECRET_KEY = env("SECRET_KEY", default="test-secret")
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env("DEBUG", default=True)
 
-ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=['localhost'])
+# Allow localhost by default and permit Elastic Beanstalk domains in production
+ALLOWED_HOSTS = env.list(
+    "ALLOWED_HOSTS", default=["localhost", ".elasticbeanstalk.com"]
+)
 
 
 # Application definition
