@@ -61,8 +61,21 @@ jobs:
           DB_USER: ${{ secrets.DB_USER }}
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
 
+      - name: Wait for EB environment to be ready
+        run: |
+          STATUS=$(aws elasticbeanstalk describe-environments --environment-names pagasys-dev-env --query 'Environments[0].Status' --output text)
+          while [ "$STATUS" != "Ready" ]; do
+            echo "Environment status: $STATUS. Waiting..."
+            sleep 20
+            STATUS=$(aws elasticbeanstalk describe-environments --environment-names pagasys-dev-env --query 'Environments[0].Status' --output text)
+          done
+          echo "Environment is Ready."
+
       - name: Inject EB environment variables
         run: aws elasticbeanstalk update-environment --environment-name pagasys-dev-env --option-settings file://eb-env.json
+
+      - name: Wait for environment update
+        run: aws elasticbeanstalk wait environment-updated --environment-name pagasys-dev-env
 
       - name: Package application
         run: zip -r deployment-package.zip . -x '*.git*' '*.venv*'
@@ -77,6 +90,9 @@ jobs:
           version_label:      ${{ github.sha }}
           region:             me-central-1
           deployment_package: deployment-package.zip
+
+      - name: Wait for deployment to finish
+        run: aws elasticbeanstalk wait environment-updated --environment-name pagasys-dev-env
 
       - name: Smoke test
         run: |
