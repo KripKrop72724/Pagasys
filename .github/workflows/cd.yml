@@ -53,6 +53,17 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region:           me-central-1
 
+      - name: Generate EB environment variables
+        run: python scripts/eb_env.py --names "DB_HOST,DB_NAME,DB_USER,DB_PASSWORD" --output eb-env.json
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USER: ${{ secrets.DB_USER }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+
+      - name: Inject EB environment variables
+        run: aws elasticbeanstalk update-environment --environment-name pagasys-dev-env --option-settings file://eb-env.json
+
       - name: Package application
         run: zip -r deployment-package.zip . -x '*.git*' '*.venv*'
 
