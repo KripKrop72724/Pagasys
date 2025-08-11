@@ -10,7 +10,7 @@ services:
     ports:
       - "80:8000"  # expose app on port 80 for EB health checks/LB
     healthcheck:
-      test: ["CMD", "/usr/bin/curl", "-f", "http://localhost/healthz"]
+      test: ["CMD-SHELL", "curl -f http://127.0.0.1:${PORT:-8000}/healthz || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 3
