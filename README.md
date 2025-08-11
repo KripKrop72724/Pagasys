@@ -77,9 +77,10 @@ Beanstalk:
   port 80. The CI pipeline renames this file to `docker-compose.yml` before
   packaging so Elastic Beanstalk never launches a local PostgreSQL container.
 
-For production deployments configure a `DATABASE_URL` environment variable (for
-example `postgres://user:pass@host:5432/dbname`). The application connects to
-this RDS instance and enforces SSL mode.
+For production deployments configure the standard `DB_NAME`, `DB_USER`,
+`DB_PASSWORD`, and `DB_HOST` environment variables. The application also honors
+an optional `DATABASE_URL` if present, which takes precedence and should include
+`sslmode=require`.
 
 ## API Endpoints
 
