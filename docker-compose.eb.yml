@@ -5,12 +5,26 @@ services:
       dockerfile: Dockerfile
       target: runtime
     command: ./entrypoint.sh
-    # Do NOT mount source or reference .env in EB
-    # EB will inject env vars from Environment Properties
     ports:
-      - "80:8000"  # expose app on port 80 for EB health checks/LB
+      - "80:8000"  # expose app on 80 for EB
+    environment:
+      # Pass-through (if set on the host via EB Environment Properties)
+      - DATABASE_URL
+      - DB_HOST
+      - DB_PORT
+      - DB_NAME
+      - DB_USER
+      - DB_PASSWORD
+      - RDS_HOSTNAME
+      - RDS_PORT
+      - RDS_DB_NAME
+      - RDS_USERNAME
+      - RDS_PASSWORD
+      - DJANGO_SETTINGS_MODULE
+      - ENV
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://127.0.0.1:${PORT:-8000}/healthz || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 3
+    restart: always

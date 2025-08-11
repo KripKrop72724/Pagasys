@@ -94,29 +94,44 @@ WSGI_APPLICATION = "config.wsgi.application"
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
+def _pg_from_env():
+    # Prefer DB_* if present, otherwise fall back to RDS_*
+    host = env("DB_HOST", default=env("RDS_HOSTNAME", default=None))
+    name = env("DB_NAME", default=env("RDS_DB_NAME", default=None))
+    user = env("DB_USER", default=env("RDS_USERNAME", default=None))
+    password = env("DB_PASSWORD", default=env("RDS_PASSWORD", default=None))
+    port = env("DB_PORT", default=env("RDS_PORT", default="5432"))
+
+    if all([host, name, user, password]):
+        return {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": name,
+            "USER": user,
+            "PASSWORD": password,
+            "HOST": host,
+            "PORT": port,
+            "CONN_MAX_AGE": env.int("DB_CONN_MAX_AGE", default=600),
+            # Use 'require' by default; override with DB_SSLMODE if needed
+            "OPTIONS": {"sslmode": env("DB_SSLMODE", default="require")},
+        }
+    return None
+
 DATABASE_URL = env("DATABASE_URL", default=None)
+
 if DATABASE_URL:
     DATABASES = {
         "default": dj_database_url.parse(
-            DATABASE_URL, conn_max_age=600, ssl_require=True
+            DATABASE_URL,
+            conn_max_age=env.int("DB_CONN_MAX_AGE", default=600),
+            ssl_require=env.bool("DB_SSL_REQUIRE", default=True),
         )
     }
 else:
-    db_name = env("DB_NAME", default=None)
-    if db_name:
-        DATABASES = {
-            "default": {
-                "ENGINE": "django.db.backends.postgresql",
-                "NAME": db_name,
-                "USER": env("DB_USER"),
-                "PASSWORD": env("DB_PASSWORD"),
-                "HOST": env("DB_HOST"),
-                "PORT": env("DB_PORT", default="5432"),
-                "CONN_MAX_AGE": 600,
-                "OPTIONS": {"sslmode": "require"},
-            }
-        }
+    pg_cfg = _pg_from_env()
+    if pg_cfg:
+        DATABASES = {"default": pg_cfg}
     else:
+        # Final fallback for local/dev: SQLite
         DATABASES = {
             "default": {
                 "ENGINE": "django.db.backends.sqlite3",
