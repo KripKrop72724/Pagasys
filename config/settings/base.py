@@ -15,6 +15,7 @@ from datetime import timedelta
 import os
 import environ
 import dj_database_url
+from django.core.exceptions import ImproperlyConfigured
 
 # Load environment variables
 env = environ.Env(
@@ -95,6 +96,15 @@ WSGI_APPLICATION = "config.wsgi.application"
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
 def _pg_from_env():
+    """Build a PostgreSQL config from environment variables.
+
+    This helper prefers explicit ``DB_*`` variables but will fall back to the
+    older ``RDS_*`` names.  If **any** of the core settings are provided we
+    require that **all** of them are present; otherwise Django would silently
+    fall back to the SQLite configuration.  Raising an ``ImproperlyConfigured``
+    error makes misconfiguration immediately visible.
+    """
+
     # Prefer DB_* if present, otherwise fall back to RDS_*
     host = env("DB_HOST", default=env("RDS_HOSTNAME", default=None))
     name = env("DB_NAME", default=env("RDS_DB_NAME", default=None))
@@ -102,7 +112,21 @@ def _pg_from_env():
     password = env("DB_PASSWORD", default=env("RDS_PASSWORD", default=None))
     port = env("DB_PORT", default=env("RDS_PORT", default="5432"))
 
-    if all([host, name, user, password]):
+    # If any of the core settings are provided but not all, raise an error
+    core_settings = {
+        "DB_HOST": host,
+        "DB_NAME": name,
+        "DB_USER": user,
+        "DB_PASSWORD": password,
+    }
+    provided_values = list(core_settings.values())
+    if any(provided_values) and not all(provided_values):
+        missing = [k for k, v in core_settings.items() if not v]
+        raise ImproperlyConfigured(
+            "Incomplete database configuration; missing: " + ", ".join(missing)
+        )
+
+    if all(provided_values):
         return {
             "ENGINE": "django.db.backends.postgresql",
             "NAME": name,
