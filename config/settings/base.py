@@ -38,7 +38,7 @@ DEBUG = env("DEBUG", default=True)
 
 # Allow localhost by default and permit Elastic Beanstalk domains in production
 ALLOWED_HOSTS = env.list(
-    "ALLOWED_HOSTS", default=["localhost", ".elasticbeanstalk.com"]
+    "ALLOWED_HOSTS", default=["localhost", ".elasticbeanstalk.com", "127.0.0.1"]
 )
 
 
