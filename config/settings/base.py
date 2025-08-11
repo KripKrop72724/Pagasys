@@ -12,7 +12,9 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 from pathlib import Path
 from datetime import timedelta
+import os
 import environ
+import dj_database_url
 
 # Load environment variables
 env = environ.Env(
@@ -92,12 +94,35 @@ WSGI_APPLICATION = "config.wsgi.application"
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-DATABASES = {
-    "default": env.db(
-        "DATABASE_URL",
-        default="sqlite:///db.sqlite3",
-    ),
-}
+DATABASE_URL = env("DATABASE_URL", default=None)
+if DATABASE_URL:
+    DATABASES = {
+        "default": dj_database_url.parse(
+            DATABASE_URL, conn_max_age=600, ssl_require=True
+        )
+    }
+else:
+    db_name = env("DB_NAME", default=None)
+    if db_name:
+        DATABASES = {
+            "default": {
+                "ENGINE": "django.db.backends.postgresql",
+                "NAME": db_name,
+                "USER": env("DB_USER"),
+                "PASSWORD": env("DB_PASSWORD"),
+                "HOST": env("DB_HOST"),
+                "PORT": env("DB_PORT", default="5432"),
+                "CONN_MAX_AGE": 600,
+                "OPTIONS": {"sslmode": "require"},
+            }
+        }
+    else:
+        DATABASES = {
+            "default": {
+                "ENGINE": "django.db.backends.sqlite3",
+                "NAME": BASE_DIR / "db.sqlite3",
+            }
+        }
 
 
 # Password validation

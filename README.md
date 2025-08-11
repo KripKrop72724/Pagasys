@@ -59,18 +59,27 @@ The API is served under `/api/` and the admin under `/admin/`.
 
 ## Docker Usage
 
-A multi‑stage `Dockerfile` and `docker-compose.yml` are provided. After creating
-an `.env` file you can build and run the stack with:
+Two separate Compose files support local development and deployment on Elastic
+Beanstalk:
 
-```bash
-docker-compose build
-docker-compose up
-```
+* **`docker-compose.local.yml`** – runs Django and a local PostgreSQL instance.
+  After creating an `.env` file, start the stack with:
 
-This launches both the Django application and a PostgreSQL container. Database
-migrations and static file collection are executed automatically via
-`entrypoint.sh`. The service is available at `http://localhost:8000` and the Docker
-image exposes this port by default.
+  ```bash
+  docker compose -f docker-compose.local.yml up --build
+  ```
+
+  The application is available at `http://localhost:8000` and migrations run
+  automatically via `entrypoint.sh`. The Docker image exposes this port by
+  default.
+
+* **`docker-compose.eb.yml`** – contains only the web service and exposes it on
+  port 80. The CI pipeline renames this file to `docker-compose.yml` before
+  packaging so Elastic Beanstalk never launches a local PostgreSQL container.
+
+For production deployments configure a `DATABASE_URL` environment variable (for
+example `postgres://user:pass@host:5432/dbname`). The application connects to
+this RDS instance and enforces SSL mode.
 
 ## API Endpoints
 

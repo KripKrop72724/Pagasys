@@ -1,0 +1,16 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    command: ./entrypoint.sh
+    # Do NOT mount source or reference .env in EB
+    # EB will inject env vars from Environment Properties
+    ports:
+      - "80:8000"  # expose app on port 80 for EB health checks/LB
+    healthcheck:
+      test: ["CMD", "/usr/bin/curl", "-f", "http://localhost/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 3

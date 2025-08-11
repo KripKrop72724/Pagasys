@@ -8,20 +8,15 @@ from scripts.eb_env import generate_option_settings
 
 
 def test_generate_option_settings_happy_path(monkeypatch):
-    monkeypatch.setenv("DB_HOST", "localhost")
-    monkeypatch.setenv("DB_NAME", "pagasys")
-    result = generate_option_settings(["DB_HOST", "DB_NAME"])
+    url = "postgres://u:p@h:5432/db"
+    monkeypatch.setenv("DATABASE_URL", url)
+    result = generate_option_settings(["DATABASE_URL"])
     assert result == [
         {
             "Namespace": "aws:elasticbeanstalk:application:environment",
-            "OptionName": "DB_HOST",
-            "Value": "localhost",
-        },
-        {
-            "Namespace": "aws:elasticbeanstalk:application:environment",
-            "OptionName": "DB_NAME",
-            "Value": "pagasys",
-        },
+            "OptionName": "DATABASE_URL",
+            "Value": url,
+        }
     ]
 
 
