@@ -54,12 +54,9 @@ jobs:
           aws-region:           me-central-1
 
       - name: Generate EB environment variables
-        run: python scripts/eb_env.py --names "DB_HOST,DB_NAME,DB_USER,DB_PASSWORD" --output eb-env.json
+        run: python scripts/eb_env.py --names "DATABASE_URL" --output eb-env.json
         env:
-          DB_HOST: ${{ secrets.DB_HOST }}
-          DB_NAME: ${{ secrets.DB_NAME }}
-          DB_USER: ${{ secrets.DB_USER }}
-          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
       - name: Wait for EB environment to be ready
         run: |
@@ -76,6 +73,9 @@ jobs:
 
       - name: Wait for environment update
         run: aws elasticbeanstalk wait environment-updated --environment-name pagasys-dev-env
+
+      - name: Use EB compose file
+        run: mv docker-compose.eb.yml docker-compose.yml
 
       - name: Package application
         run: zip -r deployment-package.zip . -x '*.git*' '*.venv*'

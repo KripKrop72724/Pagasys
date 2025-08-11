@@ -14,8 +14,9 @@ def test_entrypoint_uses_port_env():
 
 
 def test_docker_compose_uses_entrypoint():
-    compose = Path('docker-compose.yml').read_text()
-    assert '/entrypoint.sh' in compose, 'docker-compose should call entrypoint.sh'
+    for fname in ['docker-compose.local.yml', 'docker-compose.eb.yml']:
+        compose = Path(fname).read_text()
+        assert '/entrypoint.sh' in compose, f'{fname} should call entrypoint.sh'
 
 
 def test_requirements_pinned():
