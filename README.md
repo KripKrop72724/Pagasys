@@ -55,7 +55,7 @@ comprehensive automated test suite.
    python manage.py runserver
    ```
 
-The API is served under `/api/` and the admin under `/admin/`.
+The API is served under `/api/` and the admin is served under `/admin/`.
 
 ## Docker Usage
 
