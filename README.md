@@ -148,6 +148,43 @@ Two custom management commands are available:
 
 They can be run with `python manage.py <command>`.
 
+## Attendance & Leave Schema
+
+Pagasys provides a shift‑based attendance system that intentionally avoids any
+`work_branch` field. An employee's branch is derived from their department or
+project assignment and all attendance data references the employee directly.
+
+The core models live in `pagasys/models_attendance.py` and include:
+
+* **Device** – registration of kiosk, mobile or web capture devices with an
+  HMAC secret and optional geofence.
+* **AttEvent** – immutable raw punches (`IN`, `OUT`, `UNK`) with provider
+  metadata, liveness scores and signed payload. A partial unique constraint
+  prevents duplicate non‑`UNK` punches and an index on `(company, employee, ts)`
+  optimises lookups.
+* **WorkCalendar / Holiday** – company calendars and their holiday dates.
+* **ShiftTemplate** – start/end times, breaks, grace and rounding minutes,
+  cross‑midnight handling and a `requires_face` flag. Validation enforces that
+  `end_time` is after `start_time` unless `cross_midnight` is enabled.
+* **ShiftRule** – per‑company rules such as Ramadan reductions, weekly rest
+  days, night OT windows and maximum daily hours.
+* **RosterEntry** – unique `(employee, date)` assignments of shift templates.
+* **AttPair / AttDay** – processed in/out pairs and daily summaries with
+  overtime, lateness and lock flags.
+* **LeaveType / LeaveRequest / LeaveDay** – flexible leave tracking supporting
+  pay percentages and partial‑day minutes. `LeaveRequest.clean()` ensures the
+  date range expands logically.
+
+A small demonstration fixture is available at
+`pagasys/fixtures/attendance_seed.json` and can be loaded with:
+
+```bash
+python manage.py loaddata pagasys/fixtures/attendance_seed.json
+```
+
+The fixture creates a company, calendar with a holiday, two shift templates and
+an employee rostered for one week.
+
 ## License
 
 This project is product owned by Sigmoid Solutions LLC.
