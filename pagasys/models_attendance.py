@@ -39,6 +39,12 @@ class Device(models.Model):
         verbose_name = "device"
         verbose_name_plural = "devices"
         ordering = ["id"]
+        indexes = [
+            models.Index(
+                fields=["company", "device_type"],
+                name="device_company_type_idx",
+            )
+        ]
 
     def __str__(self) -> str:  # pragma: no cover - trivial
         return f"{self.name} ({self.get_device_type_display()})"
@@ -98,10 +104,22 @@ class AttEvent(models.Model):
             )
         ]
 
+    def clean(self):
+        """Validate cross-company consistency and direction values."""
+        if self.device and self.company_id and self.device.company_id != self.company_id:
+            raise ValidationError("Device company must match event company.")
+        if self.employee_id and self.company_id:
+            comp = getattr(self.employee, "company", None)
+            if comp and comp.id != self.company_id:
+                raise ValidationError("Employee company must match event company.")
+        if self.direction not in {"IN", "OUT", "UNK"}:
+            raise ValidationError("Invalid direction.")
+
     def save(self, *args, **kwargs):
-        """Prevent mutation after insert."""
+        """Run validation and prevent mutation after insert."""
         if self.pk and not self._state.adding:
             raise ValidationError("Attendance events are immutable")
+        self.full_clean()
         super().save(*args, **kwargs)
 
     def __str__(self) -> str:  # pragma: no cover - trivial
@@ -272,7 +290,11 @@ class RosterEntry(models.Model):
 
 
 class AttPair(models.Model):
-    """Paired in/out events for a work period."""
+    """Paired in/out events for a work period.
+
+    Derived timestamp and duration fields are stored to speed up daily rollups
+    and reporting while retaining references to the raw events for auditing.
+    """
 
     QUALITY_CHOICES = [
         ("good", "Good"),
@@ -303,24 +325,47 @@ class AttPair(models.Model):
     quality = models.CharField(
         max_length=20, choices=QUALITY_CHOICES, default="good", help_text="Pair quality"
     )
+    in_ts = models.DateTimeField(db_index=True)
+    out_ts = models.DateTimeField(null=True, blank=True)
+    duration_min = models.PositiveIntegerField(default=0)
 
     class Meta:
         verbose_name = "attendance pair"
         verbose_name_plural = "attendance pairs"
         ordering = ["in_event__ts"]
+        indexes = [
+            models.Index(fields=["employee", "in_ts"], name="attpair_emp_in_idx")
+        ]
+
+    def save(self, *args, **kwargs):
+        """Cache event timestamps and duration for efficient queries."""
+        self.in_ts = self.in_event.ts
+        self.out_ts = self.out_event.ts if self.out_event else None
+        if self.out_ts:
+            delta = self.out_ts - self.in_ts
+            self.duration_min = max(0, int(delta.total_seconds() // 60))
+        else:
+            self.duration_min = 0
+        super().save(*args, **kwargs)
 
     def __str__(self) -> str:  # pragma: no cover - trivial
         return f"{self.employee} {self.in_event.ts.date()}"
 
 
 class AttDay(models.Model):
-    """Computed attendance metrics per day."""
+    """Computed attendance metrics per day.
+
+    Tracks the shift template used for calculations and exposes a broader set
+    of status values for clarity.
+    """
 
     STATUS_CHOICES = [
         ("present", "Present"),
         ("absent", "Absent"),
         ("leave", "Leave"),
         ("holiday", "Holiday"),
+        ("rest", "Rest Day"),
+        ("missing", "Missing Punch"),
     ]
 
     employee = models.ForeignKey(
@@ -332,6 +377,13 @@ class AttDay(models.Model):
     date = models.DateField(help_text="Calendar date")
     status = models.CharField(
         max_length=20, choices=STATUS_CHOICES, help_text="Attendance status"
+    )
+    shift = models.ForeignKey(
+        "ShiftTemplate",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        help_text="Shift template used for this day’s calculation",
     )
     work_minutes = models.PositiveIntegerField(default=0, help_text="Worked minutes")
     late_minutes = models.PositiveIntegerField(default=0, help_text="Late minutes")
