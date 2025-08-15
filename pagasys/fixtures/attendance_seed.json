@@ -1,0 +1,167 @@
+[
+  {
+    "model": "pagasys.company",
+    "pk": 1,
+    "fields": {
+      "name": "Demo Company"
+    }
+  },
+  {
+    "model": "pagasys.branch",
+    "pk": 1,
+    "fields": {
+      "company": 1,
+      "name": "HQ"
+    }
+  },
+  {
+    "model": "pagasys.department",
+    "pk": 1,
+    "fields": {
+      "branch": 1,
+      "name": "IT"
+    }
+  },
+  {
+    "model": "pagasys.employee",
+    "pk": 1,
+    "fields": {
+      "password": "",
+      "last_login": null,
+      "is_superuser": false,
+      "username": "alice",
+      "first_name": "Alice",
+      "last_name": "Employee",
+      "email": "",
+      "is_staff": false,
+      "is_active": true,
+      "date_joined": "2024-05-01T00:00:00Z",
+      "visa_type": "personal",
+      "trade_license": null,
+      "department": 1,
+      "project": null,
+      "designation": null,
+      "hire_date": "2024-05-01",
+      "employment_type": "permanent"
+    }
+  },
+  {
+    "model": "pagasys.workcalendar",
+    "pk": 1,
+    "fields": {
+      "company": 1,
+      "name": "Default"
+    }
+  },
+  {
+    "model": "pagasys.holiday",
+    "pk": 1,
+    "fields": {
+      "calendar": 1,
+      "date": "2024-05-01",
+      "name": "Labour Day"
+    }
+  },
+  {
+    "model": "pagasys.shifttemplate",
+    "pk": 1,
+    "fields": {
+      "company": 1,
+      "name": "Day",
+      "start_time": "09:00:00",
+      "end_time": "17:00:00",
+      "break_minutes": 60,
+      "grace_minutes": 10,
+      "rounding": 15,
+      "cross_midnight": false,
+      "requires_face": true,
+      "shift_worker_night_exempt": false
+    }
+  },
+  {
+    "model": "pagasys.shifttemplate",
+    "pk": 2,
+    "fields": {
+      "company": 1,
+      "name": "Night",
+      "start_time": "22:00:00",
+      "end_time": "06:00:00",
+      "break_minutes": 30,
+      "grace_minutes": 5,
+      "rounding": 15,
+      "cross_midnight": true,
+      "requires_face": false,
+      "shift_worker_night_exempt": true
+    }
+  },
+  {
+    "model": "pagasys.rosterentry",
+    "pk": 1,
+    "fields": {
+      "employee": 1,
+      "date": "2024-05-06",
+      "shift": 1,
+      "overrides": {}
+    }
+  },
+  {
+    "model": "pagasys.rosterentry",
+    "pk": 2,
+    "fields": {
+      "employee": 1,
+      "date": "2024-05-07",
+      "shift": 1,
+      "overrides": {}
+    }
+  },
+  {
+    "model": "pagasys.rosterentry",
+    "pk": 3,
+    "fields": {
+      "employee": 1,
+      "date": "2024-05-08",
+      "shift": 1,
+      "overrides": {}
+    }
+  },
+  {
+    "model": "pagasys.rosterentry",
+    "pk": 4,
+    "fields": {
+      "employee": 1,
+      "date": "2024-05-09",
+      "shift": 1,
+      "overrides": {}
+    }
+  },
+  {
+    "model": "pagasys.rosterentry",
+    "pk": 5,
+    "fields": {
+      "employee": 1,
+      "date": "2024-05-10",
+      "shift": 1,
+      "overrides": {}
+    }
+  },
+  {
+    "model": "pagasys.rosterentry",
+    "pk": 6,
+    "fields": {
+      "employee": 1,
+      "date": "2024-05-11",
+      "shift": 2,
+      "overrides": {}
+    }
+  },
+  {
+    "model": "pagasys.rosterentry",
+    "pk": 7,
+    "fields": {
+      "employee": 1,
+      "date": "2024-05-12",
+      "shift": 2,
+      "overrides": {}
+    }
+  }
+]
