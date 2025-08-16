@@ -1,5 +1,7 @@
 """Attendance and leave models for shift based tracking."""
 
+from decimal import Decimal
+
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
