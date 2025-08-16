@@ -56,7 +56,7 @@ def test_att_event_unique_and_immutable(basic_employee):
         direction="IN",
         ts=ts,
         provider="p",
-        signed_payload="payload",
+        payload_sig="sig",
     )
     with pytest.raises(ValidationError):
         AttEvent.objects.create(
@@ -66,7 +66,7 @@ def test_att_event_unique_and_immutable(basic_employee):
             direction="OUT",
             ts=ts,
             provider="p",
-            signed_payload="payload",
+            payload_sig="sig",
         )
     # UNK direction should bypass unique constraint
     AttEvent.objects.create(
@@ -76,7 +76,7 @@ def test_att_event_unique_and_immutable(basic_employee):
         direction="UNK",
         ts=ts,
         provider="p",
-        signed_payload="payload",
+        payload_sig="sig",
     )
     evt = AttEvent.objects.filter(direction="IN").first()
     evt.provider = "x"
@@ -112,7 +112,7 @@ def test_att_event_company_consistency_and_direction(basic_employee):
             direction="IN",
             ts=timezone.now(),
             provider="p",
-            signed_payload="payload",
+            payload_sig="sig",
         )
     device = Device.objects.create(
         company=company, name="Term1", device_type="kiosk", hmac_secret="s"
@@ -125,7 +125,7 @@ def test_att_event_company_consistency_and_direction(basic_employee):
             direction="IN",
             ts=timezone.now(),
             provider="p",
-            signed_payload="payload",
+            payload_sig="sig",
         )
     with pytest.raises(ValidationError):
         AttEvent.objects.create(
@@ -135,7 +135,7 @@ def test_att_event_company_consistency_and_direction(basic_employee):
             direction="BAD",
             ts=timezone.now(),
             provider="p",
-            signed_payload="payload",
+            payload_sig="sig",
         )
 
 
@@ -207,7 +207,7 @@ def test_attpair_derived_fields(basic_employee):
         direction="IN",
         ts=ts_in,
         provider="p",
-        signed_payload="payload",
+        payload_sig="sig",
     )
     evt_out = AttEvent.objects.create(
         company=company,
@@ -216,7 +216,7 @@ def test_attpair_derived_fields(basic_employee):
         direction="OUT",
         ts=ts_out,
         provider="p",
-        signed_payload="payload",
+        payload_sig="sig",
     )
     pair = AttPair.objects.create(employee=emp, in_event=evt_in, out_event=evt_out)
     assert pair.in_ts == ts_in

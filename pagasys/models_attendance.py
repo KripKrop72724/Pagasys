@@ -1,7 +1,5 @@
 """Attendance and leave models for shift based tracking."""
 
-from decimal import Decimal
-
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
@@ -66,13 +64,13 @@ class AttEvent(models.Model):
     )
     employee = models.ForeignKey(
         Employee,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         related_name="attendance_events",
         help_text="Employee generating the event",
     )
     device = models.ForeignKey(
         Device,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         related_name="events",
         help_text="Device used for the event",
     )
@@ -81,21 +79,28 @@ class AttEvent(models.Model):
     )
     ts = models.DateTimeField(help_text="Timestamp in UTC")
     provider = models.CharField(max_length=50, help_text="Event provider identifier")
-    face_confidence = models.DecimalField(
+    face_conf = models.DecimalField(
         max_digits=5,
         decimal_places=2,
         null=True,
         blank=True,
         help_text="Face match confidence",
     )
-    liveness = models.DecimalField(
-        max_digits=5,
-        decimal_places=2,
+    liveness = models.BooleanField(
         null=True,
         blank=True,
-        help_text="Liveness score from provider",
+        help_text="Liveness confirmed by provider",
     )
-    signed_payload = models.TextField(help_text="Original signed payload")
+    payload_sig = models.CharField(
+        max_length=64,
+        help_text="HMAC signature of canonical payload",
+        default="",
+    )
+    meta = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Additional event metadata",
+    )
 
     class Meta:
         verbose_name = "attendance event"
@@ -117,25 +122,23 @@ class AttEvent(models.Model):
 
     def clean(self):
         """Validate cross-company consistency and direction values."""
-        if (
-            self.device
-            and self.company_id
-            and self.device.company_id != self.company_id
-        ):
-            raise ValidationError("Device company must match event company.")
+        valid = {c[0] for c in self.DIRECTION_CHOICES}
+        if self.direction not in valid:
+            raise ValidationError("Invalid direction")
+
+        if self.device_id and self.company_id and self.device.company_id != self.company_id:
+            raise ValidationError("Device company mismatch")
         if self.employee_id and self.company_id:
-            comp = getattr(self.employee, "company", None)
-            if comp and comp.id != self.company_id:
-                raise ValidationError("Employee company must match event company.")
-        if self.direction not in {"IN", "OUT", "UNK"}:
-            raise ValidationError("Invalid direction.")
+            emp_company = getattr(self.employee, "company", None)
+            if emp_company and emp_company.id != self.company_id:
+                raise ValidationError("Employee company mismatch")
 
     def save(self, *args, **kwargs):
         """Run validation and prevent mutation after insert."""
-        if self.pk and not self._state.adding:
-            raise ValidationError("Attendance events are immutable")
+        if self.pk:
+            raise ValidationError("Attendance events are immutable.")
         self.full_clean()
-        super().save(*args, **kwargs)
+        return super().save(*args, **kwargs)
 
     def __str__(self) -> str:  # pragma: no cover - trivial
         return f"{self.employee} {self.direction} {self.ts.isoformat()}"

@@ -10,6 +10,20 @@ from .models import (
     Project,
     Employee,
 )
+from .models_attendance import (
+    Device,
+    AttEvent,
+    WorkCalendar,
+    Holiday,
+    ShiftTemplate,
+    ShiftRule,
+    RosterEntry,
+    AttPair,
+    AttDay,
+    LeaveType,
+    LeaveRequest,
+    LeaveDay,
+)
 
 SCOPED_MODELS = {
     Company,
@@ -19,6 +33,18 @@ SCOPED_MODELS = {
     Department,
     Project,
     Employee,
+    Device,
+    AttEvent,
+    WorkCalendar,
+    Holiday,
+    ShiftTemplate,
+    ShiftRule,
+    RosterEntry,
+    AttPair,
+    AttDay,
+    LeaveType,
+    LeaveRequest,
+    LeaveDay,
 }
 
 
@@ -96,6 +122,58 @@ def scope_queryset(queryset, user):
             return queryset.filter(branch=branch)
         return queryset.none()
 
+    if model in {Device, WorkCalendar, ShiftTemplate, ShiftRule, LeaveType}:
+        if company:
+            return queryset.filter(company=company)
+        return queryset.none()
+
+    if model is Holiday:
+        if company:
+            return queryset.filter(calendar__company=company)
+        return queryset.none()
+
+    if model is AttEvent:
+        if role in ("company_admin", "payroll_manager"):
+            return queryset.filter(company=company)
+        if role == "branch_manager" and branch:
+            return queryset.filter(
+                models.Q(employee__department__branch=branch)
+                | models.Q(employee__project__branch=branch)
+            )
+        if role == "department_manager" and user.department:
+            return queryset.filter(employee__department=user.department)
+        if role == "project_manager" and user.project:
+            return queryset.filter(employee__project=user.project)
+        return queryset.filter(employee=user)
+
+    if model in {RosterEntry, AttPair, AttDay, LeaveRequest}:
+        if role in ("company_admin", "payroll_manager"):
+            return queryset.filter(employee__trade_license__company=company)
+        if role == "branch_manager" and branch:
+            return queryset.filter(
+                models.Q(employee__department__branch=branch)
+                | models.Q(employee__project__branch=branch)
+            )
+        if role == "department_manager" and user.department:
+            return queryset.filter(employee__department=user.department)
+        if role == "project_manager" and user.project:
+            return queryset.filter(employee__project=user.project)
+        return queryset.filter(employee=user)
+
+    if model is LeaveDay:
+        if role in ("company_admin", "payroll_manager"):
+            return queryset.filter(request__employee__trade_license__company=company)
+        if role == "branch_manager" and branch:
+            return queryset.filter(
+                models.Q(request__employee__department__branch=branch)
+                | models.Q(request__employee__project__branch=branch)
+            )
+        if role == "department_manager" and user.department:
+            return queryset.filter(request__employee__department=user.department)
+        if role == "project_manager" and user.project:
+            return queryset.filter(request__employee__project=user.project)
+        return queryset.filter(request__employee=user)
+
     if model is Employee:
         if not user.is_superuser:
             queryset = queryset.filter(is_superuser=False)
@@ -114,7 +192,7 @@ def scope_queryset(queryset, user):
     return queryset
 
 
-def ensure_in_scope(obj, user, field_name=""):
+def ensure_in_scope(obj, user, field_name: str = ""):
     """Raise PermissionDenied if object is outside the user's scope."""
     if obj.__class__ not in SCOPED_MODELS:
         return
