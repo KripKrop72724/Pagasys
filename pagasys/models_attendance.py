@@ -1,6 +1,7 @@
 """Attendance and leave models for shift based tracking."""
 
 from django.core.exceptions import ValidationError
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 
 from .models import Company, Employee
@@ -78,11 +79,19 @@ class AttEvent(models.Model):
     )
     ts = models.DateTimeField(help_text="Timestamp in UTC")
     provider = models.CharField(max_length=50, help_text="Event provider identifier")
-    face_confidence = models.FloatField(
-        null=True, blank=True, help_text="Face match confidence"
+    face_confidence = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Face match confidence",
     )
-    liveness = models.FloatField(
-        null=True, blank=True, help_text="Liveness score from provider"
+    liveness = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Liveness score from provider",
     )
     signed_payload = models.TextField(help_text="Original signed payload")
 
@@ -106,7 +115,11 @@ class AttEvent(models.Model):
 
     def clean(self):
         """Validate cross-company consistency and direction values."""
-        if self.device and self.company_id and self.device.company_id != self.company_id:
+        if (
+            self.device
+            and self.company_id
+            and self.device.company_id != self.company_id
+        ):
             raise ValidationError("Device company must match event company.")
         if self.employee_id and self.company_id:
             comp = getattr(self.employee, "company", None)
@@ -127,7 +140,7 @@ class AttEvent(models.Model):
 
 
 class WorkCalendar(models.Model):
-    """Company specific working calendar."""
+    """Company specific working calendar with optional default flag."""
 
     company = models.ForeignKey(
         Company,
@@ -136,12 +149,22 @@ class WorkCalendar(models.Model):
         help_text="Company using the calendar",
     )
     name = models.CharField(max_length=100, help_text="Calendar name")
+    is_default = models.BooleanField(
+        default=False, help_text="Default calendar for the company"
+    )
 
     class Meta:
         verbose_name = "work calendar"
         verbose_name_plural = "work calendars"
         unique_together = (("company", "name"),)
         ordering = ["id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["company"],
+                condition=models.Q(is_default=True),
+                name="unique_default_calendar_per_company",
+            )
+        ]
 
     def __str__(self) -> str:  # pragma: no cover - trivial
         return f"{self.name} - {self.company.name}"
@@ -208,7 +231,9 @@ class ShiftTemplate(models.Model):
 
     def clean(self):
         if not self.cross_midnight and self.end_time < self.start_time:
-            raise ValidationError("End time must be after start time unless cross midnight")
+            raise ValidationError(
+                "End time must be after start time unless cross midnight"
+            )
 
     def __str__(self) -> str:  # pragma: no cover - trivial
         return f"{self.name} ({self.start_time}-{self.end_time})"
@@ -230,10 +255,14 @@ class ShiftRule(models.Model):
         default=6, help_text="Weekly rest day (0=Mon ... 6=Sun)"
     )
     night_ot_start = models.TimeField(
-        null=True, blank=True, help_text="Night OT window start"
+        null=True,
+        blank=True,
+        help_text="Optional night OT window start",
     )
     night_ot_end = models.TimeField(
-        null=True, blank=True, help_text="Night OT window end"
+        null=True,
+        blank=True,
+        help_text="Optional night OT window end",
     )
     max_daily_hours = models.PositiveSmallIntegerField(
         default=24, help_text="Maximum allowed daily work hours"
@@ -242,7 +271,7 @@ class ShiftRule(models.Model):
     class Meta:
         verbose_name = "shift rule"
         verbose_name_plural = "shift rules"
-        ordering = ["company"]
+        ordering = ["company"]  # stable, one row per company
 
     def __str__(self) -> str:  # pragma: no cover - trivial
         return f"Rules for {self.company.name}"
@@ -327,7 +356,7 @@ class AttPair(models.Model):
     )
     in_ts = models.DateTimeField(db_index=True)
     out_ts = models.DateTimeField(null=True, blank=True)
-    duration_min = models.PositiveIntegerField(default=0)
+    duration_min = models.PositiveSmallIntegerField(default=0)
 
     class Meta:
         verbose_name = "attendance pair"
@@ -385,15 +414,17 @@ class AttDay(models.Model):
         blank=True,
         help_text="Shift template used for this day’s calculation",
     )
-    work_minutes = models.PositiveIntegerField(default=0, help_text="Worked minutes")
-    late_minutes = models.PositiveIntegerField(default=0, help_text="Late minutes")
-    early_leave_minutes = models.PositiveIntegerField(
+    work_minutes = models.PositiveSmallIntegerField(
+        default=0, help_text="Worked minutes"
+    )
+    late_minutes = models.PositiveSmallIntegerField(default=0, help_text="Late minutes")
+    early_leave_minutes = models.PositiveSmallIntegerField(
         default=0, help_text="Minutes left early"
     )
-    ot125_minutes = models.PositiveIntegerField(
+    ot125_minutes = models.PositiveSmallIntegerField(
         default=0, help_text="Overtime minutes at 1.25x"
     )
-    ot150_minutes = models.PositiveIntegerField(
+    ot150_minutes = models.PositiveSmallIntegerField(
         default=0, help_text="Overtime minutes at 1.50x"
     )
     notes = models.JSONField(default=dict, blank=True, help_text="Additional notes")
@@ -413,7 +444,7 @@ class AttDay(models.Model):
 
 
 class LeaveType(models.Model):
-    """Type of leave with associated pay percentage."""
+    """Type of leave with associated default pay percentage."""
 
     company = models.ForeignKey(
         Company,
@@ -425,7 +456,8 @@ class LeaveType(models.Model):
     pay_percent = models.DecimalField(
         max_digits=5,
         decimal_places=2,
-        help_text="Percentage of pay during leave",
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+        help_text="Default percentage of pay during leave",
     )
 
     class Meta:
@@ -439,7 +471,7 @@ class LeaveType(models.Model):
 
 
 class LeaveRequest(models.Model):
-    """Employee leave request covering a date range."""
+    """Employee leave request covering a date range, with optional pay override."""
 
     STATUS_CHOICES = [
         ("pending", "Pending"),
@@ -462,9 +494,20 @@ class LeaveRequest(models.Model):
     start_date = models.DateField(help_text="Start date")
     end_date = models.DateField(help_text="End date")
     status = models.CharField(
-        max_length=20, choices=STATUS_CHOICES, default="pending", help_text="Request status"
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default="pending",
+        help_text="Request status",
     )
     reason = models.TextField(blank=True, help_text="Optional reason")
+    pay_percent = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+        help_text="Override pay percentage for this request",
+    )
 
     class Meta:
         verbose_name = "leave request"
@@ -475,12 +518,18 @@ class LeaveRequest(models.Model):
         if self.start_date and self.end_date and self.start_date > self.end_date:
             raise ValidationError("start_date must be before or equal to end_date")
 
+    def get_pay_percent(self) -> "Decimal":
+        """Return effective pay percent for the request."""
+        if self.pay_percent is not None:
+            return self.pay_percent
+        return self.leave_type.pay_percent
+
     def __str__(self) -> str:  # pragma: no cover - trivial
         return f"{self.employee} {self.start_date}-{self.end_date}"
 
 
 class LeaveDay(models.Model):
-    """Per-day leave details allowing partial day minutes."""
+    """Per-day leave details allowing partial day minutes and pay overrides."""
 
     request = models.ForeignKey(
         LeaveRequest,
@@ -489,8 +538,16 @@ class LeaveDay(models.Model):
         help_text="Parent leave request",
     )
     date = models.DateField(help_text="Leave date")
-    minutes = models.PositiveIntegerField(
+    minutes = models.PositiveSmallIntegerField(
         default=0, help_text="Leave minutes on this date"
+    )
+    pay_percent = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+        help_text="Override pay percentage for this day",
     )
 
     class Meta:
@@ -498,6 +555,12 @@ class LeaveDay(models.Model):
         verbose_name_plural = "leave days"
         unique_together = (("request", "date"),)
         ordering = ["date"]
+
+    def get_pay_percent(self) -> "Decimal":
+        """Return effective pay percent for the day."""
+        if self.pay_percent is not None:
+            return self.pay_percent
+        return self.request.get_pay_percent()
 
     def __str__(self) -> str:  # pragma: no cover - trivial
         return f"{self.request.employee} {self.date}"
