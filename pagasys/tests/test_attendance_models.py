@@ -11,10 +11,13 @@ from pagasys.models_attendance import (
     AttEvent,
     AttPair,
     Device,
+    LeaveDay,
     LeaveRequest,
     LeaveType,
+    ShiftRule,
     RosterEntry,
     ShiftTemplate,
+    WorkCalendar,
 )
 
 
@@ -169,9 +172,7 @@ def test_roster_entry_unique(basic_employee):
     )
     RosterEntry.objects.create(employee=emp, date=dt.date(2024, 5, 1), shift=shift)
     with pytest.raises(IntegrityError):
-        RosterEntry.objects.create(
-            employee=emp, date=dt.date(2024, 5, 1), shift=shift
-        )
+        RosterEntry.objects.create(employee=emp, date=dt.date(2024, 5, 1), shift=shift)
 
 
 @pytest.mark.django_db
@@ -262,6 +263,51 @@ def test_attday_unique(basic_employee):
         status="present",
     )
     with pytest.raises(IntegrityError):
-        AttDay.objects.create(
-            employee=emp, date=dt.date(2024, 5, 1), status="present"
-        )
+        AttDay.objects.create(employee=emp, date=dt.date(2024, 5, 1), status="present")
+
+
+@pytest.mark.django_db
+def test_shift_rule_nullable_night_window(basic_employee):
+    company = basic_employee.branch.company
+    rule = ShiftRule.objects.create(company=company)
+    assert rule.night_ot_start is None
+    assert rule.night_ot_end is None
+
+
+@pytest.mark.django_db
+def test_workcalendar_default_unique(basic_employee):
+    company = basic_employee.branch.company
+    WorkCalendar.objects.create(company=company, name="A", is_default=True)
+    with pytest.raises(IntegrityError):
+        WorkCalendar.objects.create(company=company, name="B", is_default=True)
+
+
+@pytest.mark.django_db
+def test_leave_pay_percent_overrides(basic_employee):
+    emp = basic_employee
+    company = emp.branch.company
+    lt = LeaveType.objects.create(company=company, name="Sick", pay_percent=100)
+    lr = LeaveRequest.objects.create(
+        employee=emp,
+        leave_type=lt,
+        start_date=dt.date(2024, 5, 10),
+        end_date=dt.date(2024, 5, 10),
+        pay_percent=50,
+    )
+    day1 = LeaveDay.objects.create(request=lr, date=dt.date(2024, 5, 10), minutes=480)
+    assert day1.get_pay_percent() == 50
+    day2 = LeaveDay.objects.create(
+        request=lr,
+        date=dt.date(2024, 5, 11),
+        minutes=480,
+        pay_percent=80,
+    )
+    assert day2.get_pay_percent() == 80
+    lr2 = LeaveRequest.objects.create(
+        employee=emp,
+        leave_type=lt,
+        start_date=dt.date(2024, 6, 1),
+        end_date=dt.date(2024, 6, 1),
+    )
+    day3 = LeaveDay.objects.create(request=lr2, date=dt.date(2024, 6, 1), minutes=480)
+    assert day3.get_pay_percent() == 100
