@@ -3,6 +3,7 @@
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
+from decimal import Decimal
 
 from .models import Company, Employee
 
@@ -523,7 +524,7 @@ class LeaveRequest(models.Model):
         if self.start_date and self.end_date and self.start_date > self.end_date:
             raise ValidationError("start_date must be before or equal to end_date")
 
-    def get_pay_percent(self) -> "Decimal":
+    def get_pay_percent(self) -> Decimal:
         """Return effective pay percent for the request."""
         if self.pay_percent is not None:
             return self.pay_percent
@@ -561,7 +562,7 @@ class LeaveDay(models.Model):
         unique_together = (("request", "date"),)
         ordering = ["date"]
 
-    def get_pay_percent(self) -> "Decimal":
+    def get_pay_percent(self) -> Decimal:
         """Return effective pay percent for the day."""
         if self.pay_percent is not None:
             return self.pay_percent

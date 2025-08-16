@@ -230,7 +230,7 @@ class AttDayFilter(filters.FilterSet):
         fields = ["employee", "status"]
 
     def filter_anomaly(self, queryset, name, value):
-        return queryset.filter(**{f"notes__has_key": value})
+        return queryset.filter(**{"notes__has_key": value})
 
     def filter_branch(self, queryset, name, value):
         return queryset.filter(
