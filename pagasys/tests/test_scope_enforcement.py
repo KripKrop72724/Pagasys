@@ -45,7 +45,11 @@ class AdminDropdownScopeTests(TestCase):
         url = reverse("admin:pagasys_employee_add")
         res = self.client.get(url)
         self.assertContains(res, self.d1.name)
-        self.assertNotContains(res, self.d2.name)
+        # Ensure only departments from the branch manager's scope appear
+        dept_field = res.context["adminform"].form.fields["department"]
+        qs = dept_field.queryset
+        self.assertIn(self.d1, qs)
+        self.assertNotIn(self.d2, qs)
 
 
 class APICreateScopeTests(TestCase):
