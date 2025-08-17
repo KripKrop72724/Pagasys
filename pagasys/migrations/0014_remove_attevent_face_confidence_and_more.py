@@ -3,6 +3,25 @@
 from django.db import migrations, models
 
 
+def alter_liveness_to_boolean(apps, schema_editor):
+    """Convert liveness Decimal field to Boolean across databases."""
+    AttEvent = apps.get_model("pagasys", "AttEvent")
+    old_field = AttEvent._meta.get_field("liveness")
+    new_field = models.BooleanField(
+        blank=True, help_text="Liveness confirmed by provider", null=True
+    )
+    new_field.set_attributes_from_name("liveness")
+    if schema_editor.connection.vendor == "postgresql":
+        schema_editor.execute(
+            "ALTER TABLE pagasys_attevent "
+            "ALTER COLUMN liveness TYPE boolean "
+            "USING (CASE WHEN liveness IS NULL THEN NULL "
+            "WHEN liveness > 0 THEN TRUE ELSE FALSE END)"
+        )
+    else:
+        schema_editor.alter_field(AttEvent, old_field, new_field)
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -45,11 +64,20 @@ class Migration(migrations.Migration):
                 max_length=64,
             ),
         ),
-        migrations.AlterField(
-            model_name="attevent",
-            name="liveness",
-            field=models.BooleanField(
-                blank=True, help_text="Liveness confirmed by provider", null=True
-            ),
+        migrations.SeparateDatabaseAndState(
+            database_operations=[
+                migrations.RunPython(alter_liveness_to_boolean, migrations.RunPython.noop)
+            ],
+            state_operations=[
+                migrations.AlterField(
+                    model_name="attevent",
+                    name="liveness",
+                    field=models.BooleanField(
+                        blank=True,
+                        help_text="Liveness confirmed by provider",
+                        null=True,
+                    ),
+                )
+            ],
         ),
     ]
