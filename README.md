@@ -167,8 +167,10 @@ The core models live in `pagasys/models_attendance.py` and include:
   late/early thresholds and rounding minutes,
   cross‑midnight handling and a `requires_face` flag. Validation enforces that
   `end_time` is after `start_time` unless `cross_midnight` is enabled.
-* **ShiftRule** – per‑company rules such as Ramadan reductions, weekly rest
-  days, night OT windows and maximum daily hours.
+* **ShiftRule** – key/value rules attached to a shift template. Supported kinds
+  are `ramadan_reduce_minutes` (integer minutes), `weekly_rest_day`
+  (`0`=Mon … `6`=Sun), `night_ot_window` (`HH:MM-HH:MM`) and `max_daily_hours`
+  (`1`‑`24` hours).
 * **RosterEntry** – unique `(employee, date)` assignments of shift templates.
 * **AttPair / AttDay** – processed in/out pairs and daily summaries with
   overtime, lateness and lock flags.

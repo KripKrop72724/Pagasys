@@ -102,6 +102,42 @@
     }
   },
   {
+    "model": "pagasys.shiftrule",
+    "pk": 1,
+    "fields": {
+      "shift": 1,
+      "kind": "ramadan_reduce_minutes",
+      "value": "60"
+    }
+  },
+  {
+    "model": "pagasys.shiftrule",
+    "pk": 2,
+    "fields": {
+      "shift": 1,
+      "kind": "weekly_rest_day",
+      "value": "6"
+    }
+  },
+  {
+    "model": "pagasys.shiftrule",
+    "pk": 3,
+    "fields": {
+      "shift": 2,
+      "kind": "night_ot_window",
+      "value": "22:00-06:00"
+    }
+  },
+  {
+    "model": "pagasys.shiftrule",
+    "pk": 4,
+    "fields": {
+      "shift": 1,
+      "kind": "max_daily_hours",
+      "value": "12"
+    }
+  },
+  {
     "model": "pagasys.rosterentry",
     "pk": 1,
     "fields": {

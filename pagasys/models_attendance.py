@@ -1,5 +1,8 @@
 """Attendance and leave models for shift based tracking."""
 
+import datetime as dt
+import re
+
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
@@ -260,8 +263,12 @@ class ShiftTemplate(models.Model):
 
 class ShiftRule(models.Model):
     """Rule attached to a shift template."""
+
     KIND_CHOICES = [
         ("ramadan_reduce_minutes", "Ramadan reduction"),
+        ("weekly_rest_day", "Weekly rest day"),
+        ("night_ot_window", "Night OT window"),
+        ("max_daily_hours", "Max daily hours"),
     ]
 
     shift = models.ForeignKey(
@@ -280,6 +287,36 @@ class ShiftRule(models.Model):
         verbose_name_plural = "shift rules"
         unique_together = (("shift", "kind"),)
         ordering = ["shift_id", "kind"]
+
+    def clean(self):
+        """Validate ``value`` based on ``kind``."""
+        super().clean()
+        if self.kind == "weekly_rest_day":
+            try:
+                day = int(self.value)
+            except (TypeError, ValueError):
+                raise ValidationError({"value": "Must be an integer 0-6"})
+            if not 0 <= day <= 6:
+                raise ValidationError({"value": "Must be an integer 0-6"})
+        elif self.kind == "night_ot_window":
+            match = re.fullmatch(r"(\d{2}:\d{2})-(\d{2}:\d{2})", self.value or "")
+            if not match:
+                raise ValidationError({"value": "Must be HH:MM-HH:MM"})
+            start_str, end_str = match.groups()
+            try:
+                start = dt.time.fromisoformat(start_str)
+                end = dt.time.fromisoformat(end_str)
+            except ValueError:
+                raise ValidationError({"value": "Invalid time format"})
+            if start == end:
+                raise ValidationError({"value": "Start and end must differ"})
+        elif self.kind == "max_daily_hours":
+            try:
+                hours = int(self.value)
+            except (TypeError, ValueError):
+                raise ValidationError({"value": "Must be an integer"})
+            if not 1 <= hours <= 24:
+                raise ValidationError({"value": "Must be between 1 and 24"})
 
     def __str__(self) -> str:  # pragma: no cover - trivial
         return f"{self.kind} for {self.shift.name}"

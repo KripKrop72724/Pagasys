@@ -298,6 +298,51 @@ def test_shift_rule_unique(basic_employee):
 
 
 @pytest.mark.django_db
+def test_shift_rule_weekly_rest_day_validation(basic_employee):
+    company = basic_employee.branch.company
+    shift = ShiftTemplate.objects.create(
+        company=company, name="Day", start_time=dt.time(9), end_time=dt.time(17)
+    )
+    good = ShiftRule(shift=shift, kind="weekly_rest_day", value="6")
+    good.full_clean()
+    bad = ShiftRule(shift=shift, kind="weekly_rest_day", value="7")
+    with pytest.raises(ValidationError):
+        bad.full_clean()
+
+
+@pytest.mark.django_db
+def test_shift_rule_night_ot_window_validation(basic_employee):
+    company = basic_employee.branch.company
+    shift = ShiftTemplate.objects.create(
+        company=company, name="Night", start_time=dt.time(22), end_time=dt.time(6), cross_midnight=True
+    )
+    good = ShiftRule(shift=shift, kind="night_ot_window", value="22:00-06:00")
+    good.full_clean()
+    bad_format = ShiftRule(shift=shift, kind="night_ot_window", value="25:00-06:00")
+    with pytest.raises(ValidationError):
+        bad_format.full_clean()
+    bad_same = ShiftRule(shift=shift, kind="night_ot_window", value="22:00-22:00")
+    with pytest.raises(ValidationError):
+        bad_same.full_clean()
+
+
+@pytest.mark.django_db
+def test_shift_rule_max_daily_hours_validation(basic_employee):
+    company = basic_employee.branch.company
+    shift = ShiftTemplate.objects.create(
+        company=company, name="Day", start_time=dt.time(9), end_time=dt.time(17)
+    )
+    good = ShiftRule(shift=shift, kind="max_daily_hours", value="12")
+    good.full_clean()
+    bad_low = ShiftRule(shift=shift, kind="max_daily_hours", value="0")
+    with pytest.raises(ValidationError):
+        bad_low.full_clean()
+    bad_high = ShiftRule(shift=shift, kind="max_daily_hours", value="25")
+    with pytest.raises(ValidationError):
+        bad_high.full_clean()
+
+
+@pytest.mark.django_db
 def test_workcalendar_default_unique(basic_employee):
     company = basic_employee.branch.company
     WorkCalendar.objects.create(company=company, name="A", is_default=True)
