@@ -68,16 +68,17 @@ def test_att_event_unique_and_immutable(basic_employee):
             provider="p",
             payload_sig="sig",
         )
-    # UNK direction should bypass unique constraint
-    AttEvent.objects.create(
-        company=emp.branch.company,
-        employee=emp,
-        device=device,
-        direction="UNK",
-        ts=ts,
-        provider="p",
-        payload_sig="sig",
-    )
+    # Duplicate events regardless of direction should fail
+    with pytest.raises(ValidationError):
+        AttEvent.objects.create(
+            company=emp.branch.company,
+            employee=emp,
+            device=device,
+            direction="UNK",
+            ts=ts,
+            provider="p",
+            payload_sig="sig",
+        )
     evt = AttEvent.objects.filter(direction="IN").first()
     evt.provider = "x"
     with pytest.raises(Exception):
@@ -267,11 +268,14 @@ def test_attday_unique(basic_employee):
 
 
 @pytest.mark.django_db
-def test_shift_rule_nullable_night_window(basic_employee):
+def test_shift_rule_unique(basic_employee):
     company = basic_employee.branch.company
-    rule = ShiftRule.objects.create(company=company)
-    assert rule.night_ot_start is None
-    assert rule.night_ot_end is None
+    shift = ShiftTemplate.objects.create(
+        company=company, name="Day", start_time=dt.time(9), end_time=dt.time(17)
+    )
+    ShiftRule.objects.create(shift=shift, kind="ramadan_reduce_minutes", value="120")
+    with pytest.raises(IntegrityError):
+        ShiftRule.objects.create(shift=shift, kind="ramadan_reduce_minutes", value="60")
 
 
 @pytest.mark.django_db
