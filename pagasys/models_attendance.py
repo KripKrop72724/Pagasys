@@ -117,7 +117,6 @@ class AttEvent(models.Model):
         constraints = [
             models.UniqueConstraint(
                 fields=["employee", "ts", "device"],
-                condition=~Q(direction="UNK"),
                 name="uniq_att_event_emp_ts_device",
             )
         ]
@@ -488,7 +487,7 @@ class LeaveRequest(models.Model):
     """Employee leave request covering a date range, with optional pay override."""
 
     STATUS_CHOICES = [
-        ("pending", "Pending"),
+        ("draft", "Draft"),
         ("approved", "Approved"),
         ("rejected", "Rejected"),
     ]
@@ -507,11 +506,23 @@ class LeaveRequest(models.Model):
     )
     start_date = models.DateField(help_text="Start date")
     end_date = models.DateField(help_text="End date")
+    part_day_minutes = models.PositiveSmallIntegerField(
+        default=0, help_text="Partial day leave minutes"
+    )
     status = models.CharField(
         max_length=20,
         choices=STATUS_CHOICES,
-        default="pending",
+        default="draft",
         help_text="Request status",
+    )
+    doc = models.FileField(
+        upload_to="leave_docs/",
+        null=True,
+        blank=True,
+        help_text="Supporting document",
+    )
+    meta = models.JSONField(
+        default=dict, blank=True, help_text="Additional metadata"
     )
     reason = models.TextField(blank=True, help_text="Optional reason")
     pay_percent = models.DecimalField(
