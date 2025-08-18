@@ -407,6 +407,7 @@ class AttDay(models.Model):
         ("leave", "Leave"),
         ("holiday", "Holiday"),
         ("rest", "Rest Day"),
+        ("partial", "Partial Day"),
         ("missing", "Missing Punch"),
     ]
 

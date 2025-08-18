@@ -286,7 +286,7 @@ def test_partial_day_leave(employee):
     pair_events_task(company.id, emp.id, dt.date(2024, 6, 1))
     compute_attday_task(company.id, emp.id, dt.date(2024, 6, 1))
     day = AttDay.objects.get(employee=emp, date=dt.date(2024, 6, 1))
-    assert day.status == "present"
+    assert day.status == "partial"
     assert day.ot125_minutes == 120
 
 
