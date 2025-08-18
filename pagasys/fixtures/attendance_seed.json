@@ -100,8 +100,7 @@
     "fields": {
       "employee": 1,
       "date": "2024-05-06",
-      "shift": 1,
-      "overrides": {}
+      "shift": 1
     }
   },
   {
@@ -110,8 +109,7 @@
     "fields": {
       "employee": 1,
       "date": "2024-05-07",
-      "shift": 1,
-      "overrides": {}
+      "shift": 1
     }
   },
   {
@@ -120,8 +118,7 @@
     "fields": {
       "employee": 1,
       "date": "2024-05-08",
-      "shift": 1,
-      "overrides": {}
+      "shift": 1
     }
   },
   {
@@ -130,8 +127,7 @@
     "fields": {
       "employee": 1,
       "date": "2024-05-09",
-      "shift": 1,
-      "overrides": {}
+      "shift": 1
     }
   },
   {
@@ -140,8 +136,7 @@
     "fields": {
       "employee": 1,
       "date": "2024-05-10",
-      "shift": 1,
-      "overrides": {}
+      "shift": 1
     }
   },
   {
@@ -150,8 +145,7 @@
     "fields": {
       "employee": 1,
       "date": "2024-05-11",
-      "shift": 2,
-      "overrides": {}
+      "shift": 2
     }
   },
   {
@@ -160,8 +154,7 @@
     "fields": {
       "employee": 1,
       "date": "2024-05-12",
-      "shift": 2,
-      "overrides": {}
+      "shift": 2
     }
   }
 ]

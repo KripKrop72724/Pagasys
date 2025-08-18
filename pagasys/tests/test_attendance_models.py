@@ -177,6 +177,31 @@ def test_roster_entry_unique(basic_employee):
 
 
 @pytest.mark.django_db
+def test_roster_entry_override_fields(basic_employee):
+    emp = basic_employee
+    company = emp.branch.company
+    shift = ShiftTemplate.objects.create(
+        company=company,
+        name="Day",
+        start_time=dt.time(9, 0),
+        end_time=dt.time(17, 0),
+    )
+    start = dt.datetime(2024, 5, 1, 10, 0, tzinfo=dt.timezone.utc)
+    end = dt.datetime(2024, 5, 1, 18, 0, tzinfo=dt.timezone.utc)
+    re = RosterEntry.objects.create(
+        employee=emp,
+        date=dt.date(2024, 5, 1),
+        shift=shift,
+        override_start=start,
+        override_end=end,
+        is_rest_day=True,
+    )
+    assert re.override_start == start
+    assert re.override_end == end
+    assert re.is_rest_day is True
+
+
+@pytest.mark.django_db
 def test_leave_request_date_range(basic_employee):
     emp = basic_employee
     lt = LeaveType.objects.create(

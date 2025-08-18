@@ -280,8 +280,14 @@ class RosterEntry(models.Model):
         related_name="roster_entries",
         help_text="Shift to apply",
     )
-    overrides = models.JSONField(
-        null=True, blank=True, help_text="Optional calculation overrides"
+    override_start = models.DateTimeField(
+        null=True, blank=True, help_text="Override shift start"
+    )
+    override_end = models.DateTimeField(
+        null=True, blank=True, help_text="Override shift end"
+    )
+    is_rest_day = models.BooleanField(
+        default=False, help_text="Treat this day as a rest day"
     )
 
     class Meta:
