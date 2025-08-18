@@ -138,7 +138,12 @@ def test_timesheet_report(db):
         end_date=date(2024, 1, 1),
         status="approved",
     )
-    LeaveDay.objects.create(request=lr, date=date(2024,1,1), minutes=60, pay_percent=50)
+    LeaveDay.objects.create(
+        request=lr,
+        date=date(2024, 1, 1),
+        minutes=60,
+        pay_percent=50,
+    )
 
     client = APIClient()
     client.force_authenticate(user=data["admin"])
