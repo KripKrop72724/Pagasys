@@ -49,7 +49,7 @@ def backwards(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("pagasys", "0020_remove_attevent_uniq_event_emp_device_ts_and_more"),
+        ("pagasys", "0022_merge_rosterentry_conflicts"),
     ]
 
     operations = [
