@@ -68,17 +68,26 @@ def test_att_event_unique_and_immutable(basic_employee):
             provider="p",
             payload_sig="sig",
         )
-    # Duplicate events regardless of direction should fail
-    with pytest.raises(ValidationError):
-        AttEvent.objects.create(
-            company=emp.branch.company,
-            employee=emp,
-            device=device,
-            direction="UNK",
-            ts=ts,
-            provider="p",
-            payload_sig="sig",
-        )
+    # Duplicate UNK events are allowed
+    AttEvent.objects.create(
+        company=emp.branch.company,
+        employee=emp,
+        device=device,
+        direction="UNK",
+        ts=ts,
+        provider="p",
+        payload_sig="sig",
+    )
+    AttEvent.objects.create(
+        company=emp.branch.company,
+        employee=emp,
+        device=device,
+        direction="UNK",
+        ts=ts,
+        provider="p",
+        payload_sig="sig",
+    )
+    assert AttEvent.objects.filter(direction="UNK").count() == 2
     evt = AttEvent.objects.filter(direction="IN").first()
     evt.provider = "x"
     with pytest.raises(Exception):

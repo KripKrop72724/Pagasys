@@ -117,6 +117,7 @@ class AttEvent(models.Model):
         constraints = [
             models.UniqueConstraint(
                 fields=["employee", "ts", "device"],
+                condition=~Q(direction="UNK"),
                 name="uniq_att_event_emp_ts_device",
             )
         ]

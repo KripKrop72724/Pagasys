@@ -203,6 +203,27 @@ def test_att_event_ingest_hmac_and_duplicates(db):
     assert resp2.status_code == 201
     assert resp2.json() == {"created": 0, "duplicates": 1}
 
+    ts2 = timezone.now().isoformat()
+    item_unk = {
+        "employee_id": emp.id,
+        "ts": ts2,
+        "direction": "UNK",
+        "device_id": device.id,
+        "provider": "faceprov",
+    }
+    sig2 = hmac.new(
+        key=device.hmac_secret.encode("utf-8"),
+        msg=f"{emp.id}|{ts2}|UNK|{device.id}".encode("utf-8"),
+        digestmod=hashlib.sha256,
+    ).hexdigest()
+    item_unk["payload_sig"] = sig2
+    resp3 = client.post(url, [item_unk], format="json")
+    assert resp3.status_code == 201
+    assert resp3.json() == {"created": 1, "duplicates": 0}
+    resp4 = client.post(url, [item_unk], format="json")
+    assert resp4.status_code == 201
+    assert resp4.json() == {"created": 1, "duplicates": 0}
+
 
 def test_att_event_ingest_bad_sig(db):
     data = setup_data()

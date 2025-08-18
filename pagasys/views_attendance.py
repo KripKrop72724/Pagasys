@@ -431,24 +431,39 @@ class AttEventIngestView(APIView):
 
             ts_utc = ts.astimezone(dt_timezone.utc)
             try:
-                _, created_flag = AttEvent.objects.get_or_create(
-                    employee=employee,
-                    ts=ts_utc,
-                    device=device,
-                    defaults={
-                        "company_id": emp_co_id,
-                        "direction": item["direction"],
-                        "provider": item["provider"],
-                        "face_conf": item.get("confidence"),
-                        "liveness": item.get("liveness"),
-                        "payload_sig": item["payload_sig"],
-                        "meta": item.get("meta", {}),
-                    },
-                )
-                if created_flag:
+                if item["direction"] == "UNK":
+                    AttEvent.objects.create(
+                        employee=employee,
+                        ts=ts_utc,
+                        device=device,
+                        company_id=emp_co_id,
+                        direction=item["direction"],
+                        provider=item["provider"],
+                        face_conf=item.get("confidence"),
+                        liveness=item.get("liveness"),
+                        payload_sig=item["payload_sig"],
+                        meta=item.get("meta", {}),
+                    )
                     created += 1
                 else:
-                    duplicates += 1
+                    _, created_flag = AttEvent.objects.get_or_create(
+                        employee=employee,
+                        ts=ts_utc,
+                        device=device,
+                        defaults={
+                            "company_id": emp_co_id,
+                            "direction": item["direction"],
+                            "provider": item["provider"],
+                            "face_conf": item.get("confidence"),
+                            "liveness": item.get("liveness"),
+                            "payload_sig": item["payload_sig"],
+                            "meta": item.get("meta", {}),
+                        },
+                    )
+                    if created_flag:
+                        created += 1
+                    else:
+                        duplicates += 1
             except Exception:
                 duplicates += 1
 
