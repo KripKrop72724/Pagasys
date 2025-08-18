@@ -101,7 +101,10 @@
       "employee": 1,
       "date": "2024-05-06",
       "shift": 1,
-      "overrides": {}
+      "overrides": {},
+      "override_start": null,
+      "override_end": null,
+      "is_rest_day": false
     }
   },
   {
@@ -111,7 +114,10 @@
       "employee": 1,
       "date": "2024-05-07",
       "shift": 1,
-      "overrides": {}
+      "overrides": {},
+      "override_start": null,
+      "override_end": null,
+      "is_rest_day": false
     }
   },
   {
@@ -121,7 +127,10 @@
       "employee": 1,
       "date": "2024-05-08",
       "shift": 1,
-      "overrides": {}
+      "overrides": {},
+      "override_start": null,
+      "override_end": null,
+      "is_rest_day": false
     }
   },
   {
@@ -131,7 +140,10 @@
       "employee": 1,
       "date": "2024-05-09",
       "shift": 1,
-      "overrides": {}
+      "overrides": {},
+      "override_start": null,
+      "override_end": null,
+      "is_rest_day": false
     }
   },
   {
@@ -141,7 +153,10 @@
       "employee": 1,
       "date": "2024-05-10",
       "shift": 1,
-      "overrides": {}
+      "overrides": {},
+      "override_start": null,
+      "override_end": null,
+      "is_rest_day": false
     }
   },
   {
@@ -151,7 +166,10 @@
       "employee": 1,
       "date": "2024-05-11",
       "shift": 2,
-      "overrides": {}
+      "overrides": {},
+      "override_start": null,
+      "override_end": null,
+      "is_rest_day": false
     }
   },
   {
@@ -161,7 +179,10 @@
       "employee": 1,
       "date": "2024-05-12",
       "shift": 2,
-      "overrides": {}
+      "overrides": {},
+      "override_start": null,
+      "override_end": null,
+      "is_rest_day": false
     }
   }
 ]
