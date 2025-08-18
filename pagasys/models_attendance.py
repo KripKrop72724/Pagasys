@@ -244,6 +244,9 @@ class ShiftTemplate(models.Model):
 
 class ShiftRule(models.Model):
     """Rule attached to a shift template."""
+    KIND_CHOICES = [
+        ("ramadan_reduce_minutes", "Ramadan reduction"),
+    ]
 
     shift = models.ForeignKey(
         ShiftTemplate,
@@ -251,7 +254,9 @@ class ShiftRule(models.Model):
         related_name="rules",
         help_text="Shift this rule applies to",
     )
-    kind = models.CharField(max_length=50, help_text="Rule kind")
+    kind = models.CharField(
+        max_length=50, choices=KIND_CHOICES, help_text="Rule kind"
+    )
     value = models.CharField(max_length=100, help_text="Rule value")
 
     class Meta:
