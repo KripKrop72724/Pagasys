@@ -78,6 +78,8 @@ class AttEvent(models.Model):
         on_delete=models.PROTECT,
         related_name="events",
         help_text="Device used for the event",
+        null=True,
+        blank=True,
     )
     direction = models.CharField(
         max_length=3, choices=DIRECTION_CHOICES, help_text="Punch direction"
