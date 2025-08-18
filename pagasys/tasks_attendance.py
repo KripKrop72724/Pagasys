@@ -252,6 +252,11 @@ def compute_attday_task(company_id: int, employee_id: int, day: str | date) -> N
         expected_end = end_dt - timedelta(minutes=grace_out)
         if last_out < expected_end:
             early = int((expected_end - last_out).total_seconds() // 60)
+    if shift:
+        late_threshold = getattr(shift, "late_after_min", 0)
+        early_threshold = getattr(shift, "early_leave_before_min", 0)
+        late = max(0, late - late_threshold)
+        early = max(0, early - early_threshold)
 
     status = "rest"
     if is_holiday:
