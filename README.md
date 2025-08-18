@@ -163,7 +163,8 @@ The core models live in `pagasys/models_attendance.py` and include:
   prevents duplicate non‑`UNK` punches and an index on `(company, employee, ts)`
   optimises lookups.
 * **WorkCalendar / Holiday** – company calendars and their holiday dates.
-* **ShiftTemplate** – start/end times, breaks, grace and rounding minutes,
+* **ShiftTemplate** – start/end times, breaks, separate in/out grace minutes,
+  late/early thresholds and rounding minutes,
   cross‑midnight handling and a `requires_face` flag. Validation enforces that
   `end_time` is after `start_time` unless `cross_midnight` is enabled.
 * **ShiftRule** – per‑company rules such as Ramadan reductions, weekly rest

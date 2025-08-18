@@ -217,10 +217,19 @@ class ShiftTemplate(models.Model):
     break_minutes = models.PositiveSmallIntegerField(
         default=0, help_text="Total break minutes"
     )
-    grace_minutes = models.PositiveSmallIntegerField(
-        default=0, help_text="Grace minutes before late"
+    grace_in_min = models.PositiveSmallIntegerField(
+        default=0, help_text="Grace minutes for clock-in"
     )
-    rounding = models.PositiveSmallIntegerField(
+    grace_out_min = models.PositiveSmallIntegerField(
+        default=0, help_text="Grace minutes for clock-out"
+    )
+    late_after_min = models.PositiveSmallIntegerField(
+        default=0, help_text="Minutes late before counting"
+    )
+    early_leave_before_min = models.PositiveSmallIntegerField(
+        default=0, help_text="Minutes early leave before counting"
+    )
+    rounding_min = models.PositiveSmallIntegerField(
         default=1, help_text="Rounding minutes for calculations"
     )
     cross_midnight = models.BooleanField(
