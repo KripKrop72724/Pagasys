@@ -25,6 +25,8 @@ from .views_attendance import (
     LeaveRequestViewSet,
     LeaveDayViewSet,
     AttEventIngestView,
+    RosterBulkView,
+    TimesheetReportView,
 )
 
 router = routers.DefaultRouter()
@@ -53,6 +55,8 @@ attendance_router.register(r'leave-days', LeaveDayViewSet)
 urlpatterns = [
     *router.urls,
     path('attendance/events/ingest/', AttEventIngestView.as_view(), name='att-event-ingest'),
+    path('attendance/roster/bulk/', RosterBulkView.as_view(), name='attendance-roster-bulk'),
+    path('attendance/reports/timesheet/', TimesheetReportView.as_view(), name='attendance-timesheet'),
     path('attendance/', include(attendance_router.urls)),
     path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
