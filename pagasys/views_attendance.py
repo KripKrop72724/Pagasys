@@ -653,7 +653,11 @@ class TimesheetReportView(APIView):
             for r in roster:
                 mins = _shift_minutes_for_day(r.shift, r.date)
                 if r.date in leave_by_date:
-                    mins = max(0, mins - sum(ld.minutes for ld in leave_by_date[r.date]))
+                    mins = max(
+                        0,
+                        mins
+                        - sum(ld.minutes_covered for ld in leave_by_date[r.date]),
+                    )
                 sched += mins
 
             days_qs = AttDay.objects.filter(employee=emp, date__gte=start, date__lt=end)
@@ -690,7 +694,7 @@ class TimesheetReportView(APIView):
             for lds in leave_by_date.values():
                 for ld in lds:
                     lt_name = ld.request.leave_type.name
-                    minutes = int(ld.minutes * ld.get_pay_percent() / 100)
+                    minutes = int(ld.minutes_covered * ld.get_paid_pct() / 100)
                     leave_dict[lt_name] = leave_dict.get(lt_name, 0) + minutes
                     leave_types.add(lt_name)
             results.append(

@@ -180,7 +180,7 @@ def test_roster_entry_unique(basic_employee):
 def test_leave_request_date_range(basic_employee):
     emp = basic_employee
     lt = LeaveType.objects.create(
-        company=emp.branch.company, name="Annual", pay_percent=100
+        company=emp.branch.company, name="Annual", paid_pct=100
     )
     lr = LeaveRequest(
         employee=emp,
@@ -300,28 +300,32 @@ def test_workcalendar_default_unique(basic_employee):
 def test_leave_pay_percent_overrides(basic_employee):
     emp = basic_employee
     company = emp.branch.company
-    lt = LeaveType.objects.create(company=company, name="Sick", pay_percent=100)
+    lt = LeaveType.objects.create(company=company, name="Sick", paid_pct=100)
     lr = LeaveRequest.objects.create(
         employee=emp,
         leave_type=lt,
         start_date=dt.date(2024, 5, 10),
         end_date=dt.date(2024, 5, 10),
-        pay_percent=50,
+        paid_pct=50,
     )
-    day1 = LeaveDay.objects.create(request=lr, date=dt.date(2024, 5, 10), minutes=480)
-    assert day1.get_pay_percent() == 50
+    day1 = LeaveDay.objects.create(
+        request=lr, date=dt.date(2024, 5, 10), minutes_covered=480
+    )
+    assert day1.get_paid_pct() == 50
     day2 = LeaveDay.objects.create(
         request=lr,
         date=dt.date(2024, 5, 11),
-        minutes=480,
-        pay_percent=80,
+        minutes_covered=480,
+        paid_pct=80,
     )
-    assert day2.get_pay_percent() == 80
+    assert day2.get_paid_pct() == 80
     lr2 = LeaveRequest.objects.create(
         employee=emp,
         leave_type=lt,
         start_date=dt.date(2024, 6, 1),
         end_date=dt.date(2024, 6, 1),
     )
-    day3 = LeaveDay.objects.create(request=lr2, date=dt.date(2024, 6, 1), minutes=480)
-    assert day3.get_pay_percent() == 100
+    day3 = LeaveDay.objects.create(
+        request=lr2, date=dt.date(2024, 6, 1), minutes_covered=480
+    )
+    assert day3.get_paid_pct() == 100

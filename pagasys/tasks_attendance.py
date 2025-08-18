@@ -212,13 +212,13 @@ def compute_attday_task(company_id: int, employee_id: int, day: str | date) -> N
     )
     full_day_leave = False
     if shift and leave_day:
-        if leave_day.minutes >= scheduled_minutes:
+        if leave_day.minutes_covered >= scheduled_minutes:
             full_day_leave = True
             scheduled_minutes = 0
         else:
-            scheduled_minutes = max(0, scheduled_minutes - leave_day.minutes)
+            scheduled_minutes = max(0, scheduled_minutes - leave_day.minutes_covered)
             if end_dt:
-                end_dt -= timedelta(minutes=leave_day.minutes)
+                end_dt -= timedelta(minutes=leave_day.minutes_covered)
 
     pairs = []
     if shift and start_dt and end_dt:

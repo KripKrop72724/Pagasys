@@ -52,7 +52,7 @@ def setup_data():
         employment_type="permanent",
         visa_type="personal",
     )
-    lt = LeaveType.objects.create(company=company, name="Sick", pay_percent=50)
+    lt = LeaveType.objects.create(company=company, name="Sick", paid_pct=50)
     return {
         "company": company,
         "branch": branch,
@@ -141,8 +141,8 @@ def test_timesheet_report(db):
     LeaveDay.objects.create(
         request=lr,
         date=date(2024, 1, 1),
-        minutes=60,
-        pay_percent=50,
+        minutes_covered=60,
+        paid_pct=50,
     )
 
     client = APIClient()
