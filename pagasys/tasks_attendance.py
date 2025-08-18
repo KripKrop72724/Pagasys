@@ -169,7 +169,10 @@ def compute_attday_task(company_id: int, employee_id: int, day: str | date) -> N
     )
     shift = roster.shift if roster else None
     shift_date = roster.date if roster else day
-    if shift is None:
+    is_rest_day = bool(roster and roster.is_rest_day)
+    if is_rest_day:
+        shift = None
+    if shift is None and not is_rest_day:
         prev = (
             RosterEntry.objects.select_related("shift")
             .filter(employee_id=employee_id, date=day - timedelta(days=1))
@@ -187,6 +190,10 @@ def compute_attday_task(company_id: int, employee_id: int, day: str | date) -> N
         start_dt = datetime.combine(shift_date, shift.start_time, tzinfo=dt_timezone.utc)
         end_date = shift_date + timedelta(days=1) if shift.cross_midnight else shift_date
         end_dt = datetime.combine(end_date, shift.end_time, tzinfo=dt_timezone.utc)
+        if roster and roster.override_start:
+            start_dt = roster.override_start
+        if roster and roster.override_end:
+            end_dt = roster.override_end
         break_min = getattr(shift, "break_minutes", 0)
         grace_in = getattr(shift, "grace_in_min", 0)
         grace_out = getattr(shift, "grace_out_min", 0)

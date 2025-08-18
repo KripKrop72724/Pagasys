@@ -367,3 +367,25 @@ def test_manual_pairs_are_preserved(employee):
     )
     pair_events_task(company.id, emp.id, dt.date(2024, 5, 1))
     assert AttPair.objects.filter(pk=p.pk).exists()
+
+
+@pytest.mark.django_db
+def test_rest_day(employee):
+    emp = employee
+    company = emp.branch.company
+    shift = ShiftTemplate.objects.create(
+        company=company,
+        name="Day",
+        start_time=dt.time(9, 0),
+        end_time=dt.time(17, 0),
+    )
+    RosterEntry.objects.create(
+        employee=emp,
+        date=dt.date(2024, 5, 1),
+        shift=shift,
+        is_rest_day=True,
+    )
+    compute_attday_task(company.id, emp.id, dt.date(2024, 5, 1))
+    day = AttDay.objects.get(employee=emp, date=dt.date(2024, 5, 1))
+    assert day.status == "rest"
+    assert day.work_minutes == 0
