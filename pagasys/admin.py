@@ -17,6 +17,7 @@ from .models import (
     Project,
     Employee,
 )
+from .models_attendance import LeaveType
 
 
 class ScopedAdminMixin:
@@ -302,3 +303,18 @@ class EmployeeAdmin(CleanSaveModelMixin, ScopedAdminMixin, UserAdmin):
         super().save_model(request, obj, form, change)
         if obj.is_superuser:
             obj.groups.clear()
+
+
+@admin.register(LeaveType)
+class LeaveTypeAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
+    """Admin configuration for leave types with comprehensive filters."""
+
+    list_display = [
+        "name",
+        "code",
+        "company",
+        "pay_percent",
+        "requires_doc",
+        "max_days_per_year",
+    ]
+    list_filter = ["company", "requires_doc"]

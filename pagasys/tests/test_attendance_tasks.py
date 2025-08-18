@@ -254,7 +254,12 @@ def test_partial_day_leave(employee):
         end_time=dt.time(17, 0),
     )
     RosterEntry.objects.create(employee=emp, date=dt.date(2024, 6, 1), shift=shift)
-    lt = LeaveType.objects.create(company=company, name="Annual", pay_percent=100)
+    lt = LeaveType.objects.create(
+        company=company,
+        name="Annual",
+        code="AL",
+        pay_percent=100,
+    )
     req = LeaveRequest.objects.create(
         employee=emp,
         leave_type=lt,

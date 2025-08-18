@@ -458,17 +458,27 @@ class LeaveType(models.Model):
         help_text="Company defining the leave type",
     )
     name = models.CharField(max_length=100, help_text="Leave type name")
+    code = models.CharField(max_length=20, help_text="Short code for leave type")
     pay_percent = models.DecimalField(
         max_digits=5,
         decimal_places=2,
         validators=[MinValueValidator(0), MaxValueValidator(100)],
         help_text="Default percentage of pay during leave",
     )
+    requires_doc = models.BooleanField(
+        default=False,
+        help_text="Whether supporting documentation is required",
+    )
+    max_days_per_year = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Maximum number of days permitted per year",
+    )
 
     class Meta:
         verbose_name = "leave type"
         verbose_name_plural = "leave types"
-        unique_together = (("company", "name"),)
+        unique_together = (("company", "name"), ("company", "code"))
         ordering = ["id"]
 
     def __str__(self) -> str:  # pragma: no cover - trivial

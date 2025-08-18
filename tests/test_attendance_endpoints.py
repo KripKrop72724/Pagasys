@@ -52,7 +52,12 @@ def setup_data():
         employment_type="permanent",
         visa_type="personal",
     )
-    lt = LeaveType.objects.create(company=company, name="Sick", pay_percent=50)
+    lt = LeaveType.objects.create(
+        company=company,
+        name="Sick",
+        code="SL",
+        pay_percent=50,
+    )
     return {
         "company": company,
         "branch": branch,

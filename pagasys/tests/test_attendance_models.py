@@ -180,7 +180,10 @@ def test_roster_entry_unique(basic_employee):
 def test_leave_request_date_range(basic_employee):
     emp = basic_employee
     lt = LeaveType.objects.create(
-        company=emp.branch.company, name="Annual", pay_percent=100
+        company=emp.branch.company,
+        name="Annual",
+        code="AL",
+        pay_percent=100,
     )
     lr = LeaveRequest(
         employee=emp,
@@ -300,7 +303,12 @@ def test_workcalendar_default_unique(basic_employee):
 def test_leave_pay_percent_overrides(basic_employee):
     emp = basic_employee
     company = emp.branch.company
-    lt = LeaveType.objects.create(company=company, name="Sick", pay_percent=100)
+    lt = LeaveType.objects.create(
+        company=company,
+        name="Sick",
+        code="SL",
+        pay_percent=100,
+    )
     lr = LeaveRequest.objects.create(
         employee=emp,
         leave_type=lt,
