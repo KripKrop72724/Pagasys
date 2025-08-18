@@ -251,6 +251,8 @@ def compute_attday_task(company_id: int, employee_id: int, day: str | date) -> N
         status = "holiday"
     elif full_day_leave:
         status = "leave"
+    elif leave_day:
+        status = "partial"
     elif shift and work > 0:
         status = "present"
     elif shift:
