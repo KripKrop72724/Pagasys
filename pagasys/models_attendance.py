@@ -188,6 +188,9 @@ class Holiday(models.Model):
     )
     date = models.DateField(help_text="Holiday date")
     name = models.CharField(max_length=100, help_text="Holiday name")
+    is_public = models.BooleanField(
+        default=True, help_text="Public holiday?"
+    )
 
     class Meta:
         verbose_name = "holiday"

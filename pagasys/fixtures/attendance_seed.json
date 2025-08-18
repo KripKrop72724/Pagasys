@@ -59,7 +59,8 @@
     "fields": {
       "calendar": 1,
       "date": "2024-05-01",
-      "name": "Labour Day"
+      "name": "Labour Day",
+      "is_public": true
     }
   },
   {
