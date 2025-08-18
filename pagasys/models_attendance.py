@@ -107,17 +107,16 @@ class AttEvent(models.Model):
         verbose_name = "attendance event"
         verbose_name_plural = "attendance events"
         ordering = ["ts"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["employee", "device", "ts"],
+                name="uniq_event_emp_device_ts",
+            )
+        ]
         indexes = [
             models.Index(
                 fields=["company", "employee", "ts"],
-                name="att_event_comp_emp_ts_idx",
-            )
-        ]
-        constraints = [
-            models.UniqueConstraint(
-                fields=["employee", "ts", "device"],
-                condition=~models.Q(direction="UNK"),
-                name="att_event_emp_ts_device_unique",
+                name="attevent_co_emp_ts_idx",
             )
         ]
 
@@ -246,41 +245,25 @@ class ShiftTemplate(models.Model):
 
 
 class ShiftRule(models.Model):
-    """Company wide rules applied to shifts."""
+    """Rule attached to a shift template."""
 
-    company = models.OneToOneField(
-        Company,
+    shift = models.ForeignKey(
+        ShiftTemplate,
         on_delete=models.CASCADE,
-        related_name="shift_rule",
-        help_text="Company these rules apply to",
+        related_name="rules",
+        help_text="Shift this rule applies to",
     )
-    ramadan_reduce_minutes = models.PositiveSmallIntegerField(
-        default=0, help_text="Daily minute reduction during Ramadan"
-    )
-    weekly_rest_day = models.PositiveSmallIntegerField(
-        default=6, help_text="Weekly rest day (0=Mon ... 6=Sun)"
-    )
-    night_ot_start = models.TimeField(
-        null=True,
-        blank=True,
-        help_text="Optional night OT window start",
-    )
-    night_ot_end = models.TimeField(
-        null=True,
-        blank=True,
-        help_text="Optional night OT window end",
-    )
-    max_daily_hours = models.PositiveSmallIntegerField(
-        default=24, help_text="Maximum allowed daily work hours"
-    )
+    kind = models.CharField(max_length=50, help_text="Rule kind")
+    value = models.CharField(max_length=100, help_text="Rule value")
 
     class Meta:
         verbose_name = "shift rule"
         verbose_name_plural = "shift rules"
-        ordering = ["company"]  # stable, one row per company
+        unique_together = (("shift", "kind"),)
+        ordering = ["shift_id", "kind"]
 
     def __str__(self) -> str:  # pragma: no cover - trivial
-        return f"Rules for {self.company.name}"
+        return f"{self.kind} for {self.shift.name}"
 
 
 class RosterEntry(models.Model):
@@ -332,10 +315,13 @@ class AttPair(models.Model):
     """
 
     QUALITY_CHOICES = [
-        ("good", "Good"),
-        ("suspect", "Suspect"),
-        ("missing", "Missing"),
+        ("ok", "OK"),
+        ("missing_out", "Missing OUT"),
+        ("dup_in", "Duplicate IN"),
+        ("manual", "Manual"),
     ]
+
+    SOURCE_CHOICES = [("auto", "Auto"), ("manual", "Manual")]
 
     employee = models.ForeignKey(
         Employee,
@@ -357,12 +343,21 @@ class AttPair(models.Model):
         blank=True,
         help_text="Out event",
     )
-    quality = models.CharField(
-        max_length=20, choices=QUALITY_CHOICES, default="good", help_text="Pair quality"
+    source = models.CharField(
+        max_length=10,
+        choices=SOURCE_CHOICES,
+        default="auto",
+        help_text="Who created this pair",
     )
     in_ts = models.DateTimeField(db_index=True)
     out_ts = models.DateTimeField(null=True, blank=True)
-    duration_min = models.PositiveSmallIntegerField(default=0)
+    duration_min = models.PositiveIntegerField(default=0)
+    quality = models.CharField(
+        max_length=20,
+        choices=QUALITY_CHOICES,
+        default="ok",
+        help_text="Pair quality",
+    )
 
     class Meta:
         verbose_name = "attendance pair"
@@ -370,6 +365,12 @@ class AttPair(models.Model):
         ordering = ["in_event__ts"]
         indexes = [
             models.Index(fields=["employee", "in_ts"], name="attpair_emp_in_idx")
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["employee", "in_event"],
+                name="uniq_attpair_employee_in_event",
+            )
         ]
 
     def save(self, *args, **kwargs):

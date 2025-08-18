@@ -14,3 +14,4 @@ class PagasysConfig(AppConfig):
         # Import attendance models so Django registers them without touching
         # the existing core HR structure.
         from . import models_attendance  # noqa: F401
+        from . import signals  # noqa: F401

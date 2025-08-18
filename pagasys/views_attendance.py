@@ -1,5 +1,6 @@
 from django.db import models
 from django.utils import timezone
+from datetime import timezone as dt_timezone
 from rest_framework import viewsets, status
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated, DjangoModelPermissions
@@ -13,7 +14,7 @@ import json
 import hashlib
 
 from .permissions import CustomObjectPermission, GroupRequiredPermission
-from .utils import scope_queryset, ensure_in_scope
+from .utils import scope_queryset, ensure_in_scope, employee_company_id
 from .openapi_utils import document_filters
 from .models_attendance import (
     Device,
@@ -389,24 +390,25 @@ class AttEventIngestView(APIView):
             except Exception as exc:  # pragma: no cover - permission
                 return Response({"detail": str(exc)}, status=status.HTTP_403_FORBIDDEN)
 
-            payload_for_sig = {
-                "employee_id": data["employee_id"],
-                "ts": data["ts"].isoformat(),
-                "direction": data["direction"],
-                "device_id": data["device_id"],
-                "provider": data["provider"],
-                "confidence": str(data.get("confidence")) if data.get("confidence") is not None else None,
-                "liveness": data.get("liveness"),
-                "meta": data.get("meta", {}),
-            }
-            payload_json = json.dumps(payload_for_sig, sort_keys=True, separators=(",", ":"))
-            expected_sig = hmac.new(
-                device.hmac_secret.encode(), payload_json.encode(), hashlib.sha256
+            raw_payload = item.copy()
+            sig = request.headers.get("X-Signature") or raw_payload.pop("payload_sig", None)
+            if not sig:
+                return Response(
+                    {"detail": "Missing signature"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            raw_bytes = json.dumps(raw_payload, sort_keys=True, separators=(",", ":")).encode(
+                "utf-8"
+            )
+            digest = hmac.new(
+                key=device.hmac_secret.encode("utf-8"),
+                msg=raw_bytes,
+                digestmod=hashlib.sha256,
             ).hexdigest()
-            if not hmac.compare_digest(expected_sig, data["payload_sig"]):
+            if not hmac.compare_digest(digest, sig):
                 return Response(
                     {"detail": "Invalid signature"},
-                    status=status.HTTP_400_BAD_REQUEST,
+                    status=status.HTTP_403_FORBIDDEN,
                 )
 
             try:
@@ -422,7 +424,8 @@ class AttEventIngestView(APIView):
             except Exception as exc:  # pragma: no cover - permission
                 return Response({"detail": str(exc)}, status=status.HTTP_403_FORBIDDEN)
 
-            if employee.company_id != device.company_id:
+            emp_co_id = employee_company_id(employee)
+            if emp_co_id is None or emp_co_id != device.company_id:
                 return Response(
                     {"detail": "Device and employee belong to different companies."},
                     status=status.HTTP_400_BAD_REQUEST,
@@ -431,7 +434,7 @@ class AttEventIngestView(APIView):
             ts = data["ts"]
             if timezone.is_naive(ts):
                 ts = timezone.make_aware(ts)
-            ts_utc = ts.astimezone(timezone.utc)
+            ts_utc = ts.astimezone(dt_timezone.utc)
 
             obj, created_flag = AttEvent.objects.get_or_create(
                 employee=employee,
