@@ -3,6 +3,7 @@
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
+from django.db.models import Q
 from decimal import Decimal
 
 from .models import Company, Employee
@@ -114,6 +115,7 @@ class AttEvent(models.Model):
         constraints = [
             models.UniqueConstraint(
                 fields=["employee", "ts", "device"],
+                condition=~Q(direction="UNK"),
                 name="uniq_att_event_emp_ts_device",
             )
         ]
