@@ -31,6 +31,9 @@ class Device(models.Model):
         max_length=64,
         help_text="Shared secret for validating payload signatures",
     )
+    is_active = models.BooleanField(
+        default=True, help_text="Whether the device can ingest events"
+    )
     geofence = models.JSONField(
         null=True,
         blank=True,
@@ -107,16 +110,11 @@ class AttEvent(models.Model):
         verbose_name = "attendance event"
         verbose_name_plural = "attendance events"
         ordering = ["ts"]
+        indexes = [models.Index(fields=["company", "employee", "ts"])]
         constraints = [
             models.UniqueConstraint(
-                fields=["employee", "device", "ts"],
-                name="uniq_event_emp_device_ts",
-            )
-        ]
-        indexes = [
-            models.Index(
-                fields=["company", "employee", "ts"],
-                name="attevent_co_emp_ts_idx",
+                fields=["employee", "ts", "device"],
+                name="uniq_att_event_emp_ts_device",
             )
         ]
 
