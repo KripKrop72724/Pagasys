@@ -117,7 +117,6 @@ class AttEvent(models.Model):
         constraints = [
             models.UniqueConstraint(
                 fields=["employee", "ts", "device"],
-                condition=~Q(direction="UNK"),
                 name="uniq_att_event_emp_ts_device",
             )
         ]
@@ -467,7 +466,7 @@ class LeaveType(models.Model):
         help_text="Company defining the leave type",
     )
     name = models.CharField(max_length=100, help_text="Leave type name")
-    pay_percent = models.DecimalField(
+    paid_pct = models.DecimalField(
         max_digits=5,
         decimal_places=2,
         validators=[MinValueValidator(0), MaxValueValidator(100)],
@@ -514,7 +513,7 @@ class LeaveRequest(models.Model):
         help_text="Request status",
     )
     reason = models.TextField(blank=True, help_text="Optional reason")
-    pay_percent = models.DecimalField(
+    paid_pct = models.DecimalField(
         max_digits=5,
         decimal_places=2,
         null=True,
@@ -532,11 +531,11 @@ class LeaveRequest(models.Model):
         if self.start_date and self.end_date and self.start_date > self.end_date:
             raise ValidationError("start_date must be before or equal to end_date")
 
-    def get_pay_percent(self) -> Decimal:
-        """Return effective pay percent for the request."""
-        if self.pay_percent is not None:
-            return self.pay_percent
-        return self.leave_type.pay_percent
+    def get_paid_pct(self) -> Decimal:
+        """Return effective pay percentage for the request."""
+        if self.paid_pct is not None:
+            return self.paid_pct
+        return self.leave_type.paid_pct
 
     def __str__(self) -> str:  # pragma: no cover - trivial
         return f"{self.employee} {self.start_date}-{self.end_date}"
@@ -552,10 +551,10 @@ class LeaveDay(models.Model):
         help_text="Parent leave request",
     )
     date = models.DateField(help_text="Leave date")
-    minutes = models.PositiveSmallIntegerField(
+    minutes_covered = models.PositiveSmallIntegerField(
         default=0, help_text="Leave minutes on this date"
     )
-    pay_percent = models.DecimalField(
+    paid_pct = models.DecimalField(
         max_digits=5,
         decimal_places=2,
         null=True,
@@ -570,11 +569,11 @@ class LeaveDay(models.Model):
         unique_together = (("request", "date"),)
         ordering = ["date"]
 
-    def get_pay_percent(self) -> Decimal:
-        """Return effective pay percent for the day."""
-        if self.pay_percent is not None:
-            return self.pay_percent
-        return self.request.get_pay_percent()
+    def get_paid_pct(self) -> Decimal:
+        """Return effective pay percentage for the day."""
+        if self.paid_pct is not None:
+            return self.paid_pct
+        return self.request.get_paid_pct()
 
     def __str__(self) -> str:  # pragma: no cover - trivial
         return f"{self.request.employee} {self.date}"
