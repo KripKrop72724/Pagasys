@@ -63,6 +63,12 @@ jobs:
           done
           echo "Environment is Ready."
 
+      - name: Get current EB version
+        id: prev-version
+        run: |
+          PREV_VERSION=$(aws elasticbeanstalk describe-environments --environment-names pagasys-dev-env --query 'Environments[0].VersionLabel' --output text)
+          echo "version=$PREV_VERSION" >> $GITHUB_OUTPUT
+
 
       - name: Use EB compose file
         run: mv docker-compose.eb.yml docker-compose.yml
@@ -85,6 +91,8 @@ jobs:
         run: aws elasticbeanstalk wait environment-updated --environment-name pagasys-dev-env
 
       - name: Smoke test
+        id: smoke
+        continue-on-error: true
         run: |
           URL=$(aws elasticbeanstalk describe-environments \
             --environment-names pagasys-dev-env \
@@ -96,3 +104,14 @@ jobs:
             echo "Waiting for app... ($i/15)"; sleep 10
           done
           echo "Smoke test failed"; exit 1
+
+      - name: Roll back on smoke failure
+        if: steps.smoke.outcome == 'failure'
+        run: |
+          echo "Rolling back to version: ${{ steps.prev-version.outputs.version }}"
+          aws elasticbeanstalk update-environment --environment-name pagasys-dev-env --version-label "${{ steps.prev-version.outputs.version }}"
+          aws elasticbeanstalk wait environment-updated --environment-name pagasys-dev-env
+
+      - name: Fail workflow if smoke test failed
+        if: steps.smoke.outcome == 'failure'
+        run: exit 1
