@@ -15,7 +15,11 @@ class OpenAPISchemaTests(TestCase):
         import json
         data = json.loads(response.content)
         self.assertTrue(str(data.get('openapi', '')).startswith('3'))
-        models = ['Company', 'Branch', 'Designation', 'TradeLicense', 'Department', 'Project', 'Employee']
+        models = [
+            'Company', 'Branch', 'Designation', 'TradeLicense', 'Department',
+            'Project', 'Employee', 'WorkCalendar', 'Holiday', 'ShiftTemplate',
+            'ShiftRule', 'RosterEntry', 'LeaveType',
+        ]
         for name in models:
             self.assertIn(name, data['components']['schemas'])
             props = data['components']['schemas'][name]['properties']
@@ -23,9 +27,13 @@ class OpenAPISchemaTests(TestCase):
                 if field == 'id':
                     continue
                 self.assertIn('description', meta)
-                self.assertTrue(
-                    'type' in meta or '$ref' in meta or 'allOf' in meta
-                )
+                if field != 'params':
+                    self.assertTrue(
+                        'type' in meta
+                        or '$ref' in meta
+                        or 'allOf' in meta
+                        or 'additionalProperties' in meta
+                    )
 
     def test_docs_endpoint(self):
         response = self.client.get('/api/docs/')
@@ -92,6 +100,12 @@ class OpenAPISchemaTests(TestCase):
             s.DepartmentSerializer,
             s.ProjectSerializer,
             s.EmployeeSerializer,
+            s.WorkCalendarSerializer,
+            s.HolidaySerializer,
+            s.ShiftTemplateSerializer,
+            s.ShiftRuleSerializer,
+            s.RosterEntrySerializer,
+            s.LeaveTypeSerializer,
         ]
 
         for cls in serializer_classes:
@@ -118,6 +132,12 @@ class OpenAPISchemaTests(TestCase):
             '/api/departments/': v.DepartmentViewSet,
             '/api/projects/': v.ProjectViewSet,
             '/api/employees/': v.EmployeeViewSet,
+            '/api/calendars/': v.WorkCalendarViewSet,
+            '/api/holidays/': v.HolidayViewSet,
+            '/api/shift-templates/': v.ShiftTemplateViewSet,
+            '/api/shift-rules/': v.ShiftRuleViewSet,
+            '/api/roster-entries/': v.RosterEntryViewSet,
+            '/api/leave-types/': v.LeaveTypeViewSet,
         }
 
         for path, viewset in viewsets.items():

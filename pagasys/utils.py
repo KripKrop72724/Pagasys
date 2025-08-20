@@ -9,6 +9,12 @@ from .models import (
     Department,
     Project,
     Employee,
+    WorkCalendar,
+    Holiday,
+    ShiftTemplate,
+    ShiftRule,
+    RosterEntry,
+    LeaveType,
 )
 
 SCOPED_MODELS = {
@@ -19,6 +25,12 @@ SCOPED_MODELS = {
     Department,
     Project,
     Employee,
+    WorkCalendar,
+    Holiday,
+    ShiftTemplate,
+    ShiftRule,
+    RosterEntry,
+    LeaveType,
 }
 
 
@@ -110,6 +122,45 @@ def scope_queryset(queryset, user):
         if role == "project_manager" and user.project:
             return queryset.filter(project=user.project)
         return queryset.filter(pk=user.pk)
+
+    if model is WorkCalendar:
+        if company:
+            return queryset.filter(company=company)
+        return queryset.none()
+
+    if model is Holiday:
+        if company:
+            return queryset.filter(calendar__company=company)
+        return queryset.none()
+
+    if model is ShiftTemplate:
+        if company:
+            return queryset.filter(company=company)
+        return queryset.none()
+
+    if model is ShiftRule:
+        if company:
+            return queryset.filter(shift__company=company)
+        return queryset.none()
+
+    if model is RosterEntry:
+        if role in ("company_admin", "payroll_manager") and company:
+            return queryset.filter(employee__trade_license__company=company)
+        if role == "branch_manager" and branch:
+            return queryset.filter(
+                models.Q(employee__department__branch=branch)
+                | models.Q(employee__project__branch=branch)
+            )
+        if role == "department_manager" and user.department:
+            return queryset.filter(employee__department=user.department)
+        if role == "project_manager" and user.project:
+            return queryset.filter(employee__project=user.project)
+        return queryset.filter(employee=user)
+
+    if model is LeaveType:
+        if company:
+            return queryset.filter(company=company)
+        return queryset.none()
 
     return queryset
 

@@ -22,7 +22,7 @@ class AdminFilterConfigTests(TestCase):
     def test_list_filter_attributes(self):
         expected = {
             CompanyAdmin: ["name"],
-            BranchAdmin: ["company", "name"],
+            BranchAdmin: ["company", "work_calendar", "name"],
             DesignationAdmin: ["company", "name", "level"],
             TradeLicenseAdmin: [
                 "company",

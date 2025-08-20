@@ -16,6 +16,12 @@ from .models import (
     Department,
     Project,
     Employee,
+    WorkCalendar,
+    Holiday,
+    ShiftTemplate,
+    ShiftRule,
+    RosterEntry,
+    LeaveType,
 )
 
 
@@ -54,6 +60,10 @@ class ScopedAdminMixin:
             Department,
             Project,
             Employee,
+            WorkCalendar,
+            ShiftTemplate,
+            RosterEntry,
+            LeaveType,
         }
         if related_model in target_models:
             qs = scope_queryset(related_model.objects.all(), request.user)
@@ -63,7 +73,7 @@ class ScopedAdminMixin:
     def formfield_for_manytomany(self, db_field, request, **kwargs):
         """Restrict M2M dropdowns to objects within the user's scope."""
         related_model = db_field.remote_field.model
-        target_models = {Branch, Employee}
+        target_models = {Branch, Employee, ShiftTemplate, WorkCalendar}
         if related_model in target_models:
             qs = scope_queryset(related_model.objects.all(), request.user)
             kwargs["queryset"] = qs
@@ -142,6 +152,24 @@ class TradeLicenseForm(forms.ModelForm):
         return cleaned
 
 
+class BranchForm(forms.ModelForm):
+    class Meta:
+        model = Branch
+        fields = "__all__"
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        company_id = (
+            self.data.get("company")
+            or self.initial.get("company")
+            or getattr(self.instance, "company_id", None)
+        )
+        if company_id:
+            self.fields["work_calendar"].queryset = WorkCalendar.objects.filter(
+                company_id=company_id
+            )
+
+
 @admin.register(Company)
 class CompanyAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
     """Admin configuration for companies with comprehensive filters."""
@@ -149,13 +177,11 @@ class CompanyAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
     list_filter = ["name"]
 
 
-
-
 @admin.register(Branch)
 class BranchAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
     """Admin configuration for branches with comprehensive filters."""
-
-    list_filter = ["company", "name"]
+    form = BranchForm
+    list_filter = ["company", "work_calendar", "name"]
 
 
 
@@ -207,12 +233,84 @@ class ProjectAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
     list_filter = ["branch", "name", "start_date", "end_date"]
 
 
+class EmployeeAdminForm(UserChangeForm):
+    class Meta(UserChangeForm.Meta):
+        model = Employee
+        fields = "__all__"
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if "work_calendar" in self.fields:
+            company_id = self._derive_company()
+            if company_id:
+                self.fields["work_calendar"].queryset = WorkCalendar.objects.filter(
+                    company_id=company_id
+                )
+            else:
+                self.fields["work_calendar"].queryset = WorkCalendar.objects.none()
+
+    def _derive_company(self):
+        data = self.data or self.initial
+        if data.get("trade_license"):
+            return TradeLicense.objects.filter(pk=data["trade_license"]).values_list("company_id", flat=True).first()
+        if data.get("department"):
+            return Department.objects.filter(pk=data["department"]).values_list("branch__company_id", flat=True).first()
+        if data.get("project"):
+            return Project.objects.filter(pk=data["project"]).values_list("branch__company_id", flat=True).first()
+        inst = getattr(self, "instance", None)
+        if inst:
+            if inst.trade_license_id:
+                return inst.trade_license.company_id
+            if inst.department_id:
+                return inst.department.branch.company_id
+            if inst.project_id:
+                return inst.project.branch.company_id
+        return None
+
+
+class EmployeeAdminCreationForm(AdminUserCreationForm):
+    work_calendar = forms.ModelChoiceField(
+        queryset=WorkCalendar.objects.none(), required=False
+    )
+
+    class Meta(AdminUserCreationForm.Meta):
+        model = Employee
+        fields = AdminUserCreationForm.Meta.fields + (
+            "work_calendar",
+            "trade_license",
+            "visa_type",
+            "department",
+            "project",
+            "designation",
+            "hire_date",
+            "employment_type",
+        )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        company_id = self._derive_company()
+        if company_id:
+            self.fields["work_calendar"].queryset = WorkCalendar.objects.filter(
+                company_id=company_id
+            )
+
+    def _derive_company(self):
+        data = self.data
+        if data.get("trade_license"):
+            return TradeLicense.objects.filter(pk=data["trade_license"]).values_list("company_id", flat=True).first()
+        if data.get("department"):
+            return Department.objects.filter(pk=data["department"]).values_list("branch__company_id", flat=True).first()
+        if data.get("project"):
+            return Project.objects.filter(pk=data["project"]).values_list("branch__company_id", flat=True).first()
+        return None
+
+
 @admin.register(Employee)
 class EmployeeAdmin(CleanSaveModelMixin, ScopedAdminMixin, UserAdmin):
     """Admin configuration for Employee model with password reset."""
 
-    add_form = AdminUserCreationForm
-    form = UserChangeForm
+    add_form = EmployeeAdminCreationForm
+    form = EmployeeAdminForm
     model = Employee
 
     list_filter = UserAdmin.list_filter + (
@@ -222,6 +320,7 @@ class EmployeeAdmin(CleanSaveModelMixin, ScopedAdminMixin, UserAdmin):
         "department",
         "project",
         "designation",
+        "work_calendar",
     )
 
     base_fieldsets = list(UserAdmin.fieldsets)
@@ -239,6 +338,7 @@ class EmployeeAdmin(CleanSaveModelMixin, ScopedAdminMixin, UserAdmin):
                     "visa_type",
                     "department",
                     "project",
+                    "work_calendar",
                     "designation",
                     "hire_date",
                     "employment_type",
@@ -271,6 +371,7 @@ class EmployeeAdmin(CleanSaveModelMixin, ScopedAdminMixin, UserAdmin):
                     "visa_type",
                     "department",
                     "project",
+                    "work_calendar",
                     "designation",
                     "hire_date",
                     "employment_type",
@@ -302,3 +403,59 @@ class EmployeeAdmin(CleanSaveModelMixin, ScopedAdminMixin, UserAdmin):
         super().save_model(request, obj, form, change)
         if obj.is_superuser:
             obj.groups.clear()
+
+
+@admin.register(WorkCalendar)
+class WorkCalendarAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
+    """Admin configuration for work calendars."""
+
+    list_display = ["name", "company", "is_default"]
+    list_filter = ["company", "is_default"]
+    search_fields = ["name", "company__name"]
+
+
+@admin.register(Holiday)
+class HolidayAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
+    """Admin configuration for holidays."""
+
+    list_display = ["name", "date", "calendar", "is_public"]
+    list_filter = ["calendar", "is_public"]
+    search_fields = ["name"]
+    date_hierarchy = "date"
+
+
+@admin.register(ShiftTemplate)
+class ShiftTemplateAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
+    """Admin configuration for shift templates."""
+
+    list_display = ["name", "company", "start_time", "end_time", "cross_midnight"]
+    list_filter = ["company", "cross_midnight"]
+    search_fields = ["name", "company__name"]
+
+
+@admin.register(ShiftRule)
+class ShiftRuleAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
+    """Admin configuration for shift rules."""
+
+    list_display = ["kind", "shift", "value", "active_from", "active_to"]
+    list_filter = ["shift", "kind"]
+    search_fields = ["kind", "shift__name"]
+
+
+@admin.register(RosterEntry)
+class RosterEntryAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
+    """Admin configuration for roster entries."""
+
+    list_display = ["employee", "date", "shift", "is_rest_day"]
+    list_filter = ["employee", "shift", "is_rest_day"]
+    search_fields = ["employee__username", "shift__name"]
+    date_hierarchy = "date"
+
+
+@admin.register(LeaveType)
+class LeaveTypeAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
+    """Admin configuration for leave types."""
+
+    list_display = ["code", "name", "company", "paid_pct"]
+    list_filter = ["company", "paid_pct"]
+    search_fields = ["code", "name", "company__name"]

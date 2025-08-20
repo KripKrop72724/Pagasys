@@ -92,6 +92,12 @@ from .models import (
     Department,
     Project,
     Employee,
+    WorkCalendar,
+    Holiday,
+    ShiftTemplate,
+    ShiftRule,
+    RosterEntry,
+    LeaveType,
 )
 
 
@@ -109,6 +115,17 @@ class BranchSerializer(ScopedSerializerMixin, serializers.ModelSerializer):
     class Meta:
         model = Branch
         fields = '__all__'
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        if self.instance is not None:
+            data = {f.name: getattr(self.instance, f.name) for f in Branch._meta.fields}
+            data.update(attrs)
+        else:
+            data = attrs
+        instance = Branch(**data)
+        instance.clean()
+        return attrs
 
 
 class DesignationSerializer(ScopedSerializerMixin, serializers.ModelSerializer):
@@ -181,6 +198,109 @@ class ProjectSerializer(ScopedSerializerMixin, serializers.ModelSerializer):
         fields = '__all__'
 
 
+class WorkCalendarSerializer(ScopedSerializerMixin, serializers.ModelSerializer):
+    """Serializer for WorkCalendar"""
+
+    class Meta:
+        model = WorkCalendar
+        fields = '__all__'
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        base = {}
+        if self.instance:
+            for f in WorkCalendar._meta.fields:
+                base[f.name] = getattr(self.instance, f.name)
+        data = {**base, **attrs}
+        instance = WorkCalendar(**data)
+        instance.clean()
+        return attrs
+
+
+class HolidaySerializer(ScopedSerializerMixin, serializers.ModelSerializer):
+    """Serializer for Holiday"""
+
+    class Meta:
+        model = Holiday
+        fields = '__all__'
+
+
+class ShiftTemplateSerializer(ScopedSerializerMixin, serializers.ModelSerializer):
+    """Serializer for ShiftTemplate"""
+
+    class Meta:
+        model = ShiftTemplate
+        fields = '__all__'
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        base = {}
+        if self.instance:
+            for f in ShiftTemplate._meta.fields:
+                base[f.name] = getattr(self.instance, f.name)
+        data = {**base, **attrs}
+        instance = ShiftTemplate(**data)
+        instance.clean()
+        return attrs
+
+
+class ShiftRuleSerializer(ScopedSerializerMixin, serializers.ModelSerializer):
+    """Serializer for ShiftRule"""
+
+    class Meta:
+        model = ShiftRule
+        fields = '__all__'
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        if self.instance is not None:
+            data = {f.name: getattr(self.instance, f.name) for f in ShiftRule._meta.fields}
+            data.update(attrs)
+        else:
+            data = attrs
+        instance = ShiftRule(**data)
+        instance.clean()
+        return attrs
+
+
+class RosterEntrySerializer(ScopedSerializerMixin, serializers.ModelSerializer):
+    """Serializer for RosterEntry"""
+
+    class Meta:
+        model = RosterEntry
+        fields = '__all__'
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        if self.instance is not None:
+            data = {f.name: getattr(self.instance, f.name) for f in RosterEntry._meta.fields}
+            data.update(attrs)
+        else:
+            data = attrs
+        instance = RosterEntry(**data)
+        instance.clean()
+        return attrs
+
+
+class LeaveTypeSerializer(ScopedSerializerMixin, serializers.ModelSerializer):
+    """Serializer for LeaveType"""
+
+    class Meta:
+        model = LeaveType
+        fields = '__all__'
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        if self.instance is not None:
+            data = {f.name: getattr(self.instance, f.name) for f in LeaveType._meta.fields}
+            data.update(attrs)
+        else:
+            data = attrs
+        instance = LeaveType(**data)
+        instance.clean()
+        return attrs
+
+
 class EmployeeSerializer(ScopedSerializerMixin, serializers.ModelSerializer):
     """Serializer for Employee"""
 
@@ -215,6 +335,7 @@ class EmployeeSerializer(ScopedSerializerMixin, serializers.ModelSerializer):
             'trade_license',
             'department',
             'project',
+            'work_calendar',
             'designation',
             'hire_date',
             'employment_type',
