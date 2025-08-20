@@ -10,6 +10,12 @@ from .views import (
     DepartmentViewSet,
     ProjectViewSet,
     EmployeeViewSet,
+    WorkCalendarViewSet,
+    HolidayViewSet,
+    ShiftTemplateViewSet,
+    ShiftRuleViewSet,
+    RosterEntryViewSet,
+    LeaveTypeViewSet,
 )
 
 router = routers.DefaultRouter()
@@ -20,6 +26,12 @@ router.register(r'licenses', TradeLicenseViewSet)
 router.register(r'departments', DepartmentViewSet)
 router.register(r'projects', ProjectViewSet)
 router.register(r'employees', EmployeeViewSet)
+router.register(r'calendars', WorkCalendarViewSet)
+router.register(r'holidays', HolidayViewSet)
+router.register(r'shift-templates', ShiftTemplateViewSet)
+router.register(r'shift-rules', ShiftRuleViewSet)
+router.register(r'roster-entries', RosterEntryViewSet)
+router.register(r'leave-types', LeaveTypeViewSet)
 
 urlpatterns = [
     *router.urls,

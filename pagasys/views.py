@@ -24,6 +24,12 @@ from .models import (
     Department,
     Project,
     Employee,
+    WorkCalendar,
+    Holiday,
+    ShiftTemplate,
+    ShiftRule,
+    RosterEntry,
+    LeaveType,
 )
 from .serializers import (
     CompanySerializer,
@@ -33,6 +39,12 @@ from .serializers import (
     DepartmentSerializer,
     ProjectSerializer,
     EmployeeSerializer,
+    WorkCalendarSerializer,
+    HolidaySerializer,
+    ShiftTemplateSerializer,
+    ShiftRuleSerializer,
+    RosterEntrySerializer,
+    LeaveTypeSerializer,
     IdListSerializer,
     bulk_create_response_serializer,
     bulk_update_response_serializer,
@@ -409,6 +421,226 @@ document_filters(TradeLicenseViewSet)
 document_filters(DepartmentViewSet)
 document_filters(ProjectViewSet)
 document_filters(EmployeeViewSet)
+
+
+@extend_schema_view(
+    bulk_create=extend_schema(
+        request=WorkCalendarSerializer(many=True),
+        responses=bulk_create_response_serializer(WorkCalendarSerializer),
+        description="Create multiple work calendars",
+    ),
+    bulk_update=extend_schema(
+        request=WorkCalendarSerializer(many=True),
+        responses=bulk_update_response_serializer(WorkCalendarSerializer),
+        description="Update multiple work calendars",
+    ),
+    bulk_delete=extend_schema(
+        request=IdListSerializer,
+        responses=bulk_delete_response_serializer(),
+        description="Delete multiple work calendars by ID",
+    ),
+)
+class WorkCalendarViewSet(BulkCreateMixin, BulkUpdateMixin, BulkDeleteMixin, viewsets.ModelViewSet):
+    """CRUD for work calendars"""
+
+    queryset = WorkCalendar.objects.all()
+    serializer_class = WorkCalendarSerializer
+    permission_classes = [IsAuthenticated, DjangoModelPermissions, GroupRequiredPermission, CustomObjectPermission]
+    required_groups = ["Company Admin", "Payroll Manager"]
+    filter_backends = [DjangoFilterBackend, OrderingFilter]
+    filterset_fields = "__all__"
+    ordering_fields = ["name"]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        return scope_queryset(qs, self.request.user)
+
+
+@extend_schema_view(
+    bulk_create=extend_schema(
+        request=HolidaySerializer(many=True),
+        responses=bulk_create_response_serializer(HolidaySerializer),
+        description="Create multiple holidays",
+    ),
+    bulk_update=extend_schema(
+        request=HolidaySerializer(many=True),
+        responses=bulk_update_response_serializer(HolidaySerializer),
+        description="Update multiple holidays",
+    ),
+    bulk_delete=extend_schema(
+        request=IdListSerializer,
+        responses=bulk_delete_response_serializer(),
+        description="Delete multiple holidays by ID",
+    ),
+)
+class HolidayViewSet(BulkCreateMixin, BulkUpdateMixin, BulkDeleteMixin, viewsets.ModelViewSet):
+    """CRUD for holidays"""
+
+    queryset = Holiday.objects.all()
+    serializer_class = HolidaySerializer
+    permission_classes = [IsAuthenticated, DjangoModelPermissions, GroupRequiredPermission, CustomObjectPermission]
+    required_groups = ["Company Admin", "Payroll Manager"]
+    filter_backends = [DjangoFilterBackend, OrderingFilter]
+    filterset_fields = "__all__"
+    ordering_fields = ["date", "name"]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        return scope_queryset(qs, self.request.user)
+
+
+@extend_schema_view(
+    bulk_create=extend_schema(
+        request=ShiftTemplateSerializer(many=True),
+        responses=bulk_create_response_serializer(ShiftTemplateSerializer),
+        description="Create multiple shift templates",
+    ),
+    bulk_update=extend_schema(
+        request=ShiftTemplateSerializer(many=True),
+        responses=bulk_update_response_serializer(ShiftTemplateSerializer),
+        description="Update multiple shift templates",
+    ),
+    bulk_delete=extend_schema(
+        request=IdListSerializer,
+        responses=bulk_delete_response_serializer(),
+        description="Delete multiple shift templates by ID",
+    ),
+)
+class ShiftTemplateViewSet(BulkCreateMixin, BulkUpdateMixin, BulkDeleteMixin, viewsets.ModelViewSet):
+    """CRUD for shift templates"""
+
+    queryset = ShiftTemplate.objects.all()
+    serializer_class = ShiftTemplateSerializer
+    permission_classes = [IsAuthenticated, DjangoModelPermissions, GroupRequiredPermission, CustomObjectPermission]
+    required_groups = ["Company Admin", "Payroll Manager"]
+    filter_backends = [DjangoFilterBackend, OrderingFilter]
+    filterset_fields = "__all__"
+    ordering_fields = ["name"]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        return scope_queryset(qs, self.request.user)
+
+
+@extend_schema_view(
+    bulk_create=extend_schema(
+        request=ShiftRuleSerializer(many=True),
+        responses=bulk_create_response_serializer(ShiftRuleSerializer),
+        description="Create multiple shift rules",
+    ),
+    bulk_update=extend_schema(
+        request=ShiftRuleSerializer(many=True),
+        responses=bulk_update_response_serializer(ShiftRuleSerializer),
+        description="Update multiple shift rules",
+    ),
+    bulk_delete=extend_schema(
+        request=IdListSerializer,
+        responses=bulk_delete_response_serializer(),
+        description="Delete multiple shift rules by ID",
+    ),
+)
+class ShiftRuleViewSet(BulkCreateMixin, BulkUpdateMixin, BulkDeleteMixin, viewsets.ModelViewSet):
+    """CRUD for shift rules"""
+
+    queryset = ShiftRule.objects.all()
+    serializer_class = ShiftRuleSerializer
+    permission_classes = [IsAuthenticated, DjangoModelPermissions, GroupRequiredPermission, CustomObjectPermission]
+    required_groups = ["Company Admin", "Payroll Manager"]
+    filter_backends = [DjangoFilterBackend, OrderingFilter]
+    filterset_fields = [
+        "shift",
+        "kind",
+        "value",
+        "active_from",
+        "active_to",
+        "weekdays",
+    ]
+    ordering_fields = ["kind"]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        return scope_queryset(qs, self.request.user)
+
+
+@extend_schema_view(
+    bulk_create=extend_schema(
+        request=RosterEntrySerializer(many=True),
+        responses=bulk_create_response_serializer(RosterEntrySerializer),
+        description="Create multiple roster entries",
+    ),
+    bulk_update=extend_schema(
+        request=RosterEntrySerializer(many=True),
+        responses=bulk_update_response_serializer(RosterEntrySerializer),
+        description="Update multiple roster entries",
+    ),
+    bulk_delete=extend_schema(
+        request=IdListSerializer,
+        responses=bulk_delete_response_serializer(),
+        description="Delete multiple roster entries by ID",
+    ),
+)
+class RosterEntryViewSet(BulkCreateMixin, BulkUpdateMixin, BulkDeleteMixin, viewsets.ModelViewSet):
+    """CRUD for roster entries"""
+
+    queryset = RosterEntry.objects.all()
+    serializer_class = RosterEntrySerializer
+    permission_classes = [IsAuthenticated, DjangoModelPermissions, GroupRequiredPermission, CustomObjectPermission]
+    required_groups = ["Company Admin", "Payroll Manager", "Branch Manager", "Department Manager", "Project Manager"]
+    filter_backends = [DjangoFilterBackend, OrderingFilter]
+    filterset_fields = "__all__"
+    ordering_fields = ["date"]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        return scope_queryset(qs, self.request.user)
+
+
+@extend_schema_view(
+    bulk_create=extend_schema(
+        request=LeaveTypeSerializer(many=True),
+        responses=bulk_create_response_serializer(LeaveTypeSerializer),
+        description="Create multiple leave types",
+    ),
+    bulk_update=extend_schema(
+        request=LeaveTypeSerializer(many=True),
+        responses=bulk_update_response_serializer(LeaveTypeSerializer),
+        description="Update multiple leave types",
+    ),
+    bulk_delete=extend_schema(
+        request=IdListSerializer,
+        responses=bulk_delete_response_serializer(),
+        description="Delete multiple leave types by ID",
+    ),
+)
+class LeaveTypeViewSet(BulkCreateMixin, BulkUpdateMixin, BulkDeleteMixin, viewsets.ModelViewSet):
+    """CRUD for leave types"""
+
+    queryset = LeaveType.objects.all()
+    serializer_class = LeaveTypeSerializer
+    permission_classes = [IsAuthenticated, DjangoModelPermissions, GroupRequiredPermission, CustomObjectPermission]
+    required_groups = ["Company Admin", "Payroll Manager"]
+    filter_backends = [DjangoFilterBackend, OrderingFilter]
+    filterset_fields = [
+        "company",
+        "code",
+        "name",
+        "paid_pct",
+        "requires_doc",
+        "max_days_per_year",
+    ]
+    ordering_fields = ["code", "name"]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        return scope_queryset(qs, self.request.user)
+
+
+document_filters(WorkCalendarViewSet)
+document_filters(HolidayViewSet)
+document_filters(ShiftTemplateViewSet)
+document_filters(ShiftRuleViewSet)
+document_filters(RosterEntryViewSet)
+document_filters(LeaveTypeViewSet)
 
 
 def healthz(request):

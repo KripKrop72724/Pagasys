@@ -95,6 +95,12 @@ All resources expose standard RESTful endpoints using DRF viewsets:
 | `/api/departments/` | Branch departments                       |
 | `/api/projects/`    | Branch projects                          |
 | `/api/employees/`   | Employee records                         |
+| `/api/calendars/`   | Company work calendars                   |
+| `/api/holidays/`    | Holiday definitions per calendar         |
+| `/api/shift-templates/` | Reusable shift definitions           |
+| `/api/shift-rules/` | Policy rules applied to shifts           |
+| `/api/roster-entries/` | Employee shift assignments            |
+| `/api/leave-types/` | Leave type configurations                |
 
 Each list endpoint accepts filters for all model fields and an `ordering` query
 parameter. Additional paths include:
@@ -112,6 +118,40 @@ improved UI. Querysets and foreign key widgets are restricted so users only see
 objects within their role's scope. Trade license and employee forms include
 client‑side validation via the JavaScript files in
 `pagasys/static/pagasys/js/`.
+
+## Attendance Policy Layer
+
+The policy layer models how workdays should be structured. It consists of:
+
+* **WorkCalendar** – attaches holiday calendars to a company and marks a single
+  default calendar.
+* **Holiday** – individual holiday or company off day linked to a calendar.
+* **ShiftTemplate** – reusable definition of a shift including start/end times,
+  grace periods, rounding rules and break allowance.
+* **ShiftRule** – optional rules that modify a template such as break windows,
+  Ramadan reductions or night overtime windows.
+* **RosterEntry** – assigns an employee to a shift on a specific date with
+  optional one‑day overrides and rest‑day markers.
+* **LeaveType** – defines leave codes with paid percentages and documentation
+  requirements.
+
+Branches and individual employees may override the company's default calendar
+through an optional `work_calendar` field. This is useful for regional holiday
+differences or role-specific schedules.
+
+Example:
+
+```http
+PATCH /api/branches/1/ {"work_calendar": 3}
+PATCH /api/employees/42/ {"work_calendar": 3}
+```
+
+In the Django admin, the *Work calendar* drop-down only lists calendars owned by
+the branch's or employee's company, guiding administrators to select valid
+options.
+
+All models participate in the standard scoping and permission system so admins
+only manage objects within their company or branch.
 
 ## Testing & Linting
 
