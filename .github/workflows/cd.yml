@@ -105,12 +105,12 @@ jobs:
           done
           echo "Smoke test failed"; exit 1
 
-#      - name: Roll back on smoke failure
-#        if: steps.smoke.outcome == 'failure'
-#        run: |
-#          echo "Rolling back to version: ${{ steps.prev-version.outputs.version }}"
-#          aws elasticbeanstalk update-environment --environment-name pagasys-dev-env --version-label "${{ steps.prev-version.outputs.version }}"
-#          aws elasticbeanstalk wait environment-updated --environment-name pagasys-dev-env
+      - name: Roll back on smoke failure
+        if: steps.smoke.outcome == 'failure'
+        run: |
+          echo "Rolling back to version: ${{ steps.prev-version.outputs.version }}"
+          aws elasticbeanstalk update-environment --environment-name pagasys-dev-env --version-label "${{ steps.prev-version.outputs.version }}"
+          aws elasticbeanstalk wait environment-updated --environment-name pagasys-dev-env
 
       - name: Fail workflow if smoke test failed
         if: steps.smoke.outcome == 'failure'
