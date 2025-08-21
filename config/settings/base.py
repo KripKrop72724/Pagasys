@@ -42,6 +42,8 @@ ALLOWED_HOSTS = env.list(
     "ALLOWED_HOSTS", default=["localhost", ".elasticbeanstalk.com", "127.0.0.1"]
 )
 
+CORS_ALLOW_ALL_ORIGINS = True
+
 
 # Application definition
 
@@ -52,6 +54,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "corsheaders",
     "grappelli",
     "rest_framework",
     "rest_framework.authtoken",
@@ -62,6 +65,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",

@@ -7,5 +7,6 @@ django-filter
 drf-spectacular
 django-environ
 django-grappelli
+django-cors-headers
 psycopg2-binary
 dj-database-url
