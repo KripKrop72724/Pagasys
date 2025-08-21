@@ -48,12 +48,12 @@ class AdminCRUDTests(ModelFactoryMixin, TestCase):
 
     def test_company_crud(self):
         add_url = reverse("admin:pagasys_company_add")
-        res = self.client.post(add_url, {"name": "NewCo"})
+        res = self.client.post(add_url, {"name": "NewCo", "timezone": "Asia/Dubai"})
         self.assertEqual(res.status_code, 302)
         comp = Company.objects.get(name="NewCo")
 
         change_url = reverse("admin:pagasys_company_change", args=[comp.id])
-        res = self.client.post(change_url, {"name": "NewCo2"})
+        res = self.client.post(change_url, {"name": "NewCo2", "timezone": "Asia/Dubai"})
         self.assertEqual(res.status_code, 302)
         comp.refresh_from_db()
         self.assertEqual(comp.name, "NewCo2")

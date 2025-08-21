@@ -83,7 +83,9 @@ class PolicyEndpointPermissionTests(TestCase):
             end_time="17:00",
         )
 
-    def _assert_bulk_flow(self, base, create_payload, update_payload):
+    def _assert_bulk_flow(
+        self, base, create_payload, update_payload, update_status=200, delete_status=200
+    ):
         res = self.unauth_client.post(f"{base}bulk/", create_payload, format="json")
         self.assertEqual(res.status_code, 403)
         res = self.super_client.post(f"{base}bulk/", create_payload, format="json")
@@ -92,11 +94,11 @@ class PolicyEndpointPermissionTests(TestCase):
         res = self.unauth_client.patch(f"{base}bulk-update/", update_payload(ids), format="json")
         self.assertEqual(res.status_code, 403)
         res = self.super_client.patch(f"{base}bulk-update/", update_payload(ids), format="json")
-        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.status_code, update_status)
         res = self.unauth_client.post(f"{base}bulk-delete/", ids, format="json")
         self.assertEqual(res.status_code, 403)
         res = self.super_client.post(f"{base}bulk-delete/", ids, format="json")
-        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.status_code, delete_status)
 
     def test_workcalendar_permissions(self):
         payload = {"company": self.company.id, "name": "NC"}
@@ -143,7 +145,10 @@ class PolicyEndpointPermissionTests(TestCase):
         payload = {
             "shift": self.shift_template.id,
             "kind": "night_ot_window",
-            "value": "22:00-04:00",
+            "value": "20:00-02:00",
+            "weekdays": "",
+            "active_from": None,
+            "active_to": None,
         }
         res = self.unauth_client.post("/api/shift-rules/", payload, format="json")
         self.assertEqual(res.status_code, 403)
@@ -158,8 +163,29 @@ class PolicyEndpointPermissionTests(TestCase):
         self.assertEqual(res.status_code, 403)
         self._assert_bulk_flow(
             "/api/shift-rules/",
-            [{"shift": self.shift_template.id, "kind": "night_ot_window", "value": "22:00-04:00"}],
-            lambda ids: [{"id": ids[0], "value": "21:00-03:00"}],
+            [
+                {
+                    "shift": self.shift_template.id,
+                    "kind": "night_ot_window",
+                    "value": "22:00-04:00",
+                    "weekdays": "",
+                    "active_from": None,
+                    "active_to": None,
+                }
+            ],
+            lambda ids: [
+                {
+                    "id": ids[0],
+                    "shift": self.shift_template.id,
+                    "kind": "night_ot_window",
+                    "value": "21:00-03:00",
+                    "weekdays": "",
+                    "active_from": None,
+                    "active_to": None,
+                }
+            ],
+            update_status=207,
+            delete_status=200,
         )
 
     def test_holiday_permissions(self):

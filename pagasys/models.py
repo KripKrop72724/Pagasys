@@ -1,10 +1,12 @@
 """Core HR models used throughout the application."""
 
 from datetime import date, datetime, timedelta
+from decimal import Decimal
 
 from django.db import models
 from django.core.exceptions import ValidationError
 from django.contrib.auth.models import AbstractUser
+from django.db.models.functions import Lower
 
 
 class Company(models.Model):
@@ -13,6 +15,11 @@ class Company(models.Model):
     name = models.CharField(
         max_length=255,
         help_text="Official company name",
+    )
+    timezone = models.CharField(
+        max_length=64,
+        default="Asia/Dubai",
+        help_text="IANA time zone for scheduling/attendance",
     )
 
     class Meta:
@@ -601,9 +608,13 @@ class ShiftRule(models.Model):
     )
     value = models.CharField(
         max_length=100,
-        help_text="Rule value",
+        help_text="Rule value. For time windows use HH:MM-HH:MM and it may cross midnight (e.g. 22:00-04:00)",
     )
-    params = models.JSONField(null=True, blank=True, help_text="Additional parameters")
+    params = models.JSONField(
+        null=True,
+        blank=True,
+        help_text="Additional parameters; break rules require paid (bool) and enforcement (warn, flag, auto_deduct, block)",
+    )
     active_from = models.DateField(
         null=True,
         blank=True,
@@ -623,7 +634,24 @@ class ShiftRule(models.Model):
     class Meta:
         ordering = ["id"]
         indexes = [
-            models.Index(fields=["shift", "kind"], name="shiftrule_shift_kind_idx")
+            models.Index(fields=["shift", "kind"], name="shiftrule_shift_kind_idx"),
+            models.Index(
+                fields=["shift", "active_from", "active_to"],
+                name="shiftrule_active_idx",
+            ),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "shift",
+                    "kind",
+                    "value",
+                    "active_from",
+                    "active_to",
+                    "weekdays",
+                ],
+                name="uniq_rule_signature_per_shift",
+            )
         ]
 
     def clean(self):
@@ -652,9 +680,29 @@ class ShiftRule(models.Model):
 
             if not re.fullmatch(r"\d{2}:\d{2}-\d{2}:\d{2}", self.value):
                 raise ValidationError("value must be in HH:MM-HH:MM format")
+            start_str, end_str = self.value.split("-")
+            from datetime import time as _time
+            start = _time.fromisoformat(start_str)
+            end = _time.fromisoformat(end_str)
+            if start == end:
+                raise ValidationError("start and end times cannot be equal")
         if self.kind in numeric_kinds:
             if not self.value.isdigit() or int(self.value) <= 0:
                 raise ValidationError("value must be a positive integer")
+
+        if self.kind == self.Kind.FACE_MIN_CONF:
+            try:
+                conf = float(self.value)
+            except ValueError:
+                raise ValidationError("FACE_MIN_CONF value must be a float 0..1")
+            if not (0.0 <= conf <= 1.0):
+                raise ValidationError("FACE_MIN_CONF must be between 0 and 1")
+
+        if self.kind == self.Kind.GEOFENCE_REQUIRED:
+            if not self.value.isdigit() or int(self.value) <= 0:
+                raise ValidationError(
+                    "GEOFENCE_REQUIRED value must be positive meters (integer)"
+                )
 
         break_kinds = {
             self.Kind.FIXED_BREAK_WINDOW,
@@ -668,6 +716,16 @@ class ShiftRule(models.Model):
             missing = {"paid", "enforcement"} - self.params.keys()
             if missing:
                 raise ValidationError("params missing required keys: " + ", ".join(sorted(missing)))
+            allowed = {"warn", "flag", "auto_deduct", "block"}
+            if self.params.get("enforcement") not in allowed:
+                raise ValidationError(
+                    f"params.enforcement must be one of {sorted(allowed)}"
+                )
+            if (
+                self.kind == self.Kind.PAID_BREAK_WINDOW
+                and self.params.get("paid") is not True
+            ):
+                raise ValidationError("PAID_BREAK_WINDOW requires params.paid = true")
             if self.kind == self.Kind.FIXED_BREAK_WINDOW and "min_minutes" not in self.params:
                 raise ValidationError("params must include min_minutes for fixed_break_window")
             if self.kind == self.Kind.REQUIRED_BREAK_AFTER_CONSECUTIVE and "minutes" not in self.params:
@@ -729,6 +787,17 @@ class RosterEntry(models.Model):
         if self.override_start and self.override_end and self.override_end <= self.override_start:
             raise ValidationError("override_end must be after override_start")
 
+        if not any(
+            [
+                self.employee.trade_license_id,
+                self.employee.department_id,
+                self.employee.project_id,
+            ]
+        ):
+            raise ValidationError(
+                "Employee must have a license or an assignment before rostering"
+            )
+
         # Ensure shift company matches employee company
         employee_company = None
         if self.employee.trade_license_id:
@@ -772,16 +841,26 @@ class LeaveType(models.Model):
     params = models.JSONField(null=True, blank=True, help_text="Extra configuration")
 
     class Meta:
-        unique_together = (("company", "code"),)
         ordering = ["id"]
         indexes = [
             models.Index(
                 fields=["company", "code"], name="leavetype_company_code_idx"
             )
         ]
+        constraints = [
+            models.CheckConstraint(
+                check=models.Q(paid_pct__gte=0) & models.Q(paid_pct__lte=100),
+                name="leavetype_paid_pct_0_100",
+            ),
+            models.UniqueConstraint(
+                Lower("code"),
+                "company",
+                name="leavetype_company_code_ci_unique",
+            ),
+        ]
 
     def clean(self):
-        if not (0 <= float(self.paid_pct) <= 100):
+        if not (Decimal("0") <= self.paid_pct <= Decimal("100")):
             raise ValidationError("paid_pct must be between 0 and 100")
 
     def __str__(self) -> str:

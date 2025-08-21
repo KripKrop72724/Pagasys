@@ -20,6 +20,16 @@ comprehensive automated test suite.
 * **Admin tooling** – The Django admin limits queryset results according to the
   logged‑in user's scope and provides JavaScript helpers for trade license and
   employee forms.
+* **Shift rule policies** – Geofencing requirements, face match confidence,
+  and break enforcement levels (`warn`, `flag`, `auto_deduct`, `block`) keep
+  scheduling compliant. Time‑window rules accept ranges that may cross
+  midnight (e.g. `22:00-04:00`).
+* **Company time zone** – Each company records its IANA time zone (default
+  `Asia/Dubai`) so shifts and attendance localise correctly.
+* **Leave types** – `paid_pct` uses `Decimal` precision and must be between
+  0 and 100. Codes are unique per company regardless of case.
+* **Rostering safety** – Employees must have a trade license, department or
+  project before they can be assigned to a shift.
 
 ## Tech Stack
 
