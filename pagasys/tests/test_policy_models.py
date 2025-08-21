@@ -28,19 +28,19 @@ class PolicyModelTests(TestCase):
         with self.assertRaises(ValidationError):
             cal2.full_clean()
 
-    def test_company_requires_default_calendar(self):
+    def test_company_can_have_non_default_calendar(self):
         company = Company.objects.create(name="C2")
-        WorkCalendar.objects.create(company=company, name="Cal1")
-        with self.assertRaises(ValidationError):
-            company.full_clean()
+        cal = WorkCalendar(company=company, name="Cal1")
+        cal.full_clean()
+        cal.save()
 
-    def test_cannot_unset_last_default_calendar(self):
+    def test_can_unset_last_default_calendar(self):
         cal = WorkCalendar.objects.create(
             company=self.company, name="Cal", is_default=True
         )
         cal.is_default = False
-        with self.assertRaises(ValidationError):
-            cal.full_clean()
+        cal.full_clean()
+        cal.save()
 
     def test_holiday_unique_per_calendar(self):
         cal = WorkCalendar.objects.create(company=self.company, name="Cal")
@@ -110,6 +110,78 @@ class PolicyModelTests(TestCase):
         )
         with self.assertRaises(ValidationError):
             st2.full_clean()
+
+    def test_shift_template_duration_must_be_positive_and_under_24h(self):
+        st = ShiftTemplate(
+            company=self.company,
+            name="Dur1",
+            start_time="09:00",
+            end_time="09:00",
+            cross_midnight=False,
+        )
+        with self.assertRaises(ValidationError):
+            st.full_clean()
+        st2 = ShiftTemplate(
+            company=self.company,
+            name="Dur2",
+            start_time="20:00",
+            end_time="20:00",
+            cross_midnight=True,
+        )
+        with self.assertRaises(ValidationError):
+            st2.full_clean()
+
+    def test_shift_template_break_must_fit_within_duration(self):
+        st = ShiftTemplate(
+            company=self.company,
+            name="Break1",
+            start_time="09:00",
+            end_time="10:00",
+            break_minutes=60,
+        )
+        with self.assertRaises(ValidationError):
+            st.full_clean()
+
+    def test_shift_template_threshold_ordering(self):
+        st = ShiftTemplate(
+            company=self.company,
+            name="Thresh1",
+            start_time="09:00",
+            end_time="10:00",
+            grace_in_min=5,
+            late_after_min=4,
+        )
+        with self.assertRaises(ValidationError):
+            st.full_clean()
+        st2 = ShiftTemplate(
+            company=self.company,
+            name="Thresh2",
+            start_time="09:00",
+            end_time="10:00",
+            grace_out_min=5,
+            early_leave_before_min=4,
+        )
+        with self.assertRaises(ValidationError):
+            st2.full_clean()
+
+    def test_shift_template_rounding_min_whitelist(self):
+        st = ShiftTemplate(
+            company=self.company,
+            name="Round1",
+            start_time="09:00",
+            end_time="10:00",
+            rounding_min=7,
+        )
+        with self.assertRaises(ValidationError):
+            st.full_clean()
+        st_ok = ShiftTemplate(
+            company=self.company,
+            name="Round2",
+            start_time="09:00",
+            end_time="10:00",
+            rounding_min=5,
+        )
+        st_ok.full_clean()
 
     def test_shift_rule_active_dates_validation(self):
         st = ShiftTemplate.objects.create(

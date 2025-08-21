@@ -1,5 +1,7 @@
 """Core HR models used throughout the application."""
 
+from datetime import date, datetime, timedelta
+
 from django.db import models
 from django.core.exceptions import ValidationError
 from django.contrib.auth.models import AbstractUser
@@ -23,14 +25,7 @@ class Company(models.Model):
     def __str__(self) -> str:
         return self.name
 
-    def clean(self):
-        super().clean()
-        if self.pk and self.calendars.exists():
-            defaults = self.calendars.filter(is_default=True).count()
-            if defaults != 1:
-                raise ValidationError(
-                    "Exactly one default WorkCalendar is required per company"
-                )
+
 
 
 class Branch(models.Model):
@@ -415,7 +410,8 @@ class WorkCalendar(models.Model):
     )
     name = models.CharField(max_length=255, help_text="Calendar name")
     is_default = models.BooleanField(
-        default=False, help_text="Use as default when none assigned"
+        default=False,
+        help_text="Mark as company default calendar; at most one per company"
     )
 
     class Meta:
@@ -438,22 +434,13 @@ class WorkCalendar(models.Model):
         super().clean()
         if self.is_default:
             clash = (
-                WorkCalendar.objects.filter(
-                    company=self.company, is_default=True
-                )
+                WorkCalendar.objects
+                .filter(company=self.company, is_default=True)
                 .exclude(pk=self.pk)
                 .exists()
             )
             if clash:
                 raise ValidationError("Only one default calendar per company")
-        else:
-            exists_default = WorkCalendar.objects.filter(
-                company=self.company, is_default=True
-            ).exclude(pk=self.pk).exists()
-            if not exists_default:
-                raise ValidationError(
-                    "Company must have a default WorkCalendar"
-                )
 
     def __str__(self) -> str:
         return f"{self.name} - {self.company.name}"
@@ -487,6 +474,14 @@ class Holiday(models.Model):
         return f"{self.name} - {self.date}"
 
 
+def _minutes_between(start, end, cross_midnight):
+    """Return minutes between two times accounting for next-day shifts."""
+    d = date(2000, 1, 1)
+    a = datetime.combine(d, start)
+    b = datetime.combine(d + timedelta(days=1 if cross_midnight else 0), end)
+    return int((b - a).total_seconds() // 60)
+
+
 class ShiftTemplate(models.Model):
     """Reusable description of a work shift."""
 
@@ -503,7 +498,8 @@ class ShiftTemplate(models.Model):
         default=False, help_text="Does shift end next day?"
     )
     break_minutes = models.PositiveIntegerField(
-        default=0, help_text="Total unpaid break minutes"
+        default=0,
+        help_text="Total unpaid break minutes (must be < shift duration)"
     )
     grace_in_min = models.PositiveIntegerField(
         default=0, help_text="Minutes allowed late without penalty"
@@ -512,13 +508,18 @@ class ShiftTemplate(models.Model):
         default=0, help_text="Minutes allowed early without penalty"
     )
     late_after_min = models.PositiveIntegerField(
-        default=0, help_text="Mark late after this many minutes"
+        default=0,
+        help_text="Mark late after this many minutes (≥ grace_in_min)"
     )
     early_leave_before_min = models.PositiveIntegerField(
-        default=0, help_text="Mark early leave before this many minutes"
+        default=0,
+        help_text="Mark early leave before this many minutes (≥ grace_out_min)"
     )
-    rounding_min = models.PositiveIntegerField(
-        default=0, help_text="Rounding increment in minutes"
+    ROUNDING_CHOICES = [(0, "0"), (1, "1"), (5, "5"), (10, "10"), (15, "15"), (30, "30")]
+    rounding_min = models.PositiveSmallIntegerField(
+        choices=ROUNDING_CHOICES,
+        default=0,
+        help_text="Rounding increment in minutes (0,1,5,10,15,30)"
     )
     requires_face = models.BooleanField(
         default=False, help_text="Require face authentication"
@@ -538,9 +539,31 @@ class ShiftTemplate(models.Model):
             raise ValidationError(
                 "end_time must be after start_time for non-cross-midnight shifts"
             )
-        if self.cross_midnight and self.end_time > self.start_time:
+        if self.cross_midnight and self.end_time >= self.start_time:
             raise ValidationError(
-                "cross-midnight shifts must end on or before start time next day"
+                "for cross-midnight, end_time must be before start_time (next day)"
+            )
+
+        minutes = _minutes_between(self.start_time, self.end_time, self.cross_midnight)
+        if minutes <= 0 or minutes >= 24 * 60:
+            raise ValidationError("Shift duration must be >0 and <24 hours")
+
+        if self.break_minutes and self.break_minutes >= minutes:
+            raise ValidationError("break_minutes must be less than shift duration")
+
+        if self.late_after_min and self.late_after_min < self.grace_in_min:
+            raise ValidationError("late_after_min cannot be less than grace_in_min")
+        if (
+            self.early_leave_before_min
+            and self.early_leave_before_min < self.grace_out_min
+        ):
+            raise ValidationError(
+                "early_leave_before_min cannot be less than grace_out_min"
+            )
+
+        if self.rounding_min not in (0, 1, 5, 10, 15, 30):
+            raise ValidationError(
+                "rounding_min must be one of 0,1,5,10,15,30"
             )
 
     def __str__(self) -> str:
