@@ -123,11 +123,13 @@ client‑side validation via the JavaScript files in
 
 The policy layer models how workdays should be structured. It consists of:
 
-* **WorkCalendar** – attaches holiday calendars to a company and marks a single
-  default calendar.
+* **WorkCalendar** – attaches holiday calendars to a company; a company may have
+  zero or one default calendar.
 * **Holiday** – individual holiday or company off day linked to a calendar.
 * **ShiftTemplate** – reusable definition of a shift including start/end times,
-  grace periods, rounding rules and break allowance.
+  grace periods, rounding rules and break allowance. Validations enforce
+  positive duration, sane break lengths, ordered thresholds and allowed
+  rounding increments.
 * **ShiftRule** – optional rules that modify a template such as break windows,
   Ramadan reductions or night overtime windows.
 * **RosterEntry** – assigns an employee to a shift on a specific date with
@@ -135,8 +137,9 @@ The policy layer models how workdays should be structured. It consists of:
 * **LeaveType** – defines leave codes with paid percentages and documentation
   requirements.
 
-Branches and individual employees may override the company's default calendar
-through an optional `work_calendar` field. This is useful for regional holiday
+Branches and individual employees may override a company's default calendar
+through an optional `work_calendar` field. If no default exists, the field can
+still assign a specific calendar. This is useful for regional holiday
 differences or role-specific schedules.
 
 Example:

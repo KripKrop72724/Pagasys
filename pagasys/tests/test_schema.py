@@ -164,6 +164,13 @@ class OpenAPISchemaTests(TestCase):
         field = data['components']['schemas']['Employee']['properties']['is_superuser']
         self.assertEqual(field.get('default'), False)
 
+    def test_rounding_choices_documented(self):
+        response = self.client.get('/api/schema/', HTTP_ACCEPT='application/json')
+        import json
+        data = json.loads(response.content)
+        field = data['components']['schemas']['ShiftTemplate']['properties']['rounding_min']
+        self.assertIn('0,1,5,10,15,30', field.get('description', ''))
+
     def test_filter_examples_in_description(self):
         response = self.client.get('/api/schema/', HTTP_ACCEPT='application/json')
         import json
