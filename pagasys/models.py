@@ -608,12 +608,18 @@ class ShiftRule(models.Model):
     )
     value = models.CharField(
         max_length=100,
-        help_text="Rule value. For time windows use HH:MM-HH:MM and it may cross midnight (e.g. 22:00-04:00)",
+        help_text=(
+            "Rule value. For time windows use HH:MM-HH:MM and it may cross midnight "
+            "(e.g. 22:00-04:00)"
+        ),
     )
     params = models.JSONField(
         null=True,
         blank=True,
-        help_text="Additional parameters; break rules require paid (bool) and enforcement (warn, flag, auto_deduct, block)",
+        help_text=(
+            "Additional parameters; break rules require paid (bool) and enforcement "
+            "(warn, flag, auto_deduct, block)"
+        ),
     )
     active_from = models.DateField(
         null=True,
