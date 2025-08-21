@@ -1,5 +1,7 @@
+from decimal import Decimal
+
 from django.core.exceptions import ValidationError
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 from django.test import TestCase
 
 from pagasys.models import (
@@ -302,6 +304,128 @@ class PolicyModelTests(TestCase):
         rule2.params["minutes"] = 30
         rule2.full_clean()  # ok
 
+    def test_shift_rule_special_kinds_and_enforcement(self):
+        st = ShiftTemplate.objects.create(
+            company=self.company,
+            name="S6",
+            start_time="09:00",
+            end_time="17:00",
+        )
+        face_rule = ShiftRule(
+            shift=st,
+            kind=ShiftRule.Kind.FACE_MIN_CONF,
+            value="abc",
+        )
+        with self.assertRaises(ValidationError):
+            face_rule.full_clean()
+        face_rule.value = "1.2"
+        with self.assertRaises(ValidationError):
+            face_rule.full_clean()
+        face_rule.value = "0.5"
+        face_rule.full_clean()
+
+        geo_rule = ShiftRule(
+            shift=st,
+            kind=ShiftRule.Kind.GEOFENCE_REQUIRED,
+            value="-5",
+        )
+        with self.assertRaises(ValidationError):
+            geo_rule.full_clean()
+        geo_rule.value = "0"
+        with self.assertRaises(ValidationError):
+            geo_rule.full_clean()
+        geo_rule.value = "100"
+        geo_rule.full_clean()
+
+        break_rule = ShiftRule(
+            shift=st,
+            kind=ShiftRule.Kind.MIN_TOTAL_BREAK_PER_DAY,
+            value="60",
+            params={"paid": True, "enforcement": "oops"},
+        )
+        with self.assertRaises(ValidationError):
+            break_rule.full_clean()
+        break_rule.params["enforcement"] = "warn"
+        break_rule.full_clean()
+
+        paid_rule = ShiftRule(
+            shift=st,
+            kind=ShiftRule.Kind.PAID_BREAK_WINDOW,
+            value="13:00-14:00",
+            params={"paid": False, "enforcement": "warn"},
+        )
+        with self.assertRaises(ValidationError):
+            paid_rule.full_clean()
+        paid_rule.params["paid"] = True
+        paid_rule.full_clean()
+
+    def test_shift_rule_cross_midnight_and_duplicate(self):
+        st = ShiftTemplate.objects.create(
+            company=self.company,
+            name="S7",
+            start_time="09:00",
+            end_time="17:00",
+        )
+        rule = ShiftRule(
+            shift=st,
+            kind=ShiftRule.Kind.NIGHT_OT_WINDOW,
+            value="22:00-04:00",
+        )
+        rule.full_clean()  # crossing midnight allowed
+        rule.save()
+        dup = ShiftRule(
+            shift=st,
+            kind=ShiftRule.Kind.NIGHT_OT_WINDOW,
+            value="22:00-04:00",
+            active_from="2024-01-01",
+            active_to="2024-12-31",
+            weekdays="MON",
+        )
+        dup.full_clean()
+        dup.save()
+        dup2 = ShiftRule(
+            shift=st,
+            kind=ShiftRule.Kind.NIGHT_OT_WINDOW,
+            value="22:00-04:00",
+            active_from="2024-01-01",
+            active_to="2024-12-31",
+            weekdays="MON",
+        )
+        with self.assertRaises(IntegrityError):
+            dup2.save()
+
+    def test_roster_entry_requires_employee_context(self):
+        branch = self.department.branch
+        license = TradeLicense.objects.create(
+            company=branch.company,
+            license_no="L3",
+            issued_date="2024-01-01",
+            expiry_date="2025-01-01",
+            max_visas=5,
+        )
+        license.branches.set([branch])
+        emp = Employee.objects.create(
+            username="e3",
+            password="pass",
+            trade_license=license,
+            department=self.department,
+            hire_date="2024-01-02",
+            employment_type="permanent",
+            visa_type="company",
+        )
+        emp.trade_license = None
+        emp.department = None
+        emp.project = None
+        st = ShiftTemplate.objects.create(
+            company=self.company,
+            name="S8",
+            start_time="09:00",
+            end_time="17:00",
+        )
+        r = RosterEntry(employee=emp, date="2024-01-04", shift=st)
+        with self.assertRaises(ValidationError):
+            r.full_clean()
+
     def test_roster_entry_unique_and_company_match(self):
         branch = self.department.branch
         license = TradeLicense.objects.create(
@@ -377,12 +501,12 @@ class PolicyModelTests(TestCase):
         with self.assertRaises(ValidationError):
             r.full_clean()
 
-    def test_leave_type_paid_pct_bounds(self):
+    def test_leave_type_paid_pct_bounds_and_constraints(self):
         lt = LeaveType(
             company=self.company,
             code="AL",
             name="Annual",
-            paid_pct=150,
+            paid_pct=Decimal("150"),
         )
         with self.assertRaises(ValidationError):
             lt.full_clean()
@@ -390,7 +514,33 @@ class PolicyModelTests(TestCase):
             company=self.company,
             code="UP",
             name="Unpaid",
-            paid_pct=-10,
+            paid_pct=Decimal("-10"),
         )
         with self.assertRaises(ValidationError):
             lt2.full_clean()
+        LeaveType.objects.create(
+            company=self.company,
+            code="PD",
+            name="Paid",
+            paid_pct=Decimal("50"),
+        )
+        with transaction.atomic():
+            with self.assertRaises(IntegrityError):
+                LeaveType.objects.create(
+                    company=self.company,
+                    code="pd",
+                    name="Dup",
+                    paid_pct=Decimal("50"),
+                )
+        with transaction.atomic():
+            with self.assertRaises(IntegrityError):
+                LeaveType.objects.create(
+                    company=self.company,
+                    code="BAD",
+                    name="Bad",
+                    paid_pct=Decimal("200"),
+                )
+
+    def test_company_timezone_default(self):
+        c = Company.objects.create(name="CTZ")
+        self.assertEqual(c.timezone, "Asia/Dubai")
