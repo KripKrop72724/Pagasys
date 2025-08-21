@@ -117,6 +117,7 @@ parameter. Additional paths include:
 
 * `/api/token/` – obtain JWT access and refresh tokens
 * `/api/token/refresh/` – refresh a JWT access token
+* `/api/me/` – retrieve the logged-in user's profile
 * `/api/schema/` – machine readable OpenAPI schema
 * `/api/docs/` – interactive Swagger UI
 * `/healthz` – liveness endpoint returning `ok`

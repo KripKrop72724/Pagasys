@@ -40,6 +40,13 @@ class OpenAPISchemaTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn(b'<html', response.content.lower())
 
+    def test_profile_path_present_in_schema(self):
+        response = self.client.get('/api/schema/', HTTP_ACCEPT='application/json')
+        import json
+        data = json.loads(response.content)
+        self.assertIn('/api/me/', data['paths'])
+        self.assertIn('get', data['paths']['/api/me/'])
+
     def test_filter_and_pagination_parameters_present(self):
         response = self.client.get('/api/schema/', HTTP_ACCEPT='application/json')
         import json

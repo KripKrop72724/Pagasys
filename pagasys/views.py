@@ -1,4 +1,4 @@
-from rest_framework import status, viewsets
+from rest_framework import generics, status, viewsets
 from rest_framework.permissions import IsAuthenticated, DjangoModelPermissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -51,6 +51,26 @@ from .serializers import (
     bulk_delete_response_serializer,
 )
 from .openapi_utils import document_filters
+
+
+@extend_schema_view(
+    get=extend_schema(
+        description="Retrieve the profile for the currently authenticated user.",
+        responses=EmployeeSerializer,
+    )
+)
+class ProfileView(generics.RetrieveAPIView):
+    """Expose the authenticated user's profile.
+
+    Returns the same representation as :class:`EmployeeSerializer` while
+    ensuring users can only access their own data.
+    """
+
+    serializer_class = EmployeeSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self):
+        return self.request.user
 
 
 class BulkCreateMixin:
