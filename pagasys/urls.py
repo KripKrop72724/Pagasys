@@ -16,6 +16,7 @@ from .views import (
     ShiftRuleViewSet,
     RosterEntryViewSet,
     LeaveTypeViewSet,
+    ProfileView,
 )
 
 router = routers.DefaultRouter()
@@ -35,6 +36,7 @@ router.register(r'leave-types', LeaveTypeViewSet)
 
 urlpatterns = [
     *router.urls,
+    path('me/', ProfileView.as_view(), name='profile'),
     path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
 ]
