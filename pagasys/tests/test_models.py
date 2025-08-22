@@ -1,3 +1,5 @@
+from datetime import datetime, time
+
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.test import TestCase
@@ -8,7 +10,10 @@ from pagasys.models import (
     Department,
     Designation,
     Employee,
+    LeaveType,
     Project,
+    RosterEntry,
+    ShiftTemplate,
     TradeLicense,
 )
 
@@ -56,6 +61,28 @@ class ModelFactoryMixin:
             start_date="2024-01-01",
         )
 
+    def create_shift_template(
+        self,
+        company=None,
+        name="Shift",
+        start="09:00",
+        end="17:00",
+        cross_midnight=False,
+    ):
+        start_time = (
+            start if isinstance(start, time) else datetime.strptime(start, "%H:%M").time()
+        )
+        end_time = (
+            end if isinstance(end, time) else datetime.strptime(end, "%H:%M").time()
+        )
+        return ShiftTemplate.objects.create(
+            company=company or self.company,
+            name=name,
+            start_time=start_time,
+            end_time=end_time,
+            cross_midnight=cross_midnight,
+        )
+
 
 class ModelValidationTests(ModelFactoryMixin, TestCase):
     """Comprehensive validation tests for core models."""
@@ -92,9 +119,8 @@ class ModelValidationTests(ModelFactoryMixin, TestCase):
             max_visas=1,
         )
         lic.save()
-        lic.branches.set([other_branch])
-        with self.assertRaisesMessage(ValidationError, "license company"):
-            lic.full_clean()
+        with self.assertRaises(ValidationError):
+            lic.branches.set([other_branch])
 
     def test_trade_license_multiple_branch_mismatch(self):
         other_company = self.create_company("Other2")
@@ -108,9 +134,8 @@ class ModelValidationTests(ModelFactoryMixin, TestCase):
             max_visas=1,
         )
         lic.save()
-        lic.branches.set([self.branch, other_branch, b2])
         with self.assertRaises(ValidationError):
-            lic.full_clean()
+            lic.branches.set([self.branch, other_branch, b2])
 
     def test_employee_visa_quota_enforced(self):
         Employee.objects.create(
@@ -254,6 +279,90 @@ class ModelValidationTests(ModelFactoryMixin, TestCase):
                         )
                     ]
                 )
+
+    def test_leavetype_case_insensitive_unique(self):
+        LeaveType.objects.create(
+            company=self.company, code="AL", name="Annual"
+        )
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                LeaveType.objects.create(
+                    company=self.company, code="al", name="Another"
+                )
+
+    def test_leavetype_same_code_different_company_ok(self):
+        LeaveType.objects.create(
+            company=self.company, code="AL", name="Annual"
+        )
+        other_company = self.create_company("Other")
+        LeaveType.objects.create(
+            company=other_company, code="al", name="Annual2"
+        )
+
+    def test_tradelicense_branch_company_alignment_signal(self):
+        other_company = self.create_company("OtherCo")
+        other_branch = self.create_branch(other_company, "OB")
+        lic = self.create_license(branches=[self.branch], license_no="LICSIG")
+        with self.assertRaises(ValidationError):
+            with transaction.atomic():
+                lic.branches.add(other_branch)
+        with self.assertRaises(ValidationError):
+            with transaction.atomic():
+                lic.branches.set([self.branch, other_branch])
+        same_branch = self.create_branch(self.company, "B2")
+        lic.branches.add(same_branch)  # should not raise
+
+    def test_project_end_before_start_invalid(self):
+        proj = Project(
+            branch=self.branch,
+            name="Bad",
+            start_date="2024-01-10",
+            end_date="2024-01-09",
+        )
+        with self.assertRaisesMessage(
+            ValidationError, "end_date must be on/after start_date"
+        ):
+            proj.full_clean()
+
+    def test_rosterentry_override_near_shift(self):
+        shift = self.create_shift_template(start="09:00", end="17:00")
+        emp = Employee.objects.create(
+            username="emp_roster",
+            password="pass",
+            trade_license=self.license,
+            department=self.department,
+            first_name="R",
+            last_name="S",
+            hire_date="2024-02-01",
+            employment_type="permanent",
+        )
+
+        bad_start = RosterEntry(
+            employee=emp,
+            date="2024-02-02",
+            shift=shift,
+            override_start="00:00",
+        )
+        with self.assertRaises(ValidationError):
+            bad_start.full_clean()
+
+        bad_end = RosterEntry(
+            employee=emp,
+            date="2024-02-03",
+            shift=shift,
+            override_end="03:00",
+        )
+        with self.assertRaises(ValidationError):
+            bad_end.full_clean()
+
+        ok = RosterEntry(
+            employee=emp,
+            date="2024-02-04",
+            shift=shift,
+            override_start="08:00",
+            override_end="18:00",
+        )
+        ok.full_clean()  # should not raise
 
 
 class ModelStringTests(ModelFactoryMixin, TestCase):
