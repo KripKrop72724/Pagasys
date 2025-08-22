@@ -13,8 +13,11 @@ from pagasys.models import (
     LeaveType,
     Project,
     RosterEntry,
+    ShiftRule,
     ShiftTemplate,
     TradeLicense,
+    WorkCalendar,
+    effective_calendar_for,
 )
 
 
@@ -136,6 +139,72 @@ class ModelValidationTests(ModelFactoryMixin, TestCase):
         lic.save()
         with self.assertRaises(ValidationError):
             lic.branches.set([self.branch, other_branch, b2])
+
+    def test_trade_license_add_branch_mismatch(self):
+        other_company = self.create_company("Other3")
+        other_branch = self.create_branch(other_company, "OB3")
+        with self.assertRaises(ValidationError):
+            self.license.branches.add(other_branch)
+
+    def test_branch_name_unique_per_company(self):
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                Branch.objects.create(company=self.company, name=self.branch.name)
+        other_company = self.create_company("OtherCo")
+        Branch.objects.create(company=other_company, name=self.branch.name)
+
+    def test_shift_rule_weekdays_normalized_on_save(self):
+        shift = self.create_shift_template(self.company)
+        rule = ShiftRule(
+            shift=shift,
+            kind=ShiftRule.Kind.GEOFENCE_REQUIRED,
+            value="10",
+            weekdays="fri,mon",
+        )
+        rule.save()
+        self.assertEqual(rule.weekdays, "MON,FRI")
+
+    def test_shift_rule_save_invalid_weekday(self):
+        shift = self.create_shift_template(self.company)
+        rule = ShiftRule(
+            shift=shift,
+            kind=ShiftRule.Kind.GEOFENCE_REQUIRED,
+            value="10",
+            weekdays="funday",
+        )
+        with self.assertRaises(ValidationError):
+            rule.save()
+
+    def test_effective_calendar_for(self):
+        company_cal = WorkCalendar.objects.create(
+            company=self.company, name="Default", is_default=True
+        )
+        branch_cal = WorkCalendar.objects.create(
+            company=self.company, name="Branch", is_default=False
+        )
+        self.branch.work_calendar = branch_cal
+        self.branch.save()
+        emp_cal = WorkCalendar.objects.create(
+            company=self.company, name="Emp", is_default=False
+        )
+        emp = Employee.objects.create(
+            username="emp_cal",
+            password="pass",
+            trade_license=self.license,
+            department=self.department,
+            first_name="E",
+            last_name="F",
+            hire_date="2024-02-01",
+            employment_type="permanent",
+            work_calendar=emp_cal,
+        )
+        self.assertEqual(effective_calendar_for(emp), emp_cal)
+        emp.work_calendar = None
+        emp.save()
+        self.assertEqual(effective_calendar_for(emp), branch_cal)
+        self.branch.work_calendar = None
+        self.branch.save()
+        self.assertEqual(effective_calendar_for(emp), company_cal)
 
     def test_employee_visa_quota_enforced(self):
         Employee.objects.create(

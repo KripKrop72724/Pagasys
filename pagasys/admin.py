@@ -147,9 +147,7 @@ class TradeLicenseForm(forms.ModelForm):
             self.fields["branches"].queryset = Branch.objects.filter(company_id=company_id)
 
     def clean(self):
-        cleaned = super().clean()
-        self.instance._branches_for_validation = cleaned.get("branches")
-        return cleaned
+        return super().clean()
 
 
 class BranchForm(forms.ModelForm):
@@ -210,7 +208,6 @@ class TradeLicenseAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin)
         js = ["pagasys/js/tradelicense_admin.js"]
 
     def save_model(self, request, obj, form, change):
-        obj._branches_for_validation = form.cleaned_data.get("branches")
         super().save_model(request, obj, form, change)
 
     def formfield_for_manytomany(self, db_field, request, **kwargs):
