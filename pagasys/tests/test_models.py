@@ -248,6 +248,22 @@ class ModelValidationTests(ModelFactoryMixin, TestCase):
             with transaction.atomic():
                 self.create_designation(self.company, name="Engineer")
 
+    def test_department_name_unique_per_branch(self):
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                self.create_department(self.branch, name="Dept")
+        other_branch = self.create_branch(self.company, name="B2")
+        # same name in different branch is allowed
+        self.create_department(other_branch, name="Dept")
+
+    def test_project_name_unique_per_branch(self):
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                self.create_project(self.branch, name="Proj")
+        other_branch = self.create_branch(self.company, name="B3")
+        # same name in different branch is allowed
+        self.create_project(other_branch, name="Proj")
+
     def test_db_check_constraints(self):
         # bypass model.clean by saving directly
         with self.assertRaises(IntegrityError):
