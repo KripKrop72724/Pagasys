@@ -23,7 +23,7 @@ class EmployeeFilteringOrderingTests(TestCase):
             company=self.company,
             license_no="LICF",
             issued_date="2024-01-01",
-            expiry_date="2025-01-01",
+            expiry_date="2099-01-01",
             max_visas=10,
         )
         self.license.branches.set([self.branch])
@@ -35,7 +35,7 @@ class EmployeeFilteringOrderingTests(TestCase):
             company=self.other_company,
             license_no="LICO",
             issued_date="2024-01-01",
-            expiry_date="2025-01-01",
+            expiry_date="2099-01-01",
             max_visas=10,
         )
         self.other_license.branches.set([other_branch])

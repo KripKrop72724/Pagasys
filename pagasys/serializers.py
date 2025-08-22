@@ -172,7 +172,7 @@ class TradeLicenseSerializer(ScopedSerializerMixin, serializers.ModelSerializer)
         instance.clean()
 
         if branches is not None and any(b.company_id != company.id for b in branches):
-            raise serializers.ValidationError({"branches": ["Branch company mismatch"]})
+            raise serializers.ValidationError("Branch company mismatch")
 
         return attrs
 

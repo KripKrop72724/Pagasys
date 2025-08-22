@@ -20,7 +20,7 @@ class AdminScopeTests(TestCase):
             company=self.company,
             license_no="L1",
             issued_date="2024-01-01",
-            expiry_date="2025-01-01",
+            expiry_date="2099-01-01",
             max_visas=10,
         )
         license.branches.set([branch])
@@ -28,7 +28,7 @@ class AdminScopeTests(TestCase):
             company=other,
             license_no="L2",
             issued_date="2024-01-01",
-            expiry_date="2025-01-01",
+            expiry_date="2099-01-01",
             max_visas=10,
         )
         other_license.branches.set([other_branch])

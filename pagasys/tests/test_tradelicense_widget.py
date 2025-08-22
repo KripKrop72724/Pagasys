@@ -22,7 +22,7 @@ class TradeLicenseWidgetTests(TestCase):
             company=self.c1,
             license_no="L1",
             issued_date="2024-01-01",
-            expiry_date="2025-01-01",
+            expiry_date="2099-01-01",
             max_visas=1,
         )
         self.lic.branches.set([self.b1])

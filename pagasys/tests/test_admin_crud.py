@@ -108,7 +108,7 @@ class AdminCRUDTests(ModelFactoryMixin, TestCase):
             "company": self.company.id,
             "license_no": "LNEW",
             "issued_date": "2024-01-01",
-            "expiry_date": "2025-01-01",
+            "expiry_date": "2099-01-01",
             "max_visas": 1,
             "branches": [self.branch.id],
         }

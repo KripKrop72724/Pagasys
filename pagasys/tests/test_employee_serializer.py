@@ -13,7 +13,7 @@ class EmployeeSerializerPasswordTests(TestCase):
             company=self.company,
             license_no="L1",
             issued_date="2024-01-01",
-            expiry_date="2025-01-01",
+            expiry_date="2099-01-01",
             max_visas=5,
         )
         self.license.branches.set([self.branch])
@@ -59,7 +59,7 @@ class EmployeeSerializerGroupTests(TestCase):
             company=self.company,
             license_no="L1",
             issued_date="2024-01-01",
-            expiry_date="2025-01-01",
+            expiry_date="2099-01-01",
             max_visas=5,
         )
         self.license.branches.set([self.branch])
@@ -166,7 +166,7 @@ class EmployeeSerializerVisaTypeTests(TestCase):
             company=self.company,
             license_no="L1",
             issued_date="2024-01-01",
-            expiry_date="2025-01-01",
+            expiry_date="2099-01-01",
             max_visas=5,
         )
         self.license.branches.set([self.branch])

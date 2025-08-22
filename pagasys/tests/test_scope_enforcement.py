@@ -31,7 +31,7 @@ class AdminDropdownScopeTests(TestCase):
             company=self.c1,
             license_no="L1",
             issued_date="2024-01-01",
-            expiry_date="2025-01-01",
+            expiry_date="2099-01-01",
             max_visas=5,
         )
         self.lic1.branches.set([self.b1])
@@ -39,7 +39,7 @@ class AdminDropdownScopeTests(TestCase):
             company=self.c2,
             license_no="L2",
             issued_date="2024-01-01",
-            expiry_date="2025-01-01",
+            expiry_date="2099-01-01",
             max_visas=5,
         )
         self.lic2.branches.set([self.b2])
@@ -161,7 +161,7 @@ class APICreateScopeTests(TestCase):
             company=self.c1,
             license_no="L1",
             issued_date="2024-01-01",
-            expiry_date="2025-01-01",
+            expiry_date="2099-01-01",
             max_visas=5,
         )
         self.lic1.branches.set([self.b1])
@@ -169,7 +169,7 @@ class APICreateScopeTests(TestCase):
             company=self.c2,
             license_no="L2",
             issued_date="2024-01-01",
-            expiry_date="2025-01-01",
+            expiry_date="2099-01-01",
             max_visas=5,
         )
         self.lic2.branches.set([self.b2])
@@ -273,7 +273,7 @@ class ShiftTemplateAPIScopeTests(TestCase):
             company=self.c1,
             license_no="L1",
             issued_date="2024-01-01",
-            expiry_date="2025-01-01",
+            expiry_date="2099-01-01",
             max_visas=5,
         )
         lic.branches.set([b1])

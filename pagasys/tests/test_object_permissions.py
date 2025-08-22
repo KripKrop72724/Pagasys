@@ -30,7 +30,7 @@ class ObjectPermissionsTests(TestCase):
             company=self.c1,
             license_no="L1",
             issued_date="2024-01-01",
-            expiry_date="2025-01-01",
+            expiry_date="2099-01-01",
             max_visas=10,
         )
         self.lic1.branches.set([self.b1, self.b2])
@@ -38,7 +38,7 @@ class ObjectPermissionsTests(TestCase):
             company=self.c2,
             license_no="L2",
             issued_date="2024-01-01",
-            expiry_date="2025-01-01",
+            expiry_date="2099-01-01",
             max_visas=10,
         )
         self.lic2.branches.set([self.b3])

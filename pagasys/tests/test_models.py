@@ -41,7 +41,7 @@ class ModelFactoryMixin:
         branches=None,
         license_no="LIC",
         issued="2024-01-01",
-        expiry="2025-01-01",
+        expiry="2099-01-01",
         max_visas=1,
     ):
         lic = TradeLicense.objects.create(
@@ -52,6 +52,7 @@ class ModelFactoryMixin:
             max_visas=max_visas,
         )
         lic.branches.set(branches or [self.branch])
+        lic.refresh_from_db()
         return lic
 
     def create_department(self, branch=None, name="Dept"):
@@ -98,6 +99,11 @@ class ModelValidationTests(ModelFactoryMixin, TestCase):
         self.designation = self.create_designation(self.company, name="Engineer")
         self.license = self.create_license(branches=[self.branch], license_no="LIC1", max_visas=1)
 
+    def test_company_invalid_timezone(self):
+        c = Company(name="BadCo", timezone="Mars/Phobos")
+        with self.assertRaisesMessage(ValidationError, "Invalid IANA time zone"):
+            c.full_clean()
+
     def test_trade_license_date_validation(self):
         lic = TradeLicense(
             company=self.company,
@@ -106,8 +112,6 @@ class ModelValidationTests(ModelFactoryMixin, TestCase):
             expiry_date="2024-01-01",
             max_visas=1,
         )
-        lic.save()
-        lic.branches.set([self.branch])
         with self.assertRaises(ValidationError):
             lic.full_clean()
 
@@ -118,7 +122,7 @@ class ModelValidationTests(ModelFactoryMixin, TestCase):
             company=self.company,
             license_no="LICY",
             issued_date="2024-01-01",
-            expiry_date="2025-01-01",
+            expiry_date="2099-01-01",
             max_visas=1,
         )
         lic.save()
@@ -133,7 +137,7 @@ class ModelValidationTests(ModelFactoryMixin, TestCase):
             company=self.company,
             license_no="LICZ",
             issued_date="2024-01-01",
-            expiry_date="2025-01-01",
+            expiry_date="2099-01-01",
             max_visas=1,
         )
         lic.save()
@@ -145,6 +149,26 @@ class ModelValidationTests(ModelFactoryMixin, TestCase):
         other_branch = self.create_branch(other_company, "OB3")
         with self.assertRaises(ValidationError):
             self.license.branches.add(other_branch)
+
+    def test_trade_license_db_constraints(self):
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                TradeLicense.objects.create(
+                    company=self.company,
+                    license_no="BADLIC1",
+                    issued_date="2025-01-01",
+                    expiry_date="2024-01-01",
+                    max_visas=1,
+                )
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                TradeLicense.objects.create(
+                    company=self.company,
+                    license_no="BADLIC2",
+                    issued_date="2024-01-01",
+                    expiry_date="2099-01-01",
+                    max_visas=0,
+                )
 
     def test_branch_name_unique_per_company(self):
         with self.assertRaises(IntegrityError):
@@ -228,6 +252,30 @@ class ModelValidationTests(ModelFactoryMixin, TestCase):
             employment_type="permanent",
         )
         with self.assertRaisesMessage(ValidationError, "Visa quota reached"):
+            emp.full_clean()
+
+    def test_employee_expired_trade_license(self):
+        expired = TradeLicense.objects.create(
+            company=self.company,
+            license_no="EX",
+            issued_date="1999-01-01",
+            expiry_date="2000-01-01",
+            max_visas=1,
+        )
+        expired.branches.set([self.branch])
+        emp = Employee(
+            username="exp_emp",
+            password="pass",
+            trade_license=expired,
+            department=self.department,
+            first_name="X",
+            last_name="Y",
+            hire_date="2024-01-02",
+            employment_type="permanent",
+        )
+        with self.assertRaisesMessage(
+            ValidationError, "Cannot assign an expired trade license to an employee"
+        ):
             emp.full_clean()
 
     def test_department_project_exclusive(self):
@@ -408,6 +456,16 @@ class ModelValidationTests(ModelFactoryMixin, TestCase):
             ValidationError, "end_date must be on/after start_date"
         ):
             proj.full_clean()
+
+    def test_project_db_date_constraint(self):
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                Project.objects.create(
+                    branch=self.branch,
+                    name="BadDB",
+                    start_date="2024-01-10",
+                    end_date="2024-01-09",
+                )
 
     def test_rosterentry_override_near_shift(self):
         shift = self.create_shift_template(start="09:00", end="17:00")

@@ -69,7 +69,7 @@ class PolicyModelTests(TestCase):
             company=branch.company,
             license_no="LIC1",
             issued_date="2024-01-01",
-            expiry_date="2025-01-01",
+            expiry_date="2099-01-01",
             max_visas=5,
         )
         license.branches.set([branch])
@@ -416,7 +416,7 @@ class PolicyModelTests(TestCase):
             company=branch.company,
             license_no="L3",
             issued_date="2024-01-01",
-            expiry_date="2025-01-01",
+            expiry_date="2099-01-01",
             max_visas=5,
         )
         license.branches.set([branch])
@@ -448,7 +448,7 @@ class PolicyModelTests(TestCase):
             company=branch.company,
             license_no="L1",
             issued_date="2024-01-01",
-            expiry_date="2025-01-01",
+            expiry_date="2099-01-01",
             max_visas=5,
         )
         license.branches.set([branch])
@@ -488,7 +488,7 @@ class PolicyModelTests(TestCase):
             company=branch.company,
             license_no="L2",
             issued_date="2024-01-01",
-            expiry_date="2025-01-01",
+            expiry_date="2099-01-01",
             max_visas=5,
         )
         license.branches.set([branch])

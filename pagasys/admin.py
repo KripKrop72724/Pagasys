@@ -110,6 +110,8 @@ class CleanSaveModelMixin:
 
     def save_model(self, request, obj, form, change):
         try:
+            if form is not None and hasattr(form, "cleaned_data") and "branches" in form.cleaned_data:
+                obj._branches_cache = form.cleaned_data["branches"]
             obj.full_clean()
         except ValidationError as exc:
             if form is not None:

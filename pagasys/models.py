@@ -8,6 +8,8 @@ from django.core.exceptions import ValidationError
 from django.contrib.auth.models import AbstractUser
 from django.db.models import F
 from django.db.models.functions import Lower
+from django.utils import timezone
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 
 class Company(models.Model):
@@ -29,6 +31,13 @@ class Company(models.Model):
         indexes = [
             models.Index(fields=["name"], name="company_name_idx")
         ]
+
+    def clean(self):
+        super().clean()
+        try:
+            ZoneInfo(self.timezone)
+        except ZoneInfoNotFoundError:
+            raise ValidationError({"timezone": "Invalid IANA time zone (e.g., 'Asia/Dubai')"})
 
     def __str__(self) -> str:
         return self.name
@@ -140,6 +149,16 @@ class TradeLicense(models.Model):
         verbose_name = "trade license"
         verbose_name_plural = "trade licenses"
         ordering = ["id"]
+        constraints = [
+            models.CheckConstraint(
+                check=models.Q(expiry_date__gte=models.F("issued_date")),
+                name="license_expiry_after_issue",
+            ),
+            models.CheckConstraint(
+                check=models.Q(max_visas__gt=0),
+                name="license_max_visas_positive",
+            ),
+        ]
         indexes = [
             models.Index(fields=["company", "license_no"], name="license_company_no_idx"),
             models.Index(fields=["company", "issued_date", "expiry_date"], name="license_date_range_idx"),
@@ -147,14 +166,22 @@ class TradeLicense(models.Model):
 
     def clean(self):
         """Validate logical consistency and branch-company rules."""
-        if self.expiry_date < self.issued_date:
+        issued = self.issued_date
+        expiry = self.expiry_date
+        if isinstance(issued, str):
+            issued = date.fromisoformat(issued)
+        if isinstance(expiry, str):
+            expiry = date.fromisoformat(expiry)
+        if expiry < issued:
             raise ValidationError("Expiry date must be after issued date")
-        branches = self.branches.all()
+        if self.max_visas <= 0:
+            raise ValidationError({"max_visas": "Must be greater than 0"})
+        branches = self.branches.all() if self.pk else getattr(self, "_branches_cache", [])
         if any(b.company_id != self.company_id for b in branches):
             raise ValidationError("Branches must belong to the license company")
 
     def __str__(self) -> str:
-        branches = ", ".join(b.name for b in self.branches.all())
+        branches = ", ".join(b.name for b in self.branches.all()) if self.pk else ""
         return f"{self.license_no} - {self.company.name}" + (f" - {branches}" if branches else "")
 
 
@@ -212,9 +239,13 @@ class Project(models.Model):
         verbose_name_plural = "projects"
         ordering = ["id"]
         constraints = [
+            models.CheckConstraint(
+                check=models.Q(end_date__isnull=True) | models.Q(end_date__gte=models.F("start_date")),
+                name="project_end_on_or_after_start",
+            ),
             models.UniqueConstraint(
                 fields=["branch", "name"], name="uniq_project_name_per_branch"
-            )
+            ),
         ]
         indexes = [
             models.Index(fields=["branch", "name"], name="project_branch_name_idx"),
@@ -358,6 +389,7 @@ class Employee(AbstractUser):
                 name="emp_desig_type_idx",
             ),
             models.Index(fields=["visa_type"], name="employee_visa_type_idx"),
+            models.Index(fields=["hire_date"], name="emp_hire_date_idx"),
         ]
 
     def clean(self):
@@ -372,7 +404,12 @@ class Employee(AbstractUser):
         if self.visa_type == "company":
             if not self.trade_license:
                 raise ValidationError({"trade_license": ["This field is required for company visas"]})
-
+            today = timezone.now().date()
+            expiry = self.trade_license.expiry_date
+            if isinstance(expiry, str):
+                expiry = date.fromisoformat(expiry)
+            if expiry < today:
+                raise ValidationError("Cannot assign an expired trade license to an employee")
             current = self.trade_license.employees.exclude(pk=self.pk).count()
             if current >= self.trade_license.max_visas:
                 raise ValidationError("Visa quota reached")

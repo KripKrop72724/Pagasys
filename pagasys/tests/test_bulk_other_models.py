@@ -22,7 +22,7 @@ class OtherBulkActionsTests(TestCase):
             company=self.company,
             license_no="LIC0",
             issued_date="2024-01-01",
-            expiry_date="2025-01-01",
+            expiry_date="2099-01-01",
             max_visas=10,
         )
         self.license.branches.set([self.branch])
@@ -89,7 +89,7 @@ class OtherBulkActionsTests(TestCase):
             {"company": self.company.id, "name": "A"},
             {"company": self.company.id, "name": "B"},
         ]
-        updates = [{"name": "A1"}, {"name": "B1"}]
+        updates = [{"name": "A1"}, {"name": "B2"}]
         self._run_crud_flow("branches", Branch, create, updates)
 
     def test_designation_bulk_flow(self):
@@ -105,7 +105,7 @@ class OtherBulkActionsTests(TestCase):
             company=self.company,
             license_no="L1",
             issued_date="2024-01-01",
-            expiry_date="2025-01-01",
+            expiry_date="2099-01-01",
             max_visas=5,
         )
         lic1.branches.set([self.branch])
@@ -113,7 +113,7 @@ class OtherBulkActionsTests(TestCase):
             company=self.company,
             license_no="L2",
             issued_date="2024-01-01",
-            expiry_date="2025-01-01",
+            expiry_date="2099-01-01",
             max_visas=5,
         )
         lic2.branches.set([self.branch])
@@ -123,13 +123,13 @@ class OtherBulkActionsTests(TestCase):
                 "id": lic1.id,
                 "max_visas": 6,
                 "issued_date": "2024-01-01",
-                "expiry_date": "2025-01-01",
+                "expiry_date": "2099-01-01",
             },
             {
                 "id": lic2.id,
                 "max_visas": 7,
                 "issued_date": "2024-01-01",
-                "expiry_date": "2025-01-01",
+                "expiry_date": "2099-01-01",
             },
         ]
         res = self.client.patch("/api/licenses/bulk-update/", update, format="json")
@@ -199,7 +199,7 @@ class OtherBulkActionsTests(TestCase):
                 "branches": [self.branch.id],
                 "license_no": "L3",
                 "issued_date": "2024-01-01",
-                "expiry_date": "2025-01-01",
+                "expiry_date": "2099-01-01",
                 "max_visas": 5,
             },
             {
@@ -207,7 +207,7 @@ class OtherBulkActionsTests(TestCase):
                 "branches": [self.branch.id],
                 "license_no": "L4",
                 "issued_date": "2024-01-01",
-                "expiry_date": "2025-01-01",
+                "expiry_date": "2099-01-01",
                 "max_visas": 6,
             },
         ]
@@ -225,7 +225,7 @@ class OtherBulkActionsTests(TestCase):
             company=self.company,
             license_no="L5",
             issued_date="2024-01-01",
-            expiry_date="2025-01-01",
+            expiry_date="2099-01-01",
             max_visas=5,
         )
         lic.branches.set([self.branch])
@@ -251,7 +251,7 @@ class OtherBulkActionsTests(TestCase):
                 "branches": [9999],
                 "license_no": "BAD1",
                 "issued_date": "2024-01-01",
-                "expiry_date": "2025-01-01",
+                "expiry_date": "2099-01-01",
                 "max_visas": 5,
             }
         ]
@@ -267,7 +267,7 @@ class OtherBulkActionsTests(TestCase):
             company=self.company,
             license_no="DUPE",
             issued_date="2024-01-01",
-            expiry_date="2025-01-01",
+            expiry_date="2099-01-01",
             max_visas=5,
         )
         existing.branches.set([self.branch])
@@ -278,7 +278,7 @@ class OtherBulkActionsTests(TestCase):
                 "branches": [self.branch.id],
                 "license_no": "DUPE2",
                 "issued_date": "2024-01-01",
-                "expiry_date": "2025-01-01",
+                "expiry_date": "2099-01-01",
                 "max_visas": 5,
             },
             {
