@@ -34,6 +34,9 @@ comprehensive automated test suite.
   0 and 100. Codes are unique per company regardless of case.
 * **Rostering safety** – Employees must have a trade license, department or
   project before they can be assigned to a shift.
+* **Archiving over deletion** – Branches, departments and projects linked to
+  employees are protected from hard deletion. Mark them inactive to archive
+  instead of deleting.
 
 ## Tech Stack
 

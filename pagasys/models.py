@@ -46,7 +46,11 @@ class Company(models.Model):
 
 
 class Branch(models.Model):
-    """Individual branch office of a company."""
+    """Individual branch office of a company.
+
+    Branches with active employees cannot be hard deleted. Instead, mark them
+    inactive in the admin or via the API to archive them.
+    """
 
     company = models.ForeignKey(
         Company,
@@ -186,7 +190,11 @@ class TradeLicense(models.Model):
 
 
 class Department(models.Model):
-    """Organizational department within a branch."""
+    """Organizational department within a branch.
+
+    Departments referenced by employees are protected from deletion; archive or
+    mark them inactive rather than removing them.
+    """
 
     branch = models.ForeignKey(
         Branch,
@@ -216,7 +224,11 @@ class Department(models.Model):
 
 
 class Project(models.Model):
-    """Project carried out by a branch."""
+    """Project carried out by a branch.
+
+    Projects with assigned employees cannot be deleted. To retire a project,
+    mark it inactive instead of deleting it.
+    """
 
     branch = models.ForeignKey(
         Branch,
@@ -292,17 +304,17 @@ class Employee(AbstractUser):
         Department,
         null=True,
         blank=True,
-        on_delete=models.SET_NULL,
+        on_delete=models.PROTECT,
         related_name="employees",
-        help_text="Department assigned",
+        help_text="Department assigned; protected from deletion",
     )
     project = models.ForeignKey(
         Project,
         null=True,
         blank=True,
-        on_delete=models.SET_NULL,
+        on_delete=models.PROTECT,
         related_name="employees",
-        help_text="Project assigned",
+        help_text="Project assigned; protected from deletion",
     )
     work_calendar = models.ForeignKey(
         "WorkCalendar",

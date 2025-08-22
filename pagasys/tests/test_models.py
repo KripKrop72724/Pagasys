@@ -2,6 +2,7 @@ from datetime import datetime, time
 
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
+from django.db.models import ProtectedError
 from django.test import TestCase
 
 from pagasys.models import (
@@ -568,4 +569,46 @@ class ModelStringTests(ModelFactoryMixin, TestCase):
             employment_type="permanent",
         )
         self.assertEqual(str(emp), "C D - Comp - B2 - Proj2 - LICC")
+
+
+class DeletionProtectionTests(ModelFactoryMixin, TestCase):
+    """Ensure core models cannot be deleted while employees reference them."""
+
+    def setUp(self):
+        self.company = self.create_company("Comp")
+        self.branch = self.create_branch(self.company, "B1")
+        self.department = self.create_department(self.branch, "Dept1")
+        self.project = self.create_project(self.branch, "Proj1")
+
+    def create_employee(self, **kwargs):
+        data = {
+            "username": f"emp{Employee.objects.count()}",
+            "first_name": "A",
+            "last_name": "B",
+            "visa_type": "personal",
+            "hire_date": "2024-01-01",
+            "employment_type": "permanent",
+        }
+        data.update(kwargs)
+        return Employee.objects.create(**data)
+
+    def test_department_deletion_protected(self):
+        emp = self.create_employee(department=self.department)
+        with self.assertRaises(ProtectedError):
+            self.department.delete()
+        self.assertTrue(Department.objects.filter(pk=self.department.pk).exists())
+        self.assertTrue(Employee.objects.filter(pk=emp.pk, department=self.department).exists())
+
+    def test_project_deletion_protected(self):
+        emp = self.create_employee(project=self.project)
+        with self.assertRaises(ProtectedError):
+            self.project.delete()
+        self.assertTrue(Project.objects.filter(pk=self.project.pk).exists())
+        self.assertTrue(Employee.objects.filter(pk=emp.pk, project=self.project).exists())
+
+    def test_branch_deletion_protected_via_department(self):
+        self.create_employee(department=self.department)
+        with self.assertRaises(ProtectedError):
+            self.branch.delete()
+        self.assertTrue(Branch.objects.filter(pk=self.branch.pk).exists())
 
