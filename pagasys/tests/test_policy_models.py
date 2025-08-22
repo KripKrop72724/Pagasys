@@ -226,6 +226,22 @@ class PolicyModelTests(TestCase):
         with self.assertRaises(ValidationError):
             rule2.full_clean()
 
+    def test_shift_rule_weekdays_normalization(self):
+        st = ShiftTemplate.objects.create(
+            company=self.company,
+            name="S4",
+            start_time="09:00",
+            end_time="17:00",
+        )
+        rule = ShiftRule(
+            shift=st,
+            kind=ShiftRule.Kind.WEEKLY_REST_DAY,
+            value="FRI",
+            weekdays="fri, Mon",
+        )
+        rule.full_clean()
+        self.assertEqual(rule.weekdays, "MON,FRI")
+
     def test_shift_rule_value_and_params_validation(self):
         st = ShiftTemplate.objects.create(
             company=self.company,

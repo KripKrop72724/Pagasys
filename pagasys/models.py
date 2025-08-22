@@ -174,6 +174,11 @@ class Department(models.Model):
     class Meta:
         verbose_name_plural = "departments"
         ordering = ["id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["branch", "name"], name="uniq_department_name_per_branch"
+            )
+        ]
         indexes = [
             models.Index(fields=["branch", "name"], name="dept_branch_name_idx")
         ]
@@ -205,9 +210,17 @@ class Project(models.Model):
     class Meta:
         verbose_name_plural = "projects"
         ordering = ["id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["branch", "name"], name="uniq_project_name_per_branch"
+            )
+        ]
         indexes = [
             models.Index(fields=["branch", "name"], name="project_branch_name_idx"),
-            models.Index(fields=["branch", "start_date", "end_date"], name="project_date_range_idx"),
+            models.Index(
+                fields=["branch", "start_date", "end_date"],
+                name="project_date_range_idx",
+            ),
         ]
 
     def clean(self):
@@ -339,6 +352,10 @@ class Employee(AbstractUser):
                 name="emp_proj_desig_type_idx",
             ),
             models.Index(fields=["first_name", "last_name"], name="emp_name_idx"),
+            models.Index(
+                fields=["designation", "employment_type"],
+                name="emp_desig_type_idx",
+            ),
         ]
 
     def clean(self):
@@ -495,8 +512,26 @@ def _minutes_between(start, end, cross_midnight):
     return int((b - a).total_seconds() // 60)
 
 
+WEEKDAY_ORDER = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]
+
+
+def normalize_weekdays(value: str) -> str:
+    """Normalize comma separated weekdays to canonical abbreviations."""
+    parts = [p.strip().upper() for p in value.split(",") if p.strip()]
+    if len(parts) != len(set(parts)) or any(p not in WEEKDAY_ORDER for p in parts):
+        raise ValidationError(
+            "weekdays must be comma separated MON-SUN abbreviations without duplicates"
+        )
+    ordered = [d for d in WEEKDAY_ORDER if d in parts]
+    return ",".join(ordered)
+
+
 class ShiftTemplate(models.Model):
-    """Reusable description of a work shift."""
+    """Reusable description of a work shift.
+
+    For cross_midnight shifts (e.g. 22:00→06:00) the shift starts on day D and
+    ends on day D+1.
+    """
 
     company = models.ForeignKey(
         Company,
@@ -670,12 +705,7 @@ class ShiftRule(models.Model):
         if self.active_from and self.active_to and self.active_to < self.active_from:
             raise ValidationError("active_to must be after active_from")
         if self.weekdays:
-            valid = {"MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"}
-            parts = [p.strip().upper() for p in self.weekdays.split(",") if p.strip()]
-            if len(parts) != len(set(parts)) or any(p not in valid for p in parts):
-                raise ValidationError(
-                    "weekdays must be comma separated MON-SUN abbreviations without duplicates"
-                )
+            self.weekdays = normalize_weekdays(self.weekdays)
         time_window_kinds = {
             self.Kind.NIGHT_OT_WINDOW,
             self.Kind.FIXED_BREAK_WINDOW,
@@ -792,7 +822,8 @@ class RosterEntry(models.Model):
         indexes = [
             models.Index(
                 fields=["employee", "date"], name="roster_employee_date_idx"
-            )
+            ),
+            models.Index(fields=["date"], name="roster_date_idx"),
         ]
 
     def clean(self):
