@@ -20,7 +20,7 @@ class ValidateSuperCallTests(TestCase):
             company=self.company,
             license_no="L1",
             issued_date="2024-01-01",
-            expiry_date="2025-01-01",
+            expiry_date="2099-01-01",
             max_visas=5,
         )
         self.license.branches.set([self.branch])
@@ -42,7 +42,7 @@ class ValidateSuperCallTests(TestCase):
             "company": self.company,
             "license_no": "X1",
             "issued_date": date(2024, 1, 1),
-            "expiry_date": date(2025, 1, 1),
+            "expiry_date": date(2099, 1, 1),
             "max_visas": 1,
         }
         with patch.object(
@@ -93,7 +93,7 @@ class TradeLicenseSerializerBranchTests(TestCase):
             "company": self.company.id,
             "license_no": "L1",
             "issued_date": "2024-01-01",
-            "expiry_date": "2025-01-01",
+            "expiry_date": "2099-01-01",
             "max_visas": 1,
         }
 
@@ -122,7 +122,7 @@ class TradeLicenseSerializerBranchTests(TestCase):
             company=self.company,
             license_no="LX",
             issued_date="2024-01-01",
-            expiry_date="2025-01-01",
+            expiry_date="2099-01-01",
             max_visas=1,
         )
         lic.branches.set([self.branch])

@@ -18,7 +18,7 @@ class BulkPermissionsTests(TestCase):
             company=company,
             license_no="L1",
             issued_date="2024-01-01",
-            expiry_date="2025-01-01",
+            expiry_date="2099-01-01",
             max_visas=10,
         )
         license.branches.set([branch])
@@ -101,7 +101,7 @@ class GroupRequirementTests(TestCase):
             company=self.company,
             license_no="L1",
             issued_date="2024-01-01",
-            expiry_date="2025-01-01",
+            expiry_date="2099-01-01",
             max_visas=10,
         )
         license.branches.set([self.branch])
@@ -141,7 +141,7 @@ class UserRoleTests(TestCase):
             company=company,
             license_no="L1",
             issued_date="2024-01-01",
-            expiry_date="2025-01-01",
+            expiry_date="2099-01-01",
             max_visas=5,
         )
         license.branches.set([branch])

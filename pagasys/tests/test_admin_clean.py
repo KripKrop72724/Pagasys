@@ -18,7 +18,7 @@ class AdminFullCleanTests(TestCase):
             company=self.company,
             license_no="L1",
             issued_date="2024-01-01",
-            expiry_date="2025-01-01",
+            expiry_date="2099-01-01",
             max_visas=1,
         )
         self.license.branches.set([self.branch])
@@ -57,7 +57,7 @@ class AdminFullCleanTests(TestCase):
             company=self.company,
             license_no="NEW",
             issued_date="2024-01-01",
-            expiry_date="2025-01-01",
+            expiry_date="2099-01-01",
             max_visas=1,
         )
         form = type("F", (), {"add_error": lambda *a, **k: None, "cleaned_data": {"branches": [self.branch]}})()
@@ -72,7 +72,7 @@ class AdminFullCleanTests(TestCase):
             "company": self.company.id,
             "license_no": "BAD2",
             "issued_date": "2024-01-01",
-            "expiry_date": "2025-01-01",
+            "expiry_date": "2099-01-01",
             "max_visas": 1,
             "branches": [other_branch.id],
         }
@@ -80,7 +80,7 @@ class AdminFullCleanTests(TestCase):
             company=self.company,
             license_no="BAD2",
             issued_date="2024-01-01",
-            expiry_date="2025-01-01",
+            expiry_date="2099-01-01",
             max_visas=1,
         )
         form = type("F", (), {"add_error": lambda *a, **k: None, "cleaned_data": {"branches": [other_branch]}})()
@@ -94,7 +94,7 @@ class AdminFullCleanTests(TestCase):
             "company": other.id,
             "license_no": self.license.license_no,
             "issued_date": "2024-01-01",
-            "expiry_date": "2025-01-01",
+            "expiry_date": "2099-01-01",
             "max_visas": 1,
             "branches": [self.branch.id],
         }
@@ -103,7 +103,7 @@ class AdminFullCleanTests(TestCase):
             company=other,
             license_no=self.license.license_no,
             issued_date="2024-01-01",
-            expiry_date="2025-01-01",
+            expiry_date="2099-01-01",
             max_visas=1,
         )
         with self.assertRaises(ValidationError):

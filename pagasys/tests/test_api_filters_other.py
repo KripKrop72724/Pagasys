@@ -25,7 +25,7 @@ class OtherModelFilterTests(ModelFactoryMixin, TestCase):
             company=self.company,
             license_no="L1",
             issued_date="2024-01-01",
-            expiry_date="2025-01-01",
+            expiry_date="2099-01-01",
             max_visas=1,
         )
         self.license1.branches.set([self.branch1])
@@ -33,7 +33,7 @@ class OtherModelFilterTests(ModelFactoryMixin, TestCase):
             company=self.company2,
             license_no="L2",
             issued_date="2024-01-01",
-            expiry_date="2025-01-01",
+            expiry_date="2099-01-01",
             max_visas=2,
         )
         self.license2.branches.set([self.branch2])
