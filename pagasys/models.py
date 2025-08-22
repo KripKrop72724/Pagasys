@@ -6,6 +6,7 @@ from decimal import Decimal
 from django.db import models
 from django.core.exceptions import ValidationError
 from django.contrib.auth.models import AbstractUser
+from django.db.models import F
 from django.db.models.functions import Lower
 
 
@@ -208,6 +209,11 @@ class Project(models.Model):
             models.Index(fields=["branch", "name"], name="project_branch_name_idx"),
             models.Index(fields=["branch", "start_date", "end_date"], name="project_date_range_idx"),
         ]
+
+    def clean(self):
+        super().clean()
+        if self.end_date and self.end_date < self.start_date:
+            raise ValidationError("end_date must be on/after start_date")
 
     def __str__(self) -> str:
         return f"{self.name} - {self.branch.name} - {self.branch.company.name}"
@@ -790,8 +796,40 @@ class RosterEntry(models.Model):
         ]
 
     def clean(self):
+        super().clean()
         if self.override_start and self.override_end and self.override_end <= self.override_start:
             raise ValidationError("override_end must be after override_start")
+
+        # Ensure overrides are within a reasonable range of the scheduled times
+        if self.override_start or self.override_end:
+            shift_start = datetime.combine(date(2000, 1, 1), self.shift.start_time)
+            shift_end = datetime.combine(date(2000, 1, 1), self.shift.end_time)
+            if self.shift.cross_midnight and shift_end <= shift_start:
+                shift_end += timedelta(days=1)
+
+            if self.override_start:
+                os_dt = datetime.combine(date(2000, 1, 1), self.override_start)
+                if not (
+                    shift_start - timedelta(hours=8)
+                    <= os_dt
+                    <= shift_start + timedelta(hours=8)
+                ):
+                    raise ValidationError(
+                        "override_start must be within 8 hours of shift start"
+                    )
+
+            if self.override_end:
+                oe_dt = datetime.combine(date(2000, 1, 1), self.override_end)
+                if self.shift.cross_midnight and oe_dt <= shift_start:
+                    oe_dt += timedelta(days=1)
+                if not (
+                    shift_end - timedelta(hours=8)
+                    <= oe_dt
+                    <= shift_end + timedelta(hours=8)
+                ):
+                    raise ValidationError(
+                        "override_end must be within 8 hours of shift end"
+                    )
 
         if not any(
             [
@@ -860,7 +898,7 @@ class LeaveType(models.Model):
             ),
             models.UniqueConstraint(
                 Lower("code"),
-                "company",
+                F("company"),
                 name="leavetype_company_code_ci_unique",
             ),
         ]

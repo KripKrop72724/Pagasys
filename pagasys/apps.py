@@ -42,3 +42,6 @@ class PagasysConfig(AppConfig):
             return csrf._mask_cipher_secret(secret)
 
         csrf.get_token = get_token
+
+        # Register signal handlers
+        from . import signals  # noqa: F401
