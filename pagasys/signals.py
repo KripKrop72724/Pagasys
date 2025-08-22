@@ -7,8 +7,11 @@ from .models import Branch, TradeLicense
 @receiver(m2m_changed, sender=TradeLicense.branches.through)
 def enforce_license_branch_company(sender, instance: TradeLicense, action, pk_set, **kwargs):
     if action in {"pre_add", "pre_set"} and pk_set:
-        branches = Branch.objects.filter(pk__in=pk_set).only("id", "company_id")
-        bad = [b.id for b in branches if b.company_id != instance.company_id]
+        bad = (
+            Branch.objects.filter(pk__in=pk_set)
+            .exclude(company_id=instance.company_id)
+            .values_list("id", flat=True)
+        )
         if bad:
             from django.core.exceptions import ValidationError
 

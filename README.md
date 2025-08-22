@@ -24,6 +24,10 @@ comprehensive automated test suite.
   and break enforcement levels (`warn`, `flag`, `auto_deduct`, `block`) keep
   scheduling compliant. Time‑window rules accept ranges that may cross
   midnight (e.g. `22:00-04:00`).
+* **Branch & calendar rules** – Branch names are unique per company and trade
+  license branches must always belong to the license's company. Employee shift
+  rules normalise weekday strings and an `effective_calendar_for()` helper
+  resolves the correct work calendar for scheduling.
 * **Company time zone** – Each company records its IANA time zone (default
   `Asia/Dubai`) so shifts and attendance localise correctly.
 * **Leave types** – `paid_pct` uses `Decimal` precision and must be between

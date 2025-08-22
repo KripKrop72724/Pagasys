@@ -61,6 +61,11 @@ class Branch(models.Model):
     class Meta:
         verbose_name_plural = "branches"
         ordering = ["id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["company", "name"], name="uniq_branch_name_per_company"
+            )
+        ]
         indexes = [
             models.Index(fields=["company", "name"], name="branch_company_name_idx")
         ]
@@ -144,12 +149,8 @@ class TradeLicense(models.Model):
         """Validate logical consistency and branch-company rules."""
         if self.expiry_date < self.issued_date:
             raise ValidationError("Expiry date must be after issued date")
-
-        branches = getattr(self, "_branches_for_validation", None)
-        if branches is None:
-            branches = self.branches.all()
-        invalid = [b for b in branches if b.company_id != self.company_id]
-        if invalid:
+        branches = self.branches.all()
+        if any(b.company_id != self.company_id for b in branches):
             raise ValidationError("Branches must belong to the license company")
 
     def __str__(self) -> str:
@@ -356,6 +357,7 @@ class Employee(AbstractUser):
                 fields=["designation", "employment_type"],
                 name="emp_desig_type_idx",
             ),
+            models.Index(fields=["visa_type"], name="employee_visa_type_idx"),
         ]
 
     def clean(self):
@@ -502,6 +504,15 @@ class Holiday(models.Model):
 
     def __str__(self) -> str:
         return f"{self.name} - {self.date}"
+
+
+def effective_calendar_for(employee):
+    """Resolve the effective work calendar for an employee."""
+    return (
+        employee.work_calendar
+        or (employee.branch.work_calendar if employee.branch else None)
+        or employee.company.calendars.filter(is_default=True).first()
+    )
 
 
 def _minutes_between(start, end, cross_midnight):
@@ -780,6 +791,11 @@ class ShiftRule(models.Model):
                 mins = self.params.get("minutes")
                 if not isinstance(mins, int) or mins <= 0:
                     raise ValidationError("minutes must be a positive integer")
+
+    def save(self, *args, **kwargs):
+        if self.weekdays:
+            self.weekdays = normalize_weekdays(self.weekdays)
+        super().save(*args, **kwargs)
 
     def __str__(self) -> str:
         return f"{self.kind} - {self.shift.name}"
