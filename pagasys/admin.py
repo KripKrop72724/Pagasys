@@ -4,6 +4,8 @@ from django.contrib.auth.forms import AdminUserCreationForm, UserChangeForm
 from django.core.exceptions import ValidationError
 from django import forms
 from django.contrib.admin.widgets import FilteredSelectMultiple
+from django.db import transaction
+from datetime import timedelta
 from copy import deepcopy
 
 from .utils import scope_queryset
@@ -441,14 +443,105 @@ class ShiftRuleAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
     search_fields = ["kind", "shift__name"]
 
 
+class RosterEntryRangeForm(forms.ModelForm):
+    """Admin form mirroring the ``schedule-range`` API action.
+
+    Example: to assign a week's shift starting on 2024‑07‑01 and rest on
+    weekends, set ``repeat_days=7`` and pick ``Sat``/``Sun`` in *rest weekdays*.
+    """
+
+    repeat_days = forms.IntegerField(
+        required=False,
+        min_value=1,
+        help_text="Number of consecutive days to create (e.g. 7 for a week)",
+    )
+    repeat_until = forms.DateField(
+        required=False,
+        help_text="Create entries up to and including this date (e.g. 2024-07-31)",
+    )
+    rest_weekdays = forms.MultipleChoiceField(
+        required=False,
+        choices=[
+            ("mon", "Mon"),
+            ("tue", "Tue"),
+            ("wed", "Wed"),
+            ("thu", "Thu"),
+            ("fri", "Fri"),
+            ("sat", "Sat"),
+            ("sun", "Sun"),
+        ],
+        help_text="Weekdays to mark as rest days (e.g. select Sat/Sun for weekends)",
+    )
+
+    class Meta:
+        model = RosterEntry
+        fields = "__all__"
+
+    def clean(self):
+        cleaned = super().clean()
+        if cleaned.get("repeat_days") and cleaned.get("repeat_until"):
+            raise forms.ValidationError("Provide either repeat_days or repeat_until")
+        return cleaned
+
+
 @admin.register(RosterEntry)
 class RosterEntryAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
     """Admin configuration for roster entries."""
-
+    form = RosterEntryRangeForm
     list_display = ["employee", "date", "shift", "is_rest_day"]
     list_filter = ["employee", "shift", "is_rest_day"]
     search_fields = ["employee__username", "shift__name"]
     date_hierarchy = "date"
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        """Ensure employee and shift dropdowns only show in-scope objects."""
+        if db_field.name == "employee":
+            kwargs["queryset"] = scope_queryset(Employee.objects.all(), request.user)
+        elif db_field.name == "shift":
+            kwargs["queryset"] = scope_queryset(ShiftTemplate.objects.all(), request.user)
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
+    def save_model(self, request, obj, form, change):
+        repeat_days = form.cleaned_data.get("repeat_days")
+        repeat_until = form.cleaned_data.get("repeat_until")
+        name_to_idx = {"mon": 0, "tue": 1, "wed": 2, "thu": 3, "fri": 4, "sat": 5, "sun": 6}
+        rest_weekdays = {name_to_idx[w] for w in (form.cleaned_data.get("rest_weekdays") or [])}
+
+        if repeat_days or repeat_until:
+            start = obj.date
+            end = (
+                start + timedelta(days=repeat_days - 1)
+                if repeat_days
+                else repeat_until
+            )
+            entries = []
+            current = start
+            while current <= end:
+                entry = RosterEntry(
+                    employee=obj.employee,
+                    date=current,
+                    shift=obj.shift,
+                    override_start=obj.override_start,
+                    override_end=obj.override_end,
+                    is_rest_day=current.weekday() in rest_weekdays,
+                )
+                entry.full_clean()
+                entries.append(entry)
+                current += timedelta(days=1)
+            with transaction.atomic():
+                RosterEntry.objects.bulk_create(
+                    entries,
+                    update_conflicts=True,
+                    update_fields=[
+                        "shift",
+                        "override_start",
+                        "override_end",
+                        "is_rest_day",
+                    ],
+                    unique_fields=["employee", "date"],
+                )
+        else:
+            super().save_model(request, obj, form, change)
 
 
 @admin.register(LeaveType)

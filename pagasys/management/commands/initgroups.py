@@ -3,13 +3,22 @@ from django.contrib.auth.models import Group, Permission
 from django.contrib.contenttypes.models import ContentType
 from django.apps import apps
 
+from pagasys.policy.permissions import (
+    COMPANY_ADMIN,
+    BRANCH_MANAGER,
+    PAYROLL_MANAGER,
+    DEPT_MANAGER,
+    PROJECT_MANAGER,
+    EMPLOYEE_ROLE,
+)
+
 
 class Command(BaseCommand):
     help = "Create default role groups with model permissions"
 
     # Mapping of role to (models, perms)
     ROLE_CONFIG = {
-        "Company Admin": {
+        COMPANY_ADMIN: {
             "models": [
                 "Branch",
                 "Designation",
@@ -26,11 +35,11 @@ class Command(BaseCommand):
             ],
             "perms": ["add", "change", "view"],
         },
-        "Branch Manager": {
+        BRANCH_MANAGER: {
             "models": ["Department", "Project", "Employee", "RosterEntry"],
             "perms": ["add", "change", "view"],
         },
-        "Payroll Manager": {
+        PAYROLL_MANAGER: {
             "models": [
                 "Employee",
                 "Payslip",
@@ -43,15 +52,15 @@ class Command(BaseCommand):
             ],
             "perms": ["add", "change", "view"],
         },
-        "Department Manager": {
+        DEPT_MANAGER: {
             "models": ["Employee"],
             "perms": ["change", "view"],
         },
-        "Project Manager": {
+        PROJECT_MANAGER: {
             "models": ["Employee"],
             "perms": ["change", "view"],
         },
-        "Employee": {
+        EMPLOYEE_ROLE: {
             "models": ["Employee", "Payslip"],
             "perms": ["view"],
         },

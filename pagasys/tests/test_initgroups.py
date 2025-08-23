@@ -3,6 +3,15 @@ from django.contrib.auth.models import Group, Permission
 from django.contrib.contenttypes.models import ContentType
 from django.test import TestCase
 
+from pagasys.policy.permissions import (
+    COMPANY_ADMIN,
+    BRANCH_MANAGER,
+    PAYROLL_MANAGER,
+    DEPT_MANAGER,
+    PROJECT_MANAGER,
+    EMPLOYEE_ROLE,
+)
+
 
 class InitGroupsCommandTests(TestCase):
     def setUp(self):
@@ -18,7 +27,7 @@ class InitGroupsCommandTests(TestCase):
         self._run_command()
 
         expected = {
-            "Company Admin": {
+            COMPANY_ADMIN: {
                 "perms": {"add", "change", "view"},
                 "models": [
                     "branch",
@@ -35,11 +44,11 @@ class InitGroupsCommandTests(TestCase):
                     "leavetype",
                 ],
             },
-            "Branch Manager": {
+            BRANCH_MANAGER: {
                 "perms": {"add", "change", "view"},
                 "models": ["department", "project", "employee", "rosterentry"],
             },
-            "Payroll Manager": {
+            PAYROLL_MANAGER: {
                 "perms": {"add", "change", "view"},
                 "models": [
                     "employee",
@@ -52,15 +61,15 @@ class InitGroupsCommandTests(TestCase):
                     "leavetype",
                 ],
             },
-            "Department Manager": {
+            DEPT_MANAGER: {
                 "perms": {"change", "view"},
                 "models": ["employee"],
             },
-            "Project Manager": {
+            PROJECT_MANAGER: {
                 "perms": {"change", "view"},
                 "models": ["employee"],
             },
-            "Employee": {
+            EMPLOYEE_ROLE: {
                 "perms": {"view"},
                 "models": ["employee", "payslip"],
             },

@@ -1,4 +1,4 @@
-from django.urls import path
+from django.urls import path, include
 from rest_framework import routers
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
@@ -18,6 +18,7 @@ from .views import (
     LeaveTypeViewSet,
     ProfileView,
 )
+from .policy import urls as policy_urls
 
 router = routers.DefaultRouter()
 router.register(r'companies', CompanyViewSet)
@@ -36,6 +37,7 @@ router.register(r'leave-types', LeaveTypeViewSet)
 
 urlpatterns = [
     *router.urls,
+    *policy_urls.urlpatterns,
     path('me/', ProfileView.as_view(), name='profile'),
     path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
