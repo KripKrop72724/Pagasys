@@ -44,13 +44,15 @@ class CompanyScopedQuerysetMixin:
             return qs.none()
         model = qs.model
 
+        from pagasys.models import Holiday, ShiftRule, RosterEntry
+
         if hasattr(model, "company_id"):
             return qs.filter(company=company)
-        if model.__name__ == "Holiday":
+        if model is Holiday:
             return qs.filter(calendar__company=company)
-        if model.__name__ == "ShiftRule":
+        if model is ShiftRule:
             return qs.filter(shift__company=company)
-        if model.__name__ == "RosterEntry":
+        if model is RosterEntry:
             return qs.filter(
                 models.Q(employee__trade_license__company=company)
                 | models.Q(employee__department__branch__company=company)
