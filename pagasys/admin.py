@@ -462,13 +462,13 @@ class RosterEntryRangeForm(forms.ModelForm):
     rest_weekdays = forms.MultipleChoiceField(
         required=False,
         choices=[
-            (0, "Mon"),
-            (1, "Tue"),
-            (2, "Wed"),
-            (3, "Thu"),
-            (4, "Fri"),
-            (5, "Sat"),
-            (6, "Sun"),
+            ("mon", "Mon"),
+            ("tue", "Tue"),
+            ("wed", "Wed"),
+            ("thu", "Thu"),
+            ("fri", "Fri"),
+            ("sat", "Sat"),
+            ("sun", "Sun"),
         ],
         help_text="Weekdays to mark as rest days (e.g. select Sat/Sun for weekends)",
     )
@@ -493,10 +493,19 @@ class RosterEntryAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
     search_fields = ["employee__username", "shift__name"]
     date_hierarchy = "date"
 
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        """Ensure employee and shift dropdowns only show in-scope objects."""
+        if db_field.name == "employee":
+            kwargs["queryset"] = scope_queryset(Employee.objects.all(), request.user)
+        elif db_field.name == "shift":
+            kwargs["queryset"] = scope_queryset(ShiftTemplate.objects.all(), request.user)
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
     def save_model(self, request, obj, form, change):
         repeat_days = form.cleaned_data.get("repeat_days")
         repeat_until = form.cleaned_data.get("repeat_until")
-        rest_weekdays = {int(w) for w in (form.cleaned_data.get("rest_weekdays") or [])}
+        name_to_idx = {"mon": 0, "tue": 1, "wed": 2, "thu": 3, "fri": 4, "sat": 5, "sun": 6}
+        rest_weekdays = {name_to_idx[w] for w in (form.cleaned_data.get("rest_weekdays") or [])}
 
         if repeat_days or repeat_until:
             start = obj.date

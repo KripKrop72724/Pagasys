@@ -104,10 +104,16 @@ class AdminDropdownScopeTests(TestCase):
     def test_roster_entry_add_form_scopes_fields(self):
         url = reverse("admin:pagasys_rosterentry_add")
         res = self.client.get(url)
-        self.assertContains(res, f'value="{self.emp_c1.pk}"')
-        self.assertNotContains(res, f'value="{self.emp_c2.pk}"')
-        self.assertContains(res, f'value="{self.shift1.pk}"')
-        self.assertNotContains(res, f'value="{self.shift2.pk}"')
+        html = res.content.decode()
+        import re
+
+        emp_block = re.search(r'<select[^>]*id="id_employee"[^>]*>(.*?)</select>', html, re.S).group(1)
+        self.assertIn(f'value="{self.emp_c1.pk}"', emp_block)
+        self.assertNotIn(f'value="{self.emp_c2.pk}"', emp_block)
+
+        shift_block = re.search(r'<select[^>]*id="id_shift"[^>]*>(.*?)</select>', html, re.S).group(1)
+        self.assertIn(f'value="{self.shift1.pk}"', shift_block)
+        self.assertNotIn(f'value="{self.shift2.pk}"', shift_block)
 
     def test_holiday_add_form_scopes_calendar(self):
         self.client.force_login(self.company_admin)
