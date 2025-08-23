@@ -58,7 +58,8 @@ class RosterEntryAdminRangeTests(ModelFactoryMixin, TestCase):
             "date": "2024-07-01",
             "shift": self.shift.id,
             "repeat_days": 7,
-            "rest_weekdays": ["5", "6"],
+            # Roster admin expects weekday names (e.g. "sat", "sun")
+            "rest_weekdays": ["sat", "sun"],
         }
         res = self.client.post(add_url, data)
         self.assertEqual(res.status_code, 302)
