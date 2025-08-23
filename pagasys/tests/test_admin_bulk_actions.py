@@ -88,7 +88,7 @@ class AdminBulkDeleteTests(ModelFactoryMixin, TestCase):
     def test_tradelicense_bulk_delete(self):
         objs = [
             self.create_license(
-                company=self.company, branches=[self.branch], license_no=f"LIC{i+1}", max_visas=5
+                company=self.company, branches=[self.branch], license_no=f"LIC{i + 1}", max_visas=5
             )
             for i in range(2)
         ]
@@ -130,7 +130,7 @@ class AdminBulkDeleteTests(ModelFactoryMixin, TestCase):
     def test_holiday_bulk_delete(self):
         cal = WorkCalendar.objects.create(company=self.company, name="HC")
         objs = [
-            Holiday.objects.create(calendar=cal, date=f"2024-01-0{i+1}", name=f"H{i}")
+            Holiday.objects.create(calendar=cal, date=f"2024-01-0{i + 1}", name=f"H{i}")
             for i in range(2)
         ]
         self._assert_has_delete_action(Holiday)
@@ -153,7 +153,7 @@ class AdminBulkDeleteTests(ModelFactoryMixin, TestCase):
     def test_rosterentry_bulk_delete(self):
         emp = self._create_employee("rdel")
         objs = [
-            RosterEntry.objects.create(employee=emp, date=f"2024-07-0{i+1}", shift=self.shift)
+            RosterEntry.objects.create(employee=emp, date=f"2024-07-0{i + 1}", shift=self.shift)
             for i in range(2)
         ]
         self._assert_has_delete_action(RosterEntry)
