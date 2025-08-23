@@ -41,9 +41,9 @@ class ShiftTemplateSerializer(CleanModelMixin, serializers.ModelSerializer):
     class Meta:
         model = ShiftTemplate
         fields = [
-            "id","company","name","start_time","end_time","cross_midnight",
-            "break_minutes","grace_in_min","grace_out_min","late_after_min",
-            "early_leave_before_min","rounding_min","requires_face"
+            "id", "company", "name", "start_time", "end_time", "cross_midnight",
+            "break_minutes", "grace_in_min", "grace_out_min", "late_after_min",
+            "early_leave_before_min", "rounding_min", "requires_face",
         ]
         read_only_fields = ["company"]
 
@@ -84,7 +84,9 @@ class ShiftRuleSerializer(CleanModelMixin, serializers.ModelSerializer):
 
     class Meta:
         model = ShiftRule
-        fields = ["id","shift","kind","value","params","active_from","active_to","weekdays"]
+        fields = [
+            "id", "shift", "kind", "value", "params", "active_from", "active_to", "weekdays",
+        ]
 
     def validate(self, attrs):
         wd = attrs.get("weekdays")
@@ -100,15 +102,17 @@ class RosterEntrySerializer(CleanModelMixin, serializers.ModelSerializer):
     class Meta:
         model = RosterEntry
         fields = [
-            "id","employee","date","shift",
-            "override_start","override_end","is_rest_day",
-            "employee_name","shift_name"
+            "id", "employee", "date", "shift",
+            "override_start", "override_end", "is_rest_day",
+            "employee_name", "shift_name",
         ]
 
 class LeaveTypeSerializer(CleanModelMixin, serializers.ModelSerializer):
     class Meta:
         model = LeaveType
-        fields = ["id","company","code","name","paid_pct","requires_doc","max_days_per_year","params"]
+        fields = [
+            "id", "company", "code", "name", "paid_pct", "requires_doc", "max_days_per_year", "params",
+        ]
         read_only_fields = ["company"]
 
 

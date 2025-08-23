@@ -1,6 +1,16 @@
 from rest_framework.test import APIClient
 from django.test import TestCase
-from pagasys.models import Company, WorkCalendar, Holiday, ShiftTemplate, ShiftRule, RosterEntry, Employee, Department, Branch
+from pagasys.models import (
+    Company,
+    WorkCalendar,
+    Holiday,
+    ShiftTemplate,
+    ShiftRule,
+    RosterEntry,
+    Employee,
+    Department,
+    Branch,
+)
 
 class PolicyApiTests(TestCase):
     def setUp(self):
