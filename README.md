@@ -119,6 +119,50 @@ All resources expose standard RESTful endpoints using DRF viewsets:
 | `/api/roster-entries/` | Employee shift assignments            |
 | `/api/leave-types/` | Leave type configurations                |
 
+### Policy layer
+
+Endpoints under `/api/companies/<company_id>/` expose a
+fully‑scoped attendance policy API. Each resource supports pagination,
+ordering and the filters shown below:
+
+| Resource | Path | Filters |
+| --- | --- | --- |
+| Work calendars | `work-calendars/` | `name`, `is_default` |
+| Holidays | `holidays/` | `calendar`, `is_public`, `name`, `date_from`, `date_to` |
+| Shift templates | `shift-templates/` | `name`, `cross_midnight`, `requires_face`, `rounding_min` |
+| Shift rules | `shift-rules/` | `shift`, `kind`, `active_on`, `weekday` |
+| Roster entries | `roster/` | `employee`, `shift`, `is_rest_day`, `date_from`, `date_to`, `branch` |
+| Leave types | `leave-types/` | `code`, `requires_doc`, `paid_pct_min`, `paid_pct_max` |
+
+Boolean flags appear throughout the policy models:
+
+* `is_default` – work calendar marked as the company default
+* `is_public` – holiday is observed publicly
+* `cross_midnight` – shift template spans into the next day
+* `requires_face` – employees must face‑match when clocking in
+* `params.paid` – a shift rule break counts as paid time
+* `is_rest_day` – roster entry is a scheduled rest day
+* `requires_doc` – leave type needs supporting documents
+
+All boolean query parameters accept `true` or `false`. Filters are chainable,
+allowing queries like:
+
+```http
+GET /api/companies/1/holidays?is_public=true&date_from=2024-01-01&date_to=2024-12-31
+GET /api/companies/1/shift-templates?cross_midnight=true
+```
+
+Custom actions provide additional functionality:
+
+* `GET work-calendars/{id}/holidays` – list holidays for a calendar
+* `POST work-calendars/{id}/holidays/import` – bulk import holiday definitions
+* `GET shift-templates/{id}/rules` – shortcut for rules on a template
+* `GET shift-templates/{id}/preview` – compute duration and rounding info
+* `POST shift-rules/validate` – dry‑run rule validation (uses `params.paid`)
+* `POST roster/bulk-upsert` – atomic upsert of roster entries
+* `POST roster/schedule-range` – assign a shift over a date range with optional rest weekdays
+* `GET roster/summary` – aggregate by employee, shift or date
+
 Each list endpoint accepts filters for all model fields and an `ordering` query
 parameter. Additional paths include:
 
@@ -129,13 +173,59 @@ parameter. Additional paths include:
 * `/api/docs/` – interactive Swagger UI
 * `/healthz` – liveness endpoint returning `ok`
 
+### Roster schedule-range
+
+`POST /api/companies/{company_id}/roster/schedule-range/` creates or updates
+consecutive roster entries starting at `start_date`. Supply either `days` (count
+of days) or `until` (inclusive end date). Optional `rest_weekdays` accepts
+three-letter weekday codes to mark as rest days.
+
+Example by number of days:
+
+```http
+POST /api/companies/1/roster/schedule-range/
+{
+  "employee": 1,
+  "shift": 3,
+  "start_date": "2024-07-01",
+  "days": 7,
+  "rest_weekdays": ["SAT", "SUN"]
+}
+```
+
+Example until a date:
+
+```http
+POST /api/companies/1/roster/schedule-range/
+{
+  "employee": 1,
+  "shift": 3,
+  "start_date": "2024-07-01",
+  "until": "2024-07-31"
+}
+```
+
+Response:
+
+```json
+{"count": 31}
+```
+
+The `count` equals the number of roster entries created or updated.
+
 ## Admin Interface
 
 The admin site uses [Grappelli](https://django-grappelli.readthedocs.io/) for an
 improved UI. Querysets and foreign key widgets are restricted so users only see
 objects within their role's scope. Trade license and employee forms include
 client‑side validation via the JavaScript files in
-`pagasys/static/pagasys/js/`.
+`pagasys/static/pagasys/js/`. Roster entries can be repeated across multiple
+days or until a target date directly from the admin by filling the *repeat* and
+*rest weekdays* fields, which automatically mark weekend days as rest days.
+For example, to schedule a week's worth of shifts starting 2024‑07‑01 and skip
+weekends, set **Repeat days** to `7` and select **Sat** and **Sun** in *Rest
+weekdays*. The admin will create entries for the range and flag those days as
+rest, mirroring the behaviour of the `schedule-range` API.
 
 ## Attendance Policy Layer
 
