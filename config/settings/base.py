@@ -39,7 +39,7 @@ DEBUG = env("DEBUG", default=True)
 
 # Allow localhost by default and permit Elastic Beanstalk domains in production
 ALLOWED_HOSTS = env.list(
-    "ALLOWED_HOSTS", default=["localhost", ".elasticbeanstalk.com", "127.0.0.1"]
+    "ALLOWED_HOSTS", default=["localhost", ".elasticbeanstalk.com", "127.0.0.1", "0.0.0.0"]
 )
 
 CORS_ALLOW_ALL_ORIGINS = True
