@@ -492,6 +492,63 @@ class RosterEntryAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
     list_filter = ["employee", "shift", "is_rest_day"]
     search_fields = ["employee__username", "shift__name"]
     date_hierarchy = "date"
+    change_list_template = "admin/pagasys/rosterentry/change_list.html"
+
+    def get_urls(self):
+        from django.urls import path
+
+        urls = super().get_urls()
+        custom = [
+            path(
+                "overview/",
+                self.admin_site.admin_view(self.overview),
+                name="pagasys_rosterentry_overview",
+            ),
+        ]
+        return custom + urls
+
+    def overview(self, request):
+        from datetime import date
+        from django.template.response import TemplateResponse
+
+        try:
+            start = date.fromisoformat(request.GET.get("start"))
+        except Exception:
+            start = date.today()
+        try:
+            days = int(request.GET.get("days", 7))
+        except Exception:
+            days = 7
+        if days < 1:
+            days = 7
+        days = min(31, days)
+
+        end = start + timedelta(days=days - 1)
+        qs = (
+            RosterEntry.objects.filter(date__range=(start, end))
+            .select_related("employee", "shift")
+            .order_by("employee__username")
+        )
+        date_list = [start + timedelta(days=i) for i in range(days)]
+        grouped = {}
+        for entry in qs:
+            grouped.setdefault(entry.employee, {})[entry.date] = entry
+        rows = [
+            (emp, [day_map.get(d) for d in date_list])
+            for emp, day_map in grouped.items()
+        ]
+        context = dict(
+            self.admin_site.each_context(request),
+            title="Roster overview",
+            rows=rows,
+            date_list=date_list,
+            opts=self.model._meta,
+            start=start,
+            days=days,
+        )
+        return TemplateResponse(
+            request, "admin/pagasys/rosterentry/overview.html", context
+        )
 
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
         """Ensure employee and shift dropdowns only show in-scope objects."""
@@ -525,7 +582,7 @@ class RosterEntryAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
                     override_end=obj.override_end,
                     is_rest_day=current.weekday() in rest_weekdays,
                 )
-                entry.full_clean()
+                entry.full_clean(validate_unique=False)
                 entries.append(entry)
                 current += timedelta(days=1)
             with transaction.atomic():
@@ -541,6 +598,8 @@ class RosterEntryAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
                     unique_fields=["employee", "date"],
                 )
         else:
+            if obj.date.weekday() in rest_weekdays:
+                obj.is_rest_day = True
             super().save_model(request, obj, form, change)
 
 

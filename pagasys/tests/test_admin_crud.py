@@ -12,6 +12,12 @@ from pagasys.models import (
     Department,
     Project,
     Employee,
+    WorkCalendar,
+    Holiday,
+    ShiftTemplate,
+    ShiftRule,
+    RosterEntry,
+    LeaveType,
 )
 
 from .test_models import ModelFactoryMixin
@@ -42,6 +48,8 @@ class AdminCRUDTests(ModelFactoryMixin, TestCase):
             visa_type="company",
         )
         self.client.force_login(self.superuser)
+        # Ensure requests simulate the deployment host
+        self.client.defaults["HTTP_HOST"] = "0.0.0.0"
 
     def _assert_deleted(self, model, obj_id):
         self.assertFalse(model.objects.filter(id=obj_id).exists())
@@ -192,6 +200,142 @@ class AdminCRUDTests(ModelFactoryMixin, TestCase):
         res = self.client.post(delete_url, {"post": "yes"})
         self.assertEqual(res.status_code, 302)
         self._assert_deleted(Employee, emp.id)
+
+    def test_workcalendar_crud(self):
+        add_url = reverse("admin:pagasys_workcalendar_add")
+        res = self.client.post(add_url, {"company": self.company.id, "name": "Cal1"})
+        self.assertEqual(res.status_code, 302)
+        cal = WorkCalendar.objects.get(name="Cal1")
+
+        change_url = reverse("admin:pagasys_workcalendar_change", args=[cal.id])
+        res = self.client.post(change_url, {"company": self.company.id, "name": "Cal2"})
+        self.assertEqual(res.status_code, 302)
+        cal.refresh_from_db()
+        self.assertEqual(cal.name, "Cal2")
+
+        delete_url = reverse("admin:pagasys_workcalendar_delete", args=[cal.id])
+        res = self.client.post(delete_url, {"post": "yes"})
+        self.assertEqual(res.status_code, 302)
+        self._assert_deleted(WorkCalendar, cal.id)
+
+    def test_holiday_crud(self):
+        cal = WorkCalendar.objects.create(company=self.company, name="HC")
+        add_url = reverse("admin:pagasys_holiday_add")
+        data = {"calendar": cal.id, "date": "2024-01-01", "name": "H1", "is_public": True}
+        res = self.client.post(add_url, data)
+        self.assertEqual(res.status_code, 302)
+        hol = Holiday.objects.get(name="H1")
+
+        change_url = reverse("admin:pagasys_holiday_change", args=[hol.id])
+        data["name"] = "H2"
+        res = self.client.post(change_url, data)
+        self.assertEqual(res.status_code, 302)
+        hol.refresh_from_db()
+        self.assertEqual(hol.name, "H2")
+
+        delete_url = reverse("admin:pagasys_holiday_delete", args=[hol.id])
+        res = self.client.post(delete_url, {"post": "yes"})
+        self.assertEqual(res.status_code, 302)
+        self._assert_deleted(Holiday, hol.id)
+
+    def test_shifttemplate_crud(self):
+        add_url = reverse("admin:pagasys_shifttemplate_add")
+        data = {
+            "company": self.company.id,
+            "name": "S1",
+            "start_time": "09:00",
+            "end_time": "17:00",
+            "break_minutes": 0,
+            "grace_in_min": 0,
+            "grace_out_min": 0,
+            "late_after_min": 0,
+            "early_leave_before_min": 0,
+            "rounding_min": 0,
+        }
+        res = self.client.post(add_url, data)
+        self.assertEqual(res.status_code, 302)
+        st = ShiftTemplate.objects.get(name="S1")
+
+        change_url = reverse("admin:pagasys_shifttemplate_change", args=[st.id])
+        data_change = data | {"name": "S2"}
+        res = self.client.post(change_url, data_change)
+        self.assertEqual(res.status_code, 302)
+        st.refresh_from_db()
+        self.assertEqual(st.name, "S2")
+
+        delete_url = reverse("admin:pagasys_shifttemplate_delete", args=[st.id])
+        res = self.client.post(delete_url, {"post": "yes"})
+        self.assertEqual(res.status_code, 302)
+        self._assert_deleted(ShiftTemplate, st.id)
+
+    def test_shiftrule_crud(self):
+        shift = self.create_shift_template(self.company, name="SR")
+        add_url = reverse("admin:pagasys_shiftrule_add")
+        data = {"shift": shift.id, "kind": ShiftRule.Kind.GEOFENCE_REQUIRED, "value": "10"}
+        res = self.client.post(add_url, data)
+        self.assertEqual(res.status_code, 302)
+        rule = ShiftRule.objects.get(shift=shift, kind=ShiftRule.Kind.GEOFENCE_REQUIRED)
+
+        change_url = reverse("admin:pagasys_shiftrule_change", args=[rule.id])
+        data["value"] = "20"
+        res = self.client.post(change_url, data)
+        self.assertEqual(res.status_code, 302)
+        rule.refresh_from_db()
+        self.assertEqual(rule.value, "20")
+
+        delete_url = reverse("admin:pagasys_shiftrule_delete", args=[rule.id])
+        res = self.client.post(delete_url, {"post": "yes"})
+        self.assertEqual(res.status_code, 302)
+        self._assert_deleted(ShiftRule, rule.id)
+
+    def test_rosterentry_crud(self):
+        emp = get_user_model().objects.create_user(
+            username="r1",
+            password="pass",
+            trade_license=self.license,
+            department=self.department,
+            hire_date="2024-01-01",
+            employment_type="permanent",
+            visa_type="company",
+        )
+        shift = self.create_shift_template(self.company, name="RST")
+        add_url = reverse("admin:pagasys_rosterentry_add")
+        data = {"employee": emp.id, "date": "2024-07-01", "shift": shift.id}
+        res = self.client.post(add_url, data)
+        self.assertEqual(res.status_code, 302)
+        entry = RosterEntry.objects.get(employee=emp, date="2024-07-01")
+
+        change_url = reverse("admin:pagasys_rosterentry_change", args=[entry.id])
+        data["date"] = "2024-07-02"
+        res = self.client.post(change_url, data)
+        self.assertEqual(res.status_code, 302)
+        entry.refresh_from_db()
+        self.assertEqual(str(entry.date), "2024-07-02")
+
+        delete_url = reverse("admin:pagasys_rosterentry_delete", args=[entry.id])
+        res = self.client.post(delete_url, {"post": "yes"})
+        self.assertEqual(res.status_code, 302)
+        self._assert_deleted(RosterEntry, entry.id)
+
+    def test_leavetype_crud(self):
+        add_url = reverse("admin:pagasys_leavetype_add")
+        data = {"company": self.company.id, "code": "AL", "name": "Annual", "paid_pct": 100}
+        res = self.client.post(add_url, data)
+        self.assertEqual(res.status_code, 302)
+        lt = LeaveType.objects.get(code="AL")
+
+        change_url = reverse("admin:pagasys_leavetype_change", args=[lt.id])
+        data["name"] = "Annual Leave"
+        data["paid_pct"] = 50
+        res = self.client.post(change_url, data)
+        self.assertEqual(res.status_code, 302)
+        lt.refresh_from_db()
+        self.assertEqual(lt.name, "Annual Leave")
+
+        delete_url = reverse("admin:pagasys_leavetype_delete", args=[lt.id])
+        res = self.client.post(delete_url, {"post": "yes"})
+        self.assertEqual(res.status_code, 302)
+        self._assert_deleted(LeaveType, lt.id)
 
 
 class FieldValidationEdgeCaseTests(ModelFactoryMixin, TestCase):
