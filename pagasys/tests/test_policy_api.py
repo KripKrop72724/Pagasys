@@ -113,6 +113,22 @@ class PolicyApiTests(TestCase):
         assert len(resp.data["results"]) == 1
         assert resp.data["results"][0]["name"] == "Feb"
 
+    def test_holiday_cannot_use_other_company_calendar(self):
+        other = Company.objects.create(name="C2")
+        other_cal = WorkCalendar.objects.create(company=other, name="OtherCal")
+        payload = {
+            "calendar": other_cal.id,
+            "date": "2024-03-01",
+            "name": "Bad",
+        }
+        resp = self.client.post(
+            f"/api/companies/{self.company.id}/holidays/",
+            payload,
+            format="json",
+        )
+        assert resp.status_code == 400
+        assert "calendar" in resp.data["errors"]
+
     def test_shift_rule_validate_normalizes_weekdays(self):
         st = ShiftTemplate.objects.create(
             company=self.company,
@@ -129,6 +145,24 @@ class PolicyApiTests(TestCase):
         )
         assert resp.status_code == 200
         assert resp.data["normalized"]["weekdays"] == "MON,TUE"
+
+    def test_shift_rule_cannot_use_other_company_shift(self):
+        other = Company.objects.create(name="C2")
+        st_other = ShiftTemplate.objects.create(
+            company=other, name="Other", start_time="09:00", end_time="17:00"
+        )
+        payload = {
+            "shift": st_other.id,
+            "kind": "max_daily_hours",
+            "value": "8",
+        }
+        resp = self.client.post(
+            f"/api/companies/{self.company.id}/shift-rules/",
+            payload,
+            format="json",
+        )
+        assert resp.status_code == 400
+        assert "shift" in resp.data["errors"]
 
     def test_roster_bulk_upsert_and_summary(self):
         st = ShiftTemplate.objects.create(

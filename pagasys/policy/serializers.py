@@ -35,6 +35,14 @@ class WorkCalendarSerializer(CleanModelMixin, serializers.ModelSerializer):
         ref_name = "PolicyWorkCalendar"
 
 class HolidaySerializer(CleanModelMixin, serializers.ModelSerializer):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        req = self.context.get("request")
+        if req:
+            self.fields["calendar"].queryset = scope_queryset(
+                WorkCalendar.objects.all(), req.user
+            )
+
     class Meta:
         model = Holiday
         fields = ["id", "calendar", "date", "name", "is_public"]
@@ -52,6 +60,14 @@ class ShiftTemplateSerializer(CleanModelMixin, serializers.ModelSerializer):
         ref_name = "PolicyShiftTemplate"
 
 class ShiftRuleSerializer(CleanModelMixin, serializers.ModelSerializer):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        req = self.context.get("request")
+        if req:
+            self.fields["shift"].queryset = scope_queryset(
+                ShiftTemplate.objects.all(), req.user
+            )
+
     params = extend_schema_field(
         {
             "type": "object",
