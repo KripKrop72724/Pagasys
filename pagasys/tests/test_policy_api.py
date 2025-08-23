@@ -512,3 +512,87 @@ class PolicyApiTests(TestCase):
         )
         assert RosterEntry.objects.filter(employee=self.user).count() == 2
         assert RosterEntry.objects.filter(shift=st2).count() == 2
+
+    def test_shift_template_filters_search_ordering(self):
+        ShiftTemplate.objects.create(
+            company=self.company,
+            name="Morning",
+            start_time="09:00",
+            end_time="17:00",
+            rounding_min=0,
+            cross_midnight=False,
+            requires_face=False,
+        )
+        ShiftTemplate.objects.create(
+            company=self.company,
+            name="Night",
+            start_time="21:00",
+            end_time="05:00",
+            cross_midnight=True,
+            requires_face=False,
+            rounding_min=15,
+        )
+        ShiftTemplate.objects.create(
+            company=self.company,
+            name="Night Face",
+            start_time="21:00",
+            end_time="05:00",
+            cross_midnight=True,
+            requires_face=True,
+            rounding_min=15,
+        )
+        url = (
+            f"/api/companies/{self.company.id}/shift-templates/?cross_midnight=true"
+            "&requires_face=true&rounding_min=15&search=Night&ordering=-name"
+        )
+        resp = self.client.get(url)
+        assert resp.status_code == 200
+        names = [item["name"] for item in resp.data["results"]]
+        assert names == ["Night Face"]
+        url = (
+            f"/api/companies/{self.company.id}/shift-templates/?cross_midnight=true"
+            "&search=Night&ordering=-name"
+        )
+        resp = self.client.get(url)
+        assert [item["name"] for item in resp.data["results"]] == ["Night Face", "Night"]
+
+    def test_shift_rule_filters_and_ordering(self):
+        st = ShiftTemplate.objects.create(
+            company=self.company,
+            name="Shift",
+            start_time="09:00",
+            end_time="17:00",
+        )
+        r1 = ShiftRule.objects.create(
+            shift=st,
+            kind="k1",
+            value="1",
+            active_from="2024-01-01",
+            active_to="2024-01-31",
+            weekdays="MON",
+        )
+        r2 = ShiftRule.objects.create(
+            shift=st,
+            kind="k1",
+            value="2",
+            active_from="2024-02-01",
+            active_to="2024-02-28",
+            weekdays="TUE",
+        )
+        r3 = ShiftRule.objects.create(shift=st, kind="k2", value="3")
+        resp = self.client.get(
+            f"/api/companies/{self.company.id}/shift-rules/?shift={st.id}&kind=k1&ordering=-active_from"
+        )
+        assert [item["id"] for item in resp.data["results"]] == [r2.id, r1.id]
+        resp = self.client.get(
+            f"/api/companies/{self.company.id}/shift-rules/?active_on=2024-02-15&kind=k1"
+        )
+        assert [item["id"] for item in resp.data["results"]] == [r2.id]
+        resp = self.client.get(
+            f"/api/companies/{self.company.id}/shift-rules/?weekday=TUE"
+        )
+        assert [item["id"] for item in resp.data["results"]] == [r2.id, r3.id]
+        resp = self.client.get(
+            f"/api/companies/{self.company.id}/shift-rules/?weekday=FUNDAY"
+        )
+        assert resp.data["results"] == []
