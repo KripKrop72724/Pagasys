@@ -1,5 +1,11 @@
 from typing import List
-from drf_spectacular.utils import extend_schema_view, extend_schema, OpenApiParameter
+import django_filters as df
+from drf_spectacular.utils import (
+    extend_schema_view,
+    extend_schema,
+    OpenApiParameter,
+    OpenApiExample,
+)
 from drf_spectacular.types import OpenApiTypes
 
 
@@ -31,14 +37,22 @@ def _get_filter_fields(viewset) -> List[str]:
 
 
 def _generate_parameters(viewset) -> List[OpenApiParameter]:
-    params = []
+    """Build OpenAPI parameters including examples for booleans."""
+    params: List[OpenApiParameter] = []
+    filters = {}
+    if getattr(viewset, "filterset_class", None):
+        filters = viewset.filterset_class().filters
     for name in _get_filter_fields(viewset):
+        filt = filters.get(name)
+        is_bool = isinstance(filt, df.BooleanFilter)
+        example = "true" if is_bool else "<value>"
         params.append(
             OpenApiParameter(
                 name,
-                OpenApiTypes.STR,
+                OpenApiTypes.BOOL if is_bool else OpenApiTypes.STR,
                 OpenApiParameter.QUERY,
                 description=f"Filter by {name}. Combine multiple parameters for compound filtering.",
+                examples=[OpenApiExample("Example", value=example)],
             )
         )
     params.append(
@@ -54,10 +68,19 @@ def _generate_parameters(viewset) -> List[OpenApiParameter]:
 
 def _build_example_query(viewset) -> str:
     """Return a generic example query string for compounding filters."""
-    fields = _get_filter_fields(viewset)
+    filters = {}
+    if getattr(viewset, "filterset_class", None):
+        filters = viewset.filterset_class().filters
+        fields = list(filters.keys())
+    else:
+        fields = _get_filter_fields(viewset)
     if not fields:
         return ""
-    parts = [f"{name}=<value>" for name in fields[:2]]
+    parts = []
+    for name in fields[:2]:
+        filt = filters.get(name)
+        val = "true" if isinstance(filt, df.BooleanFilter) else "<value>"
+        parts.append(f"{name}={val}")
     return "?" + "&".join(parts)
 
 

@@ -149,7 +149,10 @@ allowing queries like:
 
 ```http
 GET /api/companies/1/holidays?is_public=true&date_from=2024-01-01&date_to=2024-12-31
+GET /api/companies/1/shift-templates?requires_face=true
 GET /api/companies/1/shift-templates?cross_midnight=true
+GET /api/companies/1/roster?is_rest_day=true&date_from=2024-07-01&date_to=2024-07-31
+GET /api/companies/1/leave-types?requires_doc=true
 ```
 
 Custom actions provide additional functionality:
