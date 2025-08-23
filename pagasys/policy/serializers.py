@@ -9,6 +9,7 @@ from pagasys.models import (
     LeaveType,
     Employee,
 )
+from pagasys.utils import scope_queryset
 
 class CleanModelMixin:
     """Call model.full_clean() before saving to enforce model rules."""
@@ -99,7 +100,17 @@ class ShiftRuleSerializer(CleanModelMixin, serializers.ModelSerializer):
             attrs["weekdays"] = normalize_weekdays(wd)
         return super().validate(attrs)
 
+
 class RosterEntrySerializer(CleanModelMixin, serializers.ModelSerializer):
+    def validate(self, attrs):
+        request = self.context.get("request")
+        if request:
+            allowed_emps = set(scope_queryset(Employee.objects.all(), request.user).values_list("id", flat=True))
+            allowed_shifts = set(scope_queryset(ShiftTemplate.objects.all(), request.user).values_list("id", flat=True))
+            if attrs["employee"].id not in allowed_emps or attrs["shift"].id not in allowed_shifts:
+                from rest_framework.exceptions import PermissionDenied
+                raise PermissionDenied("employee or shift outside your scope")
+        return super().validate(attrs)
     employee_name = serializers.CharField(source="employee.get_full_name", read_only=True)
     shift_name = serializers.CharField(source="shift.name", read_only=True)
 
@@ -154,9 +165,7 @@ class RosterRangeSerializer(serializers.Serializer):
         days = attrs.get("days")
         until = attrs.get("until")
         if (days and until) or (not days and not until):
-            raise serializers.ValidationError(
-                "Provide either 'days' or 'until'"
-            )
+            raise serializers.ValidationError("Provide either 'days' or 'until'")
         if until and until < attrs["start_date"]:
             raise serializers.ValidationError({"until": "must be on or after start_date"})
         return attrs

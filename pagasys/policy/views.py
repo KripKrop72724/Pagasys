@@ -13,7 +13,7 @@ from drf_spectacular.utils import (
     inline_serializer,
 )
 
-from pagasys.models import WorkCalendar, Holiday, ShiftTemplate, ShiftRule, RosterEntry, LeaveType
+from pagasys.models import WorkCalendar, Holiday, ShiftTemplate, ShiftRule, RosterEntry, LeaveType, Employee
 from .serializers import (
     WorkCalendarSerializer,
     HolidaySerializer,
@@ -31,15 +31,18 @@ from .filters import (
     RosterFilter,
     LeaveTypeFilter,
 )
-from .permissions import IsCompanyMember, CompanyScopedQuerysetMixin
+from .permissions import IsCompanyMember, CompanyScopedQuerysetMixin, ActionRolePermission
 from pagasys.openapi_utils import document_filters
+from pagasys.utils import scope_queryset
 
 import django_filters.rest_framework as drf_filters
 from rest_framework import filters as rest_filters
+from .backends import ScopeFilterBackend
 
 class BasePolicyViewSet(CompanyScopedQuerysetMixin, viewsets.ModelViewSet):
-    permission_classes = [IsAuthenticated, IsCompanyMember]
+    permission_classes = [IsAuthenticated, IsCompanyMember, ActionRolePermission]
     filter_backends = [
+        ScopeFilterBackend,
         drf_filters.DjangoFilterBackend,
         rest_filters.OrderingFilter,
         rest_filters.SearchFilter,
@@ -218,6 +221,16 @@ class RosterViewSet(BasePolicyViewSet):
             ser = self.get_serializer(data=item)
             ser.is_valid(raise_exception=True)
             validated.append(ser.validated_data)
+        allowed_emp_ids = set(scope_queryset(Employee.objects.all(), request.user).values_list("id", flat=True))
+        allowed_shift_ids = set(scope_queryset(ShiftTemplate.objects.all(), request.user).values_list("id", flat=True))
+        bad_emp = sorted({v["employee"].id for v in validated if v["employee"].id not in allowed_emp_ids})
+        bad_shift = sorted({v["shift"].id for v in validated if v["shift"].id not in allowed_shift_ids})
+        if bad_emp or bad_shift:
+            return Response(
+                {"detail": "Some items are outside your scope",
+                 "errors": {"employee_ids": bad_emp, "shift_ids": bad_shift}},
+                status=403,
+            )
         to_create = [RosterEntry(**v) for v in validated]
         with transaction.atomic():
             RosterEntry.objects.bulk_create(
@@ -276,6 +289,10 @@ class RosterViewSet(BasePolicyViewSet):
         params = RosterRangeSerializer(data=request.data, context=self.get_serializer_context())
         params.is_valid(raise_exception=True)
         data = params.validated_data
+        allowed_emp_ids = set(scope_queryset(Employee.objects.all(), request.user).values_list("id", flat=True))
+        allowed_shift_ids = set(scope_queryset(ShiftTemplate.objects.all(), request.user).values_list("id", flat=True))
+        if data["employee"].id not in allowed_emp_ids or data["shift"].id not in allowed_shift_ids:
+            return Response({"detail": "Target employee/shift outside your scope", "errors": {}}, status=403)
         start = data["start_date"]
         end = start + timedelta(days=data["days"] - 1) if data.get("days") else data["until"]
         rest_weekdays = set(data.get("rest_weekdays", []))

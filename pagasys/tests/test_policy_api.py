@@ -1,4 +1,6 @@
 from rest_framework.test import APIClient
+from django.contrib.auth.models import Group
+from django.core.management import call_command
 from django.test import TestCase
 from pagasys.models import (
     Company,
@@ -10,19 +12,27 @@ from pagasys.models import (
     Employee,
     Department,
     Branch,
+    TradeLicense,
 )
 
 class PolicyApiTests(TestCase):
     def setUp(self):
+        call_command("initgroups", verbosity=0)
         self.client = APIClient()
         self.company = Company.objects.create(name="C1")
         self.branch = Branch.objects.create(company=self.company, name="B1")
         self.department = Department.objects.create(branch=self.branch, name="D1")
-        self.user = Employee.objects.create_user(
-            username="u1", password="pass", department=self.department,
-            hire_date="2024-01-01", employment_type="permanent",
-            visa_type="personal"
+        self.license = TradeLicense.objects.create(
+            company=self.company, license_no="L1", issued_date="2024-01-01", expiry_date="2099-01-01", max_visas=5,
         )
+        self.license.branches.set([self.branch])
+        self.user = Employee.objects.create_user(
+            username="u1", password="pass", department=self.department, trade_license=self.license,
+            hire_date="2024-01-01", employment_type="permanent",
+            visa_type="company"
+        )
+        admin_group = Group.objects.get(name="Company Admin")
+        self.user.groups.add(admin_group)
         self.client.force_authenticate(self.user)
 
     def test_workcalendar_cross_company_post_forbidden(self):
@@ -227,7 +237,7 @@ class PolicyApiTests(TestCase):
             payload,
             format="json",
         )
-        assert resp.status_code == 400
+        assert resp.status_code == 403
 
     def test_roster_bulk_upsert_dedup(self):
         st = ShiftTemplate.objects.create(
@@ -275,7 +285,7 @@ class PolicyApiTests(TestCase):
             payload,
             format="json",
         )
-        assert resp.status_code == 400
+        assert resp.status_code == 403
         assert RosterEntry.objects.count() == 0
 
     def test_roster_list_filters(self):
@@ -291,9 +301,10 @@ class PolicyApiTests(TestCase):
             username="u2",
             password="pass",
             department=dept2,
+            trade_license=self.license,
             hire_date="2024-01-01",
             employment_type="permanent",
-            visa_type="personal",
+            visa_type="company",
         )
         RosterEntry.objects.create(employee=self.user, date="2024-06-01", shift=st)
         RosterEntry.objects.create(
