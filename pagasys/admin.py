@@ -541,6 +541,8 @@ class RosterEntryAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
                     unique_fields=["employee", "date"],
                 )
         else:
+            if obj.date.weekday() in rest_weekdays:
+                obj.is_rest_day = True
             super().save_model(request, obj, form, change)
 
 
