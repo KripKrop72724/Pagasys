@@ -31,11 +31,13 @@ class WorkCalendarSerializer(CleanModelMixin, serializers.ModelSerializer):
         model = WorkCalendar
         fields = ["id", "company", "name", "is_default"]
         read_only_fields = ["company"]
+        ref_name = "PolicyWorkCalendar"
 
 class HolidaySerializer(CleanModelMixin, serializers.ModelSerializer):
     class Meta:
         model = Holiday
         fields = ["id", "calendar", "date", "name", "is_public"]
+        ref_name = "PolicyHoliday"
 
 class ShiftTemplateSerializer(CleanModelMixin, serializers.ModelSerializer):
     class Meta:
@@ -46,6 +48,7 @@ class ShiftTemplateSerializer(CleanModelMixin, serializers.ModelSerializer):
             "early_leave_before_min", "rounding_min", "requires_face",
         ]
         read_only_fields = ["company"]
+        ref_name = "PolicyShiftTemplate"
 
 class ShiftRuleSerializer(CleanModelMixin, serializers.ModelSerializer):
     params = extend_schema_field(
@@ -87,6 +90,7 @@ class ShiftRuleSerializer(CleanModelMixin, serializers.ModelSerializer):
         fields = [
             "id", "shift", "kind", "value", "params", "active_from", "active_to", "weekdays",
         ]
+        ref_name = "PolicyShiftRule"
 
     def validate(self, attrs):
         wd = attrs.get("weekdays")
@@ -106,6 +110,7 @@ class RosterEntrySerializer(CleanModelMixin, serializers.ModelSerializer):
             "override_start", "override_end", "is_rest_day",
             "employee_name", "shift_name",
         ]
+        ref_name = "PolicyRosterEntry"
 
 class LeaveTypeSerializer(CleanModelMixin, serializers.ModelSerializer):
     class Meta:
@@ -114,6 +119,7 @@ class LeaveTypeSerializer(CleanModelMixin, serializers.ModelSerializer):
             "id", "company", "code", "name", "paid_pct", "requires_doc", "max_days_per_year", "params",
         ]
         read_only_fields = ["company"]
+        ref_name = "PolicyLeaveType"
 
 
 class RosterRangeSerializer(serializers.Serializer):
