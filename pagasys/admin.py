@@ -525,7 +525,7 @@ class RosterEntryAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
                     override_end=obj.override_end,
                     is_rest_day=current.weekday() in rest_weekdays,
                 )
-                entry.full_clean()
+                entry.full_clean(validate_unique=False)
                 entries.append(entry)
                 current += timedelta(days=1)
             with transaction.atomic():

@@ -91,3 +91,51 @@ class RosterEntryAdminRangeTests(ModelFactoryMixin, TestCase):
         res = self.client.post(add_url, data)
         self.assertEqual(res.status_code, 200)
         self.assertContains(res, "Provide either repeat_days or repeat_until")
+
+    def test_repeat_days_updates_existing_entries(self):
+        RosterEntry.objects.create(
+            employee=self.employee, date="2024-07-01", shift=self.shift
+        )
+        RosterEntry.objects.create(
+            employee=self.employee, date="2024-07-02", shift=self.shift
+        )
+        entry = RosterEntry.objects.get(date="2024-07-01")
+        change_url = reverse("admin:pagasys_rosterentry_change", args=[entry.id])
+        new_shift = self.create_shift_template(self.company, name="Night")
+        data = {
+            "employee": self.employee.id,
+            "date": "2024-07-01",
+            "shift": new_shift.id,
+            "repeat_days": 3,
+        }
+        res = self.client.post(change_url, data)
+        self.assertEqual(res.status_code, 302)
+        qs = RosterEntry.objects.filter(
+            employee=self.employee, date__range=["2024-07-01", "2024-07-03"]
+        ).order_by("date")
+        self.assertEqual(qs.count(), 3)
+        self.assertEqual(list(qs.values_list("shift_id", flat=True)), [new_shift.id] * 3)
+
+    def test_repeat_until_updates_existing_entries(self):
+        RosterEntry.objects.create(
+            employee=self.employee, date="2024-07-01", shift=self.shift
+        )
+        RosterEntry.objects.create(
+            employee=self.employee, date="2024-07-02", shift=self.shift
+        )
+        entry = RosterEntry.objects.get(date="2024-07-01")
+        change_url = reverse("admin:pagasys_rosterentry_change", args=[entry.id])
+        new_shift = self.create_shift_template(self.company, name="Late")
+        data = {
+            "employee": self.employee.id,
+            "date": "2024-07-01",
+            "shift": new_shift.id,
+            "repeat_until": "2024-07-03",
+        }
+        res = self.client.post(change_url, data)
+        self.assertEqual(res.status_code, 302)
+        qs = RosterEntry.objects.filter(
+            employee=self.employee, date__range=["2024-07-01", "2024-07-03"]
+        ).order_by("date")
+        self.assertEqual(qs.count(), 3)
+        self.assertEqual(list(qs.values_list("shift_id", flat=True)), [new_shift.id] * 3)
