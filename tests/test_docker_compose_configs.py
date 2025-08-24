@@ -23,7 +23,9 @@ def test_local_compose_contains_postgres():
 
 def test_eb_compose_services():
     data = load_compose("docker-compose.eb.yml")
-    assert set(data["services"].keys()) == {"web", "redis", "worker"}, "EB compose should define web, redis and worker services"
+    assert set(data["services"].keys()) == {"web", "redis", "worker"}, (
+        "EB compose should define web, redis and worker services"
+    )
     assert "postgres" not in data["services"], "EB compose must not include postgres"
 
 
