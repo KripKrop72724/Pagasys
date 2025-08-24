@@ -1,4 +1,16 @@
 {% extends "admin/base_site.html" %}
+
+{% block extrastyle %}
+{{ block.super }}
+<style>
+  .roster-overview-wrapper {
+    width: 100%;
+    max-height: 70vh;
+    overflow: auto;
+  }
+</style>
+{% endblock %}
+
 {% block content %}
 <h1>{{ title }}</h1>
 <form method="get" class="roster-overview-form">
@@ -6,6 +18,7 @@
   Days: <input type="number" name="days" value="{{ days }}" min="1" max="31">
   <input type="submit" value="Go">
 </form>
+<div class="roster-overview-wrapper">
 <table class="roster-overview">
   <thead>
     <tr>
@@ -34,4 +47,5 @@
     {% endfor %}
   </tbody>
 </table>
+</div>
 {% endblock %}
