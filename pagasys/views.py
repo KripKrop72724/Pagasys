@@ -1,4 +1,6 @@
-from rest_framework import generics, status, viewsets
+from rest_framework import generics, status, viewsets, serializers
+from datetime import date, timedelta
+
 from rest_framework.permissions import IsAuthenticated, DjangoModelPermissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -7,6 +9,10 @@ from django.http import HttpResponse
 from drf_spectacular.utils import (
     extend_schema,
     extend_schema_view,
+    OpenApiParameter,
+    OpenApiTypes,
+    inline_serializer,
+    OpenApiExample,
 )
 from django_filters.rest_framework import DjangoFilterBackend
 from django_filters import rest_framework as filters
@@ -50,7 +56,7 @@ from .serializers import (
     bulk_update_response_serializer,
     bulk_delete_response_serializer,
 )
-from .openapi_utils import document_filters
+from .openapi_utils import document_filters, _generate_parameters
 
 
 @extend_schema_view(
@@ -582,21 +588,103 @@ class ShiftRuleViewSet(BulkCreateMixin, BulkUpdateMixin, BulkDeleteMixin, viewse
         return scope_queryset(qs, self.request.user)
 
 
+class RosterEntryFilter(filters.FilterSet):
+    """Filters for roster entries supporting date ranges and related objects."""
+
+    date_from = filters.DateFilter(field_name="date", lookup_expr="gte")
+    date_to = filters.DateFilter(field_name="date", lookup_expr="lte")
+    branch = filters.NumberFilter(field_name="employee__department__branch_id")
+    department = filters.NumberFilter(field_name="employee__department_id")
+    project = filters.NumberFilter(field_name="employee__project_id")
+
+    class Meta:
+        model = RosterEntry
+        fields = [
+            f.name
+            for f in RosterEntry._meta.get_fields()
+            if getattr(f, "concrete", False) and not f.auto_created
+        ] + ["branch", "department", "project", "date_from", "date_to"]
+
+
 @extend_schema_view(
     bulk_create=extend_schema(
         request=RosterEntrySerializer(many=True),
         responses=bulk_create_response_serializer(RosterEntrySerializer),
         description="Create multiple roster entries",
+        examples=[
+            OpenApiExample(
+                "Bulk create request",
+                request_only=True,
+                value=[
+                    {"employee": 1, "date": "2024-07-01", "shift": 1},
+                    {"employee": 1, "date": "2024-07-02", "is_rest_day": True},
+                ],
+            ),
+            OpenApiExample(
+                "Bulk create response",
+                response_only=True,
+                value={
+                    "created": [
+                        {
+                            "id": 1,
+                            "employee": 1,
+                            "date": "2024-07-01",
+                            "shift": 1,
+                            "is_rest_day": False,
+                        }
+                    ],
+                    "errors": [],
+                },
+            ),
+        ],
     ),
     bulk_update=extend_schema(
         request=RosterEntrySerializer(many=True),
         responses=bulk_update_response_serializer(RosterEntrySerializer),
         description="Update multiple roster entries",
+        examples=[
+            OpenApiExample(
+                "Bulk update request",
+                request_only=True,
+                value=[
+                    {"id": 1, "shift": 2},
+                    {"id": 2, "is_rest_day": True},
+                ],
+            ),
+            OpenApiExample(
+                "Bulk update response",
+                response_only=True,
+                value={
+                    "updated": [
+                        {
+                            "id": 1,
+                            "employee": 1,
+                            "date": "2024-07-01",
+                            "shift": 2,
+                            "is_rest_day": False,
+                        }
+                    ],
+                    "errors": [],
+                },
+            ),
+        ],
     ),
     bulk_delete=extend_schema(
         request=IdListSerializer,
         responses=bulk_delete_response_serializer(),
         description="Delete multiple roster entries by ID",
+        examples=[
+            OpenApiExample(
+                "Bulk delete request",
+                request_only=True,
+                value={"ids": [1, 2]},
+            ),
+            OpenApiExample(
+                "Bulk delete response",
+                response_only=True,
+                value={"deleted": 2, "errors": []},
+            ),
+        ],
     ),
 )
 class RosterEntryViewSet(BulkCreateMixin, BulkUpdateMixin, BulkDeleteMixin, viewsets.ModelViewSet):
@@ -607,12 +695,155 @@ class RosterEntryViewSet(BulkCreateMixin, BulkUpdateMixin, BulkDeleteMixin, view
     permission_classes = [IsAuthenticated, DjangoModelPermissions, GroupRequiredPermission, CustomObjectPermission]
     required_groups = ["Company Admin", "Payroll Manager", "Branch Manager", "Department Manager", "Project Manager"]
     filter_backends = [DjangoFilterBackend, OrderingFilter]
-    filterset_fields = "__all__"
-    ordering_fields = ["date"]
+    filterset_class = RosterEntryFilter
+    ordering_fields = ["date", "employee", "shift"]
+    ordering = ["date", "employee"]
 
     def get_queryset(self):
         qs = super().get_queryset()
         return scope_queryset(qs, self.request.user)
+
+    @action(detail=False, methods=["get"], url_path="overview")
+    @extend_schema(
+        description=(
+            "Return a grid of roster entries grouped by employee for a range of dates. "
+            "Example: `/api/roster-entries/overview/?start=2024-07-01&days=2`."
+        ),
+        parameters=[
+            OpenApiParameter("start", OpenApiTypes.DATE, description="Start date", required=True),
+            OpenApiParameter("days", OpenApiTypes.INT, description="Number of days", required=True),
+        ],
+        responses={
+            200: inline_serializer(
+                name="RosterOverview",
+                fields={
+                    "start": serializers.DateField(),
+                    "days": serializers.IntegerField(),
+                    "employees": serializers.ListField(
+                        child=inline_serializer(
+                            name="RosterOverviewEmployee",
+                            fields={
+                                "id": serializers.IntegerField(),
+                                "name": serializers.CharField(),
+                                "entries": serializers.ListField(
+                                    child=inline_serializer(
+                                        name="RosterOverviewEntry",
+                                        fields={
+                                            "date": serializers.DateField(),
+                                            "shift": serializers.IntegerField(allow_null=True),
+                                            "is_rest_day": serializers.BooleanField(),
+                                        },
+                                    )
+                                ),
+                            },
+                        )
+                    ),
+                },
+            )
+        },
+        examples=[
+            OpenApiExample(
+                "Overview response",
+                response_only=True,
+                value={
+                    "start": "2024-07-01",
+                    "days": 2,
+                    "employees": [
+                        {
+                            "id": 1,
+                            "name": "Alice",
+                            "entries": [
+                                {
+                                    "date": "2024-07-01",
+                                    "shift": 1,
+                                    "is_rest_day": False,
+                                },
+                                {
+                                    "date": "2024-07-02",
+                                    "shift": None,
+                                    "is_rest_day": True,
+                                },
+                            ],
+                        }
+                    ],
+                },
+            )
+        ],
+    )
+    def overview(self, request):
+        start_param = request.query_params.get("start")
+        days_param = request.query_params.get("days")
+        try:
+            start = date.fromisoformat(start_param)
+            days = int(days_param)
+            if days <= 0:
+                raise ValueError
+        except (TypeError, ValueError):
+            return Response(
+                {"detail": "start and days parameters are required and days must be positive"},
+                status=400,
+            )
+
+        end = start + timedelta(days=days - 1)
+        qs = self.filter_queryset(self.get_queryset()).filter(date__range=(start, end)).order_by(
+            "employee_id", "date"
+        )
+
+        employees = {}
+        for entry in qs:
+            emp = entry.employee
+            emp_data = employees.setdefault(
+                emp.id,
+                {
+                    "id": emp.id,
+                    "name": emp.get_full_name() or emp.username,
+                    "entries": [],
+                },
+            )
+            emp_data["entries"].append(
+                {
+                    "date": entry.date.isoformat(),
+                    "shift": entry.shift_id,
+                    "is_rest_day": entry.is_rest_day,
+                }
+            )
+
+        payload = {"start": start.isoformat(), "days": days, "employees": list(employees.values())}
+        return Response(payload)
+
+
+RosterEntryViewSet = extend_schema_view(
+    list=extend_schema(
+        description=(
+            "List roster entries with filters for employee, branch, department, project and date range. "
+            "Combine parameters for compound queries. Example: "
+            "`?employee=1&branch=2&date_from=2024-07-01&date_to=2024-07-07`."
+        ),
+        parameters=_generate_parameters(RosterEntryViewSet),
+        examples=[
+            OpenApiExample(
+                "List response",
+                response_only=True,
+                value=[
+                    {
+                        "id": 1,
+                        "employee": 1,
+                        "date": "2024-07-01",
+                        "shift": 1,
+                        "is_rest_day": False,
+                    },
+                    {
+                        "id": 2,
+                        "employee": 1,
+                        "date": "2024-07-02",
+                        "shift": None,
+                        "is_rest_day": True,
+                    },
+                ],
+            )
+        ],
+    )
+)(RosterEntryViewSet)
 
 
 @extend_schema_view(
@@ -659,7 +890,6 @@ document_filters(WorkCalendarViewSet)
 document_filters(HolidayViewSet)
 document_filters(ShiftTemplateViewSet)
 document_filters(ShiftRuleViewSet)
-document_filters(RosterEntryViewSet)
 document_filters(LeaveTypeViewSet)
 
 
