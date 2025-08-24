@@ -51,11 +51,11 @@ class HolidayAuditLogAPITests(ModelFactoryMixin, TestCase):
     def test_filter_by_calendar(self):
         url = f"/api/holiday-audit-logs/?calendar={self.calendar.id}"
         res = self.client.get(url)
-        self.assertEqual(set(self._ids(res)), {l.id for l in self.logs})
+        self.assertEqual(set(self._ids(res)), {log.id for log in self.logs})
 
     def test_ordering(self):
         res = self.client.get("/api/holiday-audit-logs/?ordering=timestamp")
-        self.assertEqual(self._ids(res), [l.id for l in self.logs])
+        self.assertEqual(self._ids(res), [log.id for log in self.logs])
 
     def test_timestamp_range(self):
         from urllib.parse import quote
