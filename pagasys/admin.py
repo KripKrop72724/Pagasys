@@ -475,7 +475,7 @@ class RosterEntryRangeForm(forms.ModelForm):
 
     class Meta:
         model = RosterEntry
-        fields = "__all__"
+        exclude = ["is_holiday_calendar"]
 
     def clean(self):
         cleaned = super().clean()
@@ -488,11 +488,12 @@ class RosterEntryRangeForm(forms.ModelForm):
 class RosterEntryAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
     """Admin configuration for roster entries."""
     form = RosterEntryRangeForm
-    list_display = ["employee", "date", "shift", "is_rest_day"]
-    list_filter = ["employee", "shift", "is_rest_day"]
+    list_display = ["employee", "date", "shift", "is_rest_day", "is_holiday"]
+    list_filter = ["employee", "shift", "is_rest_day", "is_holiday"]
     search_fields = ["employee__username", "shift__name"]
     date_hierarchy = "date"
     change_list_template = "admin/pagasys/rosterentry/change_list.html"
+    readonly_fields = ["is_holiday_calendar"]
 
     def get_urls(self):
         from django.urls import path
@@ -594,6 +595,8 @@ class RosterEntryAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
                         "override_start",
                         "override_end",
                         "is_rest_day",
+                        "is_holiday",
+                        "is_holiday_calendar",
                     ],
                     unique_fields=["employee", "date"],
                 )

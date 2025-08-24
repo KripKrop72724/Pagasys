@@ -555,6 +555,15 @@ class Holiday(models.Model):
         return f"{self.name} - {self.date}"
 
 
+class RosterEntryManager(models.Manager):
+    """Custom manager ensuring holiday flags are applied on bulk creates."""
+
+    def bulk_create(self, objs, **kwargs):
+        for obj in objs:
+            obj._apply_holiday()
+        return super().bulk_create(objs, **kwargs)
+
+
 def effective_calendar_for(employee):
     """Resolve the effective work calendar for an employee."""
     return (
@@ -880,6 +889,17 @@ class RosterEntry(models.Model):
         default=False,
         help_text="Marks the day as a scheduled rest day",
     )
+    is_holiday = models.BooleanField(
+        default=False,
+        help_text="Marks the day as a holiday. Auto-set if date falls on a holiday",
+    )
+    is_holiday_calendar = models.BooleanField(
+        default=False,
+        editable=False,
+        help_text="Indicates the date was a holiday when the entry was created",
+    )
+
+    objects = RosterEntryManager()
 
     class Meta:
         unique_together = (("employee", "date"),)
@@ -890,6 +910,25 @@ class RosterEntry(models.Model):
             ),
             models.Index(fields=["date"], name="roster_date_idx"),
         ]
+
+    def __init__(self, *args, **kwargs):
+        self._is_holiday_provided = "is_holiday" in kwargs
+        super().__init__(*args, **kwargs)
+
+    def _apply_holiday(self):
+        cal = effective_calendar_for(self.employee)
+        holiday_exists = False
+        if cal:
+            holiday_exists = cal.holidays.filter(date=self.date).exists()
+        self.is_holiday_calendar = holiday_exists
+        if holiday_exists and not self._is_holiday_provided:
+            self.is_holiday = True
+
+    def save(self, *args, **kwargs):
+        if self.pk:
+            self._is_holiday_provided = True
+        self._apply_holiday()
+        super().save(*args, **kwargs)
 
     def clean(self):
         super().clean()

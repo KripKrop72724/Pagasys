@@ -264,6 +264,7 @@ class RosterEntrySerializer(ScopedSerializerMixin, serializers.ModelSerializer):
     class Meta:
         model = RosterEntry
         fields = '__all__'
+        read_only_fields = ['is_holiday_calendar']
 
     def validate(self, attrs):
         attrs = super().validate(attrs)

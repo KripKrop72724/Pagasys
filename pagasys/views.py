@@ -582,6 +582,14 @@ class ShiftRuleViewSet(BulkCreateMixin, BulkUpdateMixin, BulkDeleteMixin, viewse
         return scope_queryset(qs, self.request.user)
 
 
+@extend_schema(
+    description=(
+        "CRUD for roster entries. Dates that fall on a holiday in the employee's"
+        " effective work calendar are automatically marked with `is_holiday`."
+        " This flag can be overridden while `is_holiday_calendar` preserves the"
+        " original holiday status."
+    )
+)
 @extend_schema_view(
     bulk_create=extend_schema(
         request=RosterEntrySerializer(many=True),

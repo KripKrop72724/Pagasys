@@ -34,6 +34,10 @@ comprehensive automated test suite.
   0 and 100. Codes are unique per company regardless of case.
 * **Rostering safety** – Employees must have a trade license, department or
   project before they can be assigned to a shift.
+* **Holiday awareness** – When a roster entry falls on a holiday in the employee's
+  effective work calendar it is auto‑flagged via `is_holiday`. The read‑only
+  `is_holiday_calendar` field records that the date matched a holiday even if
+  the flag is later overridden.
 * **Archiving over deletion** – Branches, departments and projects linked to
   employees are protected from hard deletion. Mark them inactive to archive
   instead of deleting.
@@ -131,7 +135,7 @@ ordering and the filters shown below:
 | Holidays | `holidays/` | `calendar`, `is_public`, `name`, `date_from`, `date_to` |
 | Shift templates | `shift-templates/` | `name`, `cross_midnight`, `requires_face`, `rounding_min` |
 | Shift rules | `shift-rules/` | `shift`, `kind`, `active_on`, `weekday` |
-| Roster entries | `roster/` | `employee`, `shift`, `is_rest_day`, `date_from`, `date_to`, `branch` |
+| Roster entries | `roster/` | `employee`, `shift`, `is_rest_day`, `is_holiday`, `date_from`, `date_to`, `branch` |
 | Leave types | `leave-types/` | `code`, `requires_doc`, `paid_pct_min`, `paid_pct_max` |
 
 Boolean flags appear throughout the policy models:
@@ -142,6 +146,8 @@ Boolean flags appear throughout the policy models:
 * `requires_face` – employees must face‑match when clocking in
 * `params.paid` – a shift rule break counts as paid time
 * `is_rest_day` – roster entry is a scheduled rest day
+* `is_holiday` – roster entry is treated as a holiday
+* `is_holiday_calendar` – roster date originally matched a holiday
 * `requires_doc` – leave type needs supporting documents
 
 All boolean query parameters accept `true` or `false`. Filters are chainable,

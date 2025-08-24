@@ -236,7 +236,14 @@ class RosterViewSet(BasePolicyViewSet):
             RosterEntry.objects.bulk_create(
                 to_create,
                 update_conflicts=True,
-                update_fields=["shift", "override_start", "override_end", "is_rest_day"],
+                update_fields=[
+                    "shift",
+                    "override_start",
+                    "override_end",
+                    "is_rest_day",
+                    "is_holiday",
+                    "is_holiday_calendar",
+                ],
                 unique_fields=["employee", "date"],
             )
         return Response({"upserted": len(to_create)}, status=200)
@@ -316,7 +323,14 @@ class RosterViewSet(BasePolicyViewSet):
             RosterEntry.objects.bulk_create(
                 entries,
                 update_conflicts=True,
-                update_fields=["shift", "override_start", "override_end", "is_rest_day"],
+                update_fields=[
+                    "shift",
+                    "override_start",
+                    "override_end",
+                    "is_rest_day",
+                    "is_holiday",
+                    "is_holiday_calendar",
+                ],
                 unique_fields=["employee", "date"],
             )
         return Response({"count": len(entries)}, status=200)
