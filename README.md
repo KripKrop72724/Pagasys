@@ -119,6 +119,27 @@ All resources expose standard RESTful endpoints using DRF viewsets:
 | `/api/roster-entries/` | Employee shift assignments            |
 | `/api/leave-types/` | Leave type configurations                |
 
+### Roster entries
+
+`/api/roster-entries/` provides full control over shift assignments. The
+endpoint supports granular filtering, sorting and bulk operations:
+
+* Filters: `employee`, `shift`, `is_rest_day`, `date_from`, `date_to`,
+  `branch`, `department` and `project`.
+* Ordering: use the `ordering` parameter with `date`, `employee` or `shift`.
+* Bulk create/update/delete via `POST roster-entries/bulk`,
+  `PATCH roster-entries/bulk-update` and `DELETE roster-entries/bulk-delete`.
+* `GET roster-entries/overview?start=<YYYY-MM-DD>&days=<N>` returns a grid of
+  entries grouped by employee across the requested date range.
+
+Example queries:
+
+```http
+GET /api/roster-entries/?branch=1&date_from=2024-07-01&date_to=2024-07-31&ordering=employee
+PATCH /api/roster-entries/5/ {"is_rest_day": true}
+GET /api/roster-entries/overview/?start=2024-07-01&days=7
+```
+
 ### Policy layer
 
 Endpoints under `/api/companies/<company_id>/` expose a
