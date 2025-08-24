@@ -38,5 +38,6 @@ RUN chmod +x entrypoint.sh
 # Expose default application port
 EXPOSE 8000
 
-# Run entrypoint
+# Run entrypoint and default command
 ENTRYPOINT ["./entrypoint.sh"]
+CMD gunicorn config.wsgi:application --bind 0.0.0.0:${PORT:-8000}

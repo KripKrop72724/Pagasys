@@ -86,13 +86,16 @@ Beanstalk:
   docker compose -f docker-compose.local.yml up --build
   ```
 
-  The application is available at `http://localhost:8000` and migrations run
-  automatically via `entrypoint.sh`. The Docker image exposes this port by
-  default.
+  The application is available at `http://localhost:8000`. Migrations run
+  automatically for the web service because `docker-compose.local.yml` sets
+  `RUN_MIGRATIONS=1`. The worker service skips migrations by default. The
+  Docker image exposes this port by default.
 
 * **`docker-compose.eb.yml`** – contains only the web service and exposes it on
   port 80. The CI pipeline renames this file to `docker-compose.yml` before
   packaging so Elastic Beanstalk never launches a local PostgreSQL container.
+  Only the web container sets `RUN_MIGRATIONS=1`; the worker container runs
+  the Celery worker without applying migrations.
 
 For production deployments configure the standard `DB_NAME`, `DB_USER`,
 `DB_PASSWORD`, and `DB_HOST` environment variables. The application also honors
