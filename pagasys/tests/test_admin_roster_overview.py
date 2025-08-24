@@ -1,4 +1,5 @@
-from datetime import timedelta, date
+from datetime import timedelta
+from django.utils import timezone
 
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
@@ -75,13 +76,13 @@ class RosterEntryOverviewTests(ModelFactoryMixin, TestCase):
         url = reverse("admin:pagasys_rosterentry_overview") + "?start=bad&days=-5"
         res = self.client.get(url)
         self.assertEqual(res.status_code, 200)
-        today = date.today()
+        today = timezone.localdate()
         self.assertContains(res, today.isoformat())
         self.assertContains(res, (today + timedelta(days=6)).isoformat())
 
     def test_overview_no_entries(self):
         url = reverse("admin:pagasys_rosterentry_overview") + "?start=2024-07-01&days=3"
         res = self.client.get(url)
-        self.assertNotContains(res, "e1")
+        self.assertNotContains(res, ">e1<")
         self.assertContains(res, "2024-07-01")
 

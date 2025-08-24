@@ -519,11 +519,12 @@ class RosterEntryAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
     def overview(self, request):
         from datetime import date
         from django.template.response import TemplateResponse
+        from django.utils import timezone
 
         try:
             start = date.fromisoformat(request.GET.get("start"))
         except Exception:
-            start = date.today()
+            start = timezone.localdate()
         try:
             days = int(request.GET.get("days", 7))
         except Exception:

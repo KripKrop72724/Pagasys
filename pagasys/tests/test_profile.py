@@ -1,6 +1,5 @@
-from datetime import date
-
 from django.test import TestCase
+from django.utils import timezone
 from rest_framework.test import APIClient
 from pagasys.models import Company, Branch, Department, Employee
 
@@ -20,7 +19,7 @@ class ProfileEndpointTests(TestCase):
             password="pass",
             visa_type="personal",
             department=self.department,
-            hire_date=date.today(),
+            hire_date=timezone.localdate(),
             employment_type="permanent",
         )
         defaults.update(kwargs)
