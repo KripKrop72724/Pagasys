@@ -10,6 +10,8 @@ from pagasys.models import (
     Employee,
     ShiftTemplate,
     RosterEntry,
+    WorkCalendar,
+    Holiday,
 )
 
 
@@ -28,6 +30,12 @@ class RosterEntryApiTests(TestCase):
             max_visas=10,
         )
         self.license.branches.set([self.branch])
+        self.calendar = WorkCalendar.objects.create(
+            company=self.company, name="Cal", is_default=True
+        )
+        Holiday.objects.create(
+            calendar=self.calendar, date="2024-07-04", name="H1"
+        )
         self.user = Employee.objects.create_user(
             username="u1",
             password="pass",
@@ -123,3 +131,113 @@ class RosterEntryApiTests(TestCase):
     def test_overview_requires_params(self):
         resp = self.client.get("/api/roster-entries/overview/?start=bad&days=-1")
         assert resp.status_code == 400
+
+    def test_auto_marks_holiday_on_create(self):
+        resp = self.client.post(
+            "/api/roster-entries/",
+            {
+                "employee": self.user.id,
+                "shift": self.shift.id,
+                "date": "2024-07-04",
+            },
+            format="json",
+        )
+        assert resp.status_code == 201
+        entry = RosterEntry.objects.get(id=resp.data["id"])
+        assert entry.is_holiday and entry.was_holiday
+
+    def test_manual_override_holiday(self):
+        resp = self.client.post(
+            "/api/roster-entries/",
+            {
+                "employee": self.user.id,
+                "shift": self.shift.id,
+                "date": "2024-07-04",
+            },
+            format="json",
+        )
+        entry_id = resp.data["id"]
+        patch = self.client.patch(
+            f"/api/roster-entries/{entry_id}/",
+            {"is_holiday": False},
+            format="json",
+        )
+        assert patch.status_code == 200
+        entry = RosterEntry.objects.get(id=entry_id)
+        assert entry.was_holiday and not entry.is_holiday
+
+    def test_create_with_holiday_override(self):
+        resp = self.client.post(
+            "/api/roster-entries/",
+            {
+                "employee": self.user.id,
+                "shift": self.shift.id,
+                "date": "2024-07-04",
+                "is_holiday": False,
+            },
+            format="json",
+        )
+        assert resp.status_code == 201
+        entry = RosterEntry.objects.get(id=resp.data["id"])
+        assert not entry.is_holiday and entry.was_holiday
+
+    def test_create_manual_holiday_on_regular_day(self):
+        resp = self.client.post(
+            "/api/roster-entries/",
+            {
+                "employee": self.user.id,
+                "shift": self.shift.id,
+                "date": "2024-07-05",
+                "is_holiday": True,
+            },
+            format="json",
+        )
+        assert resp.status_code == 201
+        entry = RosterEntry.objects.get(id=resp.data["id"])
+        assert entry.is_holiday and not entry.was_holiday
+
+    def test_bulk_create_marks_holiday(self):
+        payload = [
+            {
+                "employee": self.user.id,
+                "shift": self.shift.id,
+                "date": "2024-07-04",
+            },
+            {
+                "employee": self.user.id,
+                "shift": self.shift.id,
+                "date": "2024-07-05",
+            },
+        ]
+        resp = self.client.post(
+            "/api/roster-entries/bulk/", payload, format="json"
+        )
+        assert resp.status_code in (201, 207)
+        hol = RosterEntry.objects.get(date="2024-07-04", employee=self.user)
+        reg = RosterEntry.objects.get(date="2024-07-05", employee=self.user)
+        assert hol.is_holiday and hol.was_holiday
+        assert not reg.is_holiday and not reg.was_holiday
+
+    def test_bulk_create_holiday_override_and_manual_flag(self):
+        payload = [
+            {
+                "employee": self.user.id,
+                "shift": self.shift.id,
+                "date": "2024-07-04",
+                "is_holiday": False,
+            },
+            {
+                "employee": self.user.id,
+                "shift": self.shift.id,
+                "date": "2024-07-05",
+                "is_holiday": True,
+            },
+        ]
+        resp = self.client.post(
+            "/api/roster-entries/bulk/", payload, format="json"
+        )
+        assert resp.status_code in (201, 207)
+        hol = RosterEntry.objects.get(date="2024-07-04", employee=self.user)
+        reg = RosterEntry.objects.get(date="2024-07-05", employee=self.user)
+        assert not hol.is_holiday and hol.was_holiday
+        assert reg.is_holiday and not reg.was_holiday

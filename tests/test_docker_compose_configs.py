@@ -21,9 +21,11 @@ def test_local_compose_contains_postgres():
     assert hc and "test" in hc, "postgres healthcheck missing"
 
 
-def test_eb_compose_has_only_web():
+def test_eb_compose_services():
     data = load_compose("docker-compose.eb.yml")
-    assert list(data["services"].keys()) == ["web"], "EB compose should define only web service"
+    assert set(data["services"].keys()) == {"web", "redis", "worker"}, (
+        "EB compose should define web, redis and worker services"
+    )
     assert "postgres" not in data["services"], "EB compose must not include postgres"
 
 
@@ -34,3 +36,26 @@ def test_web_healthcheck_uses_healthz():
         test_cmd = hc.get("test")
         target = test_cmd[-1] if isinstance(test_cmd, list) else test_cmd
         assert "healthz" in target, f"web healthcheck in {fname} should target /healthz"
+
+
+def extract_env(service):
+    env = service.get("environment", {})
+    if isinstance(env, list):
+        return {item.split("=", 1)[0]: item.split("=", 1)[1] if "=" in item else None for item in env}
+    return env
+
+
+def test_migration_flag_and_commands():
+    for fname in ["docker-compose.local.yml", "docker-compose.eb.yml"]:
+        data = load_compose(fname)
+        web = data["services"]["web"]
+        worker = data["services"]["worker"]
+
+        assert "command" not in web, f"web service in {fname} should use default CMD"
+        web_env = extract_env(web)
+        assert web_env.get("RUN_MIGRATIONS") == "1", f"web in {fname} must set RUN_MIGRATIONS=1"
+
+        worker_env = extract_env(worker)
+        assert "RUN_MIGRATIONS" not in worker_env, f"worker in {fname} must not set RUN_MIGRATIONS"
+        cmd = worker.get("command", "")
+        assert str(cmd).startswith("celery"), f"worker command in {fname} should start with celery"

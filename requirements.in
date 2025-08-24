@@ -10,3 +10,6 @@ django-grappelli
 django-cors-headers
 psycopg2-binary
 dj-database-url
+
+celery
+redis

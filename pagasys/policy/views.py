@@ -13,7 +13,16 @@ from drf_spectacular.utils import (
     inline_serializer,
 )
 
-from pagasys.models import WorkCalendar, Holiday, ShiftTemplate, ShiftRule, RosterEntry, LeaveType, Employee
+from pagasys.models import (
+    WorkCalendar,
+    Holiday,
+    ShiftTemplate,
+    ShiftRule,
+    RosterEntry,
+    LeaveType,
+    Employee,
+    holiday_flags,
+)
 from .serializers import (
     WorkCalendarSerializer,
     HolidaySerializer,
@@ -114,6 +123,13 @@ class WorkCalendarViewSet(BasePolicyViewSet):
         return Response({"count": len(to_create)}, status=200)
 
 class HolidayViewSet(BasePolicyViewSet):
+    """Policy layer holiday operations.
+
+    Updates or deletions enqueue recalculation of roster entries tied to the
+    holiday's calendar so existing schedules stay in sync with calendar
+    changes.
+    """
+
     queryset = Holiday.objects.select_related("calendar", "calendar__company")
     serializer_class = HolidaySerializer
     filterset_class = HolidayFilter
@@ -195,18 +211,24 @@ class RosterViewSet(BasePolicyViewSet):
 
     @action(detail=False, methods=["post"], url_path="bulk-upsert")
     @extend_schema(
-        description="Atomically upsert roster entries. 'is_rest_day' marks days off.",
+        description=(
+            "Atomically upsert roster entries. Dates coinciding with calendar "
+            "holidays are automatically flagged with `is_holiday`, and "
+            "`was_holiday` records that a holiday was scheduled. Include "
+            "`is_holiday` in an entry to explicitly override the default."
+        ),
         examples=[
             OpenApiExample(
                 "Upsert example",
                 value={
                     "entries": [
+                        {"employee": 1, "date": "2024-07-04", "shift": 1},
                         {
                             "employee": 1,
-                            "date": "2024-01-01",
+                            "date": "2024-07-05",
                             "shift": 1,
-                            "is_rest_day": False,
-                        }
+                            "is_holiday": False,
+                        },
                     ]
                 },
             )
@@ -220,7 +242,11 @@ class RosterViewSet(BasePolicyViewSet):
         for item in entries:
             ser = self.get_serializer(data=item)
             ser.is_valid(raise_exception=True)
-            validated.append(ser.validated_data)
+            v = ser.validated_data
+            v["is_holiday"], v["was_holiday"] = holiday_flags(
+                v["employee"], v["date"], item.get("is_holiday")
+            )
+            validated.append(v)
         allowed_emp_ids = set(scope_queryset(Employee.objects.all(), request.user).values_list("id", flat=True))
         allowed_shift_ids = set(scope_queryset(ShiftTemplate.objects.all(), request.user).values_list("id", flat=True))
         bad_emp = sorted({v["employee"].id for v in validated if v["employee"].id not in allowed_emp_ids})
@@ -236,7 +262,14 @@ class RosterViewSet(BasePolicyViewSet):
             RosterEntry.objects.bulk_create(
                 to_create,
                 update_conflicts=True,
-                update_fields=["shift", "override_start", "override_end", "is_rest_day"],
+                update_fields=[
+                    "shift",
+                    "override_start",
+                    "override_end",
+                    "is_rest_day",
+                    "is_holiday",
+                    "was_holiday",
+                ],
                 unique_fields=["employee", "date"],
             )
         return Response({"upserted": len(to_create)}, status=200)
@@ -247,7 +280,9 @@ class RosterViewSet(BasePolicyViewSet):
             "Create or update consecutive roster entries starting from `start_date`."
             " Provide either `days` (number of days) or `until` (inclusive end date)."
             " `rest_weekdays` may list weekday codes such as ['SAT','SUN'] to mark"
-            " rest days automatically."
+            " rest days automatically. Entries on calendar holidays are flagged"
+            " with `is_holiday`, and `was_holiday` records that a holiday was"
+            " originally scheduled."
         ),
         examples=[
             OpenApiExample(
@@ -311,12 +346,23 @@ class RosterViewSet(BasePolicyViewSet):
             ).first()
             ser = self.get_serializer(instance=existing, data=item)
             ser.is_valid(raise_exception=True)
-            entries.append(RosterEntry(**ser.validated_data))
+            v = ser.validated_data
+            v["is_holiday"], v["was_holiday"] = holiday_flags(
+                v["employee"], v["date"], v.get("is_holiday")
+            )
+            entries.append(RosterEntry(**v))
         with transaction.atomic():
             RosterEntry.objects.bulk_create(
                 entries,
                 update_conflicts=True,
-                update_fields=["shift", "override_start", "override_end", "is_rest_day"],
+                update_fields=[
+                    "shift",
+                    "override_start",
+                    "override_end",
+                    "is_rest_day",
+                    "is_holiday",
+                    "was_holiday",
+                ],
                 unique_fields=["employee", "date"],
             )
         return Response({"count": len(entries)}, status=200)

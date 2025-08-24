@@ -513,6 +513,74 @@ class PolicyApiTests(TestCase):
         assert RosterEntry.objects.filter(employee=self.user).count() == 2
         assert RosterEntry.objects.filter(shift=st2).count() == 2
 
+    def test_schedule_range_marks_holidays(self):
+        cal = WorkCalendar.objects.create(
+            company=self.company, name="Cal", is_default=True
+        )
+        Holiday.objects.create(calendar=cal, date="2024-07-04", name="H1")
+        st = ShiftTemplate.objects.create(
+            company=self.company,
+            name="Shift",
+            start_time="09:00",
+            end_time="17:00",
+        )
+        payload = {
+            "employee": self.user.id,
+            "shift": st.id,
+            "start_date": "2024-07-03",
+            "days": 3,
+        }
+        resp = self.client.post(
+            f"/api/companies/{self.company.id}/roster/schedule-range/",
+            payload,
+            format="json",
+        )
+        assert resp.status_code == 200
+        entry = RosterEntry.objects.get(employee=self.user, date="2024-07-04")
+        assert entry.is_holiday and entry.was_holiday
+
+    def test_bulk_upsert_holiday_combinations(self):
+        cal = WorkCalendar.objects.create(
+            company=self.company, name="Cal", is_default=True
+        )
+        Holiday.objects.create(calendar=cal, date="2024-07-04", name="H1")
+        Holiday.objects.create(calendar=cal, date="2024-07-05", name="H2")
+        st = ShiftTemplate.objects.create(
+            company=self.company,
+            name="Shift",
+            start_time="09:00",
+            end_time="17:00",
+        )
+        payload = {
+            "entries": [
+                {"employee": self.user.id, "shift": st.id, "date": "2024-07-04"},
+                {
+                    "employee": self.user.id,
+                    "shift": st.id,
+                    "date": "2024-07-05",
+                    "is_holiday": False,
+                },
+                {
+                    "employee": self.user.id,
+                    "shift": st.id,
+                    "date": "2024-07-06",
+                    "is_holiday": True,
+                },
+            ]
+        }
+        resp = self.client.post(
+            f"/api/companies/{self.company.id}/roster/bulk-upsert/",
+            payload,
+            format="json",
+        )
+        assert resp.status_code == 200
+        hol = RosterEntry.objects.get(employee=self.user, date="2024-07-04")
+        overridden = RosterEntry.objects.get(employee=self.user, date="2024-07-05")
+        manual = RosterEntry.objects.get(employee=self.user, date="2024-07-06")
+        assert hol.is_holiday and hol.was_holiday
+        assert not overridden.is_holiday and overridden.was_holiday
+        assert manual.is_holiday and not manual.was_holiday
+
     def test_shift_template_filters_search_ordering(self):
         ShiftTemplate.objects.create(
             company=self.company,

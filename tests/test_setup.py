@@ -1,22 +1,26 @@
 from pathlib import Path
+import yaml
 
 
 def test_entrypoint_exists():
     entrypoint = Path('entrypoint.sh')
     assert entrypoint.exists(), 'entrypoint.sh should exist'
     content = entrypoint.read_text()
-    assert 'gunicorn' in content, 'entrypoint should run gunicorn'
+    assert 'RUN_MIGRATIONS' in content, 'entrypoint should check RUN_MIGRATIONS'
+    assert 'exec "$@"' in content, 'entrypoint should forward commands'
 
 
-def test_entrypoint_uses_port_env():
-    content = Path('entrypoint.sh').read_text()
-    assert '--bind 0.0.0.0:${PORT:-8000}' in content
+def test_cmd_uses_port_env():
+    dockerfile = Path('Dockerfile').read_text()
+    assert '${PORT:-8000}' in dockerfile, 'Dockerfile CMD should use PORT env'
 
 
 def test_docker_compose_uses_entrypoint():
     for fname in ['docker-compose.local.yml', 'docker-compose.eb.yml']:
-        compose = Path(fname).read_text()
-        assert '/entrypoint.sh' in compose, f'{fname} should call entrypoint.sh'
+        data = yaml.safe_load(Path(fname).read_text())
+        assert 'command' not in data['services']['web'], (
+            f'web service in {fname} should rely on image CMD'
+        )
 
 
 def test_requirements_pinned():
