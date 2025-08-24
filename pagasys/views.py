@@ -500,7 +500,12 @@ class WorkCalendarViewSet(BulkCreateMixin, BulkUpdateMixin, BulkDeleteMixin, vie
     ),
 )
 class HolidayViewSet(BulkCreateMixin, BulkUpdateMixin, BulkDeleteMixin, viewsets.ModelViewSet):
-    """CRUD for holidays"""
+    """CRUD for holidays.
+
+    Changing or deleting a holiday automatically schedules a background task
+    to recompute holiday flags on existing roster entries for employees whose
+    effective calendar matches the holiday's calendar.
+    """
 
     queryset = Holiday.objects.all()
     serializer_class = HolidaySerializer
@@ -610,14 +615,20 @@ class RosterEntryFilter(filters.FilterSet):
     bulk_create=extend_schema(
         request=RosterEntrySerializer(many=True),
         responses=bulk_create_response_serializer(RosterEntrySerializer),
-        description="Create multiple roster entries",
+        description=(
+            "Create multiple roster entries. Dates that fall on a work calendar "
+            "holiday are automatically returned with `is_holiday=True` and "
+            "`was_holiday=True`. Providing `is_holiday` in the payload overrides "
+            "the auto-detected value while `was_holiday` preserves the original "
+            "holiday status."
+        ),
         examples=[
             OpenApiExample(
                 "Bulk create request",
                 request_only=True,
                 value=[
-                    {"employee": 1, "date": "2024-07-01", "shift": 1},
-                    {"employee": 1, "date": "2024-07-02", "is_rest_day": True},
+                    {"employee": 1, "date": "2024-07-04", "shift": 1},
+                    {"employee": 1, "date": "2024-07-05", "is_holiday": True},
                 ],
             ),
             OpenApiExample(
@@ -628,9 +639,11 @@ class RosterEntryFilter(filters.FilterSet):
                         {
                             "id": 1,
                             "employee": 1,
-                            "date": "2024-07-01",
+                            "date": "2024-07-04",
                             "shift": 1,
                             "is_rest_day": False,
+                            "is_holiday": True,
+                            "was_holiday": True,
                         }
                     ],
                     "errors": [],
@@ -641,14 +654,18 @@ class RosterEntryFilter(filters.FilterSet):
     bulk_update=extend_schema(
         request=RosterEntrySerializer(many=True),
         responses=bulk_update_response_serializer(RosterEntrySerializer),
-        description="Update multiple roster entries",
+        description=(
+            "Update multiple roster entries. `is_holiday` may be supplied to "
+            "override the computed holiday flag; `was_holiday` is read-only and "
+            "reflects the calendar at creation time."
+        ),
         examples=[
             OpenApiExample(
                 "Bulk update request",
                 request_only=True,
                 value=[
                     {"id": 1, "shift": 2},
-                    {"id": 2, "is_rest_day": True},
+                    {"id": 2, "is_holiday": False},
                 ],
             ),
             OpenApiExample(
@@ -662,6 +679,8 @@ class RosterEntryFilter(filters.FilterSet):
                             "date": "2024-07-01",
                             "shift": 2,
                             "is_rest_day": False,
+                            "is_holiday": False,
+                            "was_holiday": True,
                         }
                     ],
                     "errors": [],
@@ -732,6 +751,8 @@ class RosterEntryViewSet(BulkCreateMixin, BulkUpdateMixin, BulkDeleteMixin, view
                                             "date": serializers.DateField(),
                                             "shift": serializers.IntegerField(allow_null=True),
                                             "is_rest_day": serializers.BooleanField(),
+                                            "is_holiday": serializers.BooleanField(),
+                                            "was_holiday": serializers.BooleanField(),
                                         },
                                     )
                                 ),
@@ -757,11 +778,15 @@ class RosterEntryViewSet(BulkCreateMixin, BulkUpdateMixin, BulkDeleteMixin, view
                                     "date": "2024-07-01",
                                     "shift": 1,
                                     "is_rest_day": False,
+                                    "is_holiday": False,
+                                    "was_holiday": False,
                                 },
                                 {
                                     "date": "2024-07-02",
                                     "shift": None,
                                     "is_rest_day": True,
+                                    "is_holiday": False,
+                                    "was_holiday": False,
                                 },
                             ],
                         }
@@ -805,6 +830,8 @@ class RosterEntryViewSet(BulkCreateMixin, BulkUpdateMixin, BulkDeleteMixin, view
                     "date": entry.date.isoformat(),
                     "shift": entry.shift_id,
                     "is_rest_day": entry.is_rest_day,
+                    "is_holiday": entry.is_holiday,
+                    "was_holiday": entry.was_holiday,
                 }
             )
 
@@ -831,6 +858,8 @@ RosterEntryViewSet = extend_schema_view(
                         "date": "2024-07-01",
                         "shift": 1,
                         "is_rest_day": False,
+                        "is_holiday": False,
+                        "was_holiday": False,
                     },
                     {
                         "id": 2,
@@ -838,6 +867,8 @@ RosterEntryViewSet = extend_schema_view(
                         "date": "2024-07-02",
                         "shift": None,
                         "is_rest_day": True,
+                        "is_holiday": False,
+                        "was_holiday": False,
                     },
                 ],
             )
