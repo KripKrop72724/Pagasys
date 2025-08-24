@@ -98,6 +98,7 @@ from .models import (
     ShiftRule,
     RosterEntry,
     LeaveType,
+    holiday_flags,
 )
 
 
@@ -213,7 +214,13 @@ class WorkCalendarSerializer(ScopedSerializerMixin, serializers.ModelSerializer)
 
 
 class HolidaySerializer(ScopedSerializerMixin, serializers.ModelSerializer):
-    """Serializer for Holiday"""
+    """Serializer for Holiday.
+
+    Editing or deleting a holiday triggers asynchronous recalculation of
+    roster entries tied to the holiday's calendar. Manual ``is_holiday``
+    overrides on those entries are preserved while ``was_holiday`` reflects
+    the calendar's current state.
+    """
 
     class Meta:
         model = Holiday
@@ -264,6 +271,7 @@ class RosterEntrySerializer(ScopedSerializerMixin, serializers.ModelSerializer):
     class Meta:
         model = RosterEntry
         fields = '__all__'
+        read_only_fields = ("was_holiday",)
 
     def validate(self, attrs):
         attrs = super().validate(attrs)
@@ -274,6 +282,14 @@ class RosterEntrySerializer(ScopedSerializerMixin, serializers.ModelSerializer):
             data = attrs
         instance = RosterEntry(**data)
         instance.clean()
+        is_holiday_input = attrs.get("is_holiday") if "is_holiday" in attrs else (
+            instance.is_holiday if self.instance else None
+        )
+        instance.is_holiday, instance.was_holiday = holiday_flags(
+            instance.employee, instance.date, is_holiday_input
+        )
+        attrs["is_holiday"] = instance.is_holiday
+        attrs["was_holiday"] = instance.was_holiday
         return attrs
 
 

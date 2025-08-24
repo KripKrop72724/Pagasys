@@ -24,6 +24,7 @@ from .models import (
     ShiftRule,
     RosterEntry,
     LeaveType,
+    holiday_flags,
 )
 
 
@@ -488,11 +489,19 @@ class RosterEntryRangeForm(forms.ModelForm):
 class RosterEntryAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
     """Admin configuration for roster entries."""
     form = RosterEntryRangeForm
-    list_display = ["employee", "date", "shift", "is_rest_day"]
-    list_filter = ["employee", "shift", "is_rest_day"]
+    list_display = [
+        "employee",
+        "date",
+        "shift",
+        "is_rest_day",
+        "is_holiday",
+        "was_holiday",
+    ]
+    list_filter = ["employee", "shift", "is_rest_day", "is_holiday", "was_holiday"]
     search_fields = ["employee__username", "shift__name"]
     date_hierarchy = "date"
     change_list_template = "admin/pagasys/rosterentry/change_list.html"
+    readonly_fields = ["was_holiday"]
 
     def get_urls(self):
         from django.urls import path
@@ -563,6 +572,7 @@ class RosterEntryAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
         repeat_until = form.cleaned_data.get("repeat_until")
         name_to_idx = {"mon": 0, "tue": 1, "wed": 2, "thu": 3, "fri": 4, "sat": 5, "sun": 6}
         rest_weekdays = {name_to_idx[w] for w in (form.cleaned_data.get("rest_weekdays") or [])}
+        override = obj.is_holiday if "is_holiday" in form.changed_data else None
 
         if repeat_days or repeat_until:
             start = obj.date
@@ -582,6 +592,9 @@ class RosterEntryAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
                     override_end=obj.override_end,
                     is_rest_day=current.weekday() in rest_weekdays,
                 )
+                entry.is_holiday, entry.was_holiday = holiday_flags(
+                    entry.employee, current, override
+                )
                 entry.full_clean(validate_unique=False)
                 entries.append(entry)
                 current += timedelta(days=1)
@@ -594,12 +607,17 @@ class RosterEntryAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
                         "override_start",
                         "override_end",
                         "is_rest_day",
+                        "is_holiday",
+                        "was_holiday",
                     ],
                     unique_fields=["employee", "date"],
                 )
         else:
             if obj.date.weekday() in rest_weekdays:
                 obj.is_rest_day = True
+            obj.is_holiday, obj.was_holiday = holiday_flags(
+                obj.employee, obj.date, override
+            )
             super().save_model(request, obj, form, change)
 
 

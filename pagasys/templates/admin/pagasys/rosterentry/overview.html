@@ -36,6 +36,10 @@
         {% if entry %}
           {% if entry.is_rest_day %}
             <td>Rest</td>
+          {% elif entry.is_holiday %}
+            <td>Holiday</td>
+          {% elif entry.was_holiday %}
+            <td>{{ entry.shift.name }} (holiday)</td>
           {% else %}
             <td>{{ entry.shift.name }}</td>
           {% endif %}

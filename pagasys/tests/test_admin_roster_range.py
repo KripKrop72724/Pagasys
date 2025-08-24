@@ -3,7 +3,7 @@ from django.core.management import call_command
 from django.urls import reverse
 from django.test import TestCase
 
-from pagasys.models import RosterEntry, Employee
+from pagasys.models import RosterEntry, Employee, WorkCalendar, Holiday
 from .test_models import ModelFactoryMixin
 
 
@@ -34,6 +34,10 @@ class RosterEntryAdminRangeTests(ModelFactoryMixin, TestCase):
             license_no="LICX",
             max_visas=5,
         )
+        self.calendar = WorkCalendar.objects.create(
+            company=self.company, name="Cal", is_default=True
+        )
+        Holiday.objects.create(calendar=self.calendar, date="2024-07-04", name="H1")
         self.employee = self._create_employee(
             department=self.department,
             trade_license=self.license,
@@ -66,6 +70,20 @@ class RosterEntryAdminRangeTests(ModelFactoryMixin, TestCase):
         self.assertEqual(RosterEntry.objects.filter(employee=self.employee).count(), 7)
         self.assertTrue(RosterEntry.objects.get(date="2024-07-06").is_rest_day)
         self.assertTrue(RosterEntry.objects.get(date="2024-07-07").is_rest_day)
+
+    def test_holiday_flag_on_repeat(self):
+        add_url = reverse("admin:pagasys_rosterentry_add")
+        data = {
+            "employee": self.employee.id,
+            "date": "2024-07-04",
+            "shift": self.shift.id,
+            "repeat_days": 1,
+        }
+        res = self.client.post(add_url, data)
+        self.assertEqual(res.status_code, 302)
+        entry = RosterEntry.objects.get(employee=self.employee, date="2024-07-04")
+        self.assertTrue(entry.is_holiday)
+        self.assertTrue(entry.was_holiday)
 
     def test_repeat_until_with_rest(self):
         add_url = reverse("admin:pagasys_rosterentry_add")

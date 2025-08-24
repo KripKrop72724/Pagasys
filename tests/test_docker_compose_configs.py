@@ -21,9 +21,9 @@ def test_local_compose_contains_postgres():
     assert hc and "test" in hc, "postgres healthcheck missing"
 
 
-def test_eb_compose_has_only_web():
+def test_eb_compose_services():
     data = load_compose("docker-compose.eb.yml")
-    assert list(data["services"].keys()) == ["web"], "EB compose should define only web service"
+    assert set(data["services"].keys()) == {"web", "redis", "worker"}, "EB compose should define web, redis and worker services"
     assert "postgres" not in data["services"], "EB compose must not include postgres"
 
 

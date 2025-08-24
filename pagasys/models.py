@@ -555,6 +555,34 @@ class Holiday(models.Model):
         return f"{self.name} - {self.date}"
 
 
+class HolidayAuditLog(models.Model):
+    """Audit trail for holiday changes."""
+
+    ACTION_CHOICES = [
+        ("created", "created"),
+        ("updated", "updated"),
+        ("deleted", "deleted"),
+    ]
+
+    calendar = models.ForeignKey(
+        WorkCalendar,
+        on_delete=models.CASCADE,
+        related_name="holiday_audit_logs",
+        help_text="Calendar this audit entry relates to",
+    )
+    name = models.CharField(max_length=255, help_text="Holiday name at change time")
+    old_date = models.DateField(null=True, blank=True, help_text="Previous holiday date")
+    new_date = models.DateField(null=True, blank=True, help_text="New holiday date")
+    action = models.CharField(max_length=7, choices=ACTION_CHOICES, help_text="Change action")
+    timestamp = models.DateTimeField(auto_now_add=True, help_text="When the change occurred")
+
+    class Meta:
+        ordering = ["-timestamp"]
+
+    def __str__(self) -> str:  # pragma: no cover - trivial
+        return f"{self.calendar_id}:{self.name}:{self.action}"
+
+
 def effective_calendar_for(employee):
     """Resolve the effective work calendar for an employee."""
     return (
@@ -562,6 +590,23 @@ def effective_calendar_for(employee):
         or (employee.branch.work_calendar if employee.branch else None)
         or employee.company.calendars.filter(is_default=True).first()
     )
+
+
+def holiday_flags(employee, target_date, is_holiday=None):
+    """Determine holiday flags for a roster entry.
+
+    Returns a tuple ``(is_holiday, was_holiday)`` where ``is_holiday`` is the
+    effective flag (respecting manual overrides) and ``was_holiday`` records if
+    the date is a holiday in the employee's calendar.
+    """
+
+    calendar = effective_calendar_for(employee)
+    was_holiday = bool(
+        calendar and calendar.holidays.filter(date=target_date).exists()
+    )
+    if is_holiday is None:
+        is_holiday = was_holiday
+    return is_holiday, was_holiday
 
 
 def _minutes_between(start, end, cross_midnight):
@@ -879,6 +924,15 @@ class RosterEntry(models.Model):
     is_rest_day = models.BooleanField(
         default=False,
         help_text="Marks the day as a scheduled rest day",
+    )
+    is_holiday = models.BooleanField(
+        default=False,
+        help_text="Treat the day as a holiday (auto-set for calendar holidays)",
+    )
+    was_holiday = models.BooleanField(
+        default=False,
+        editable=False,
+        help_text="True if the date was a holiday when scheduled",
     )
 
     class Meta:

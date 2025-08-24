@@ -131,6 +131,13 @@ endpoint supports granular filtering, sorting and bulk operations:
   `PATCH roster-entries/bulk-update` and `DELETE roster-entries/bulk-delete`.
 * `GET roster-entries/overview?start=<YYYY-MM-DD>&days=<N>` returns a grid of
   entries grouped by employee across the requested date range.
+* Entries falling on holidays in the employee's work calendar are
+  automatically marked with `is_holiday`. The companion field
+  `was_holiday` always records if a scheduled date was a holiday, even when
+  `is_holiday` is manually overridden. All roster endpoints – single create,
+  `bulk`, policy `bulk-upsert`, and `schedule-range` – populate these flags.
+  Supplying `is_holiday` in any request lets you override the automatic
+  detection while `was_holiday` preserves the original calendar status.
 
 Example queries:
 
@@ -202,7 +209,9 @@ parameter. Additional paths include:
 `POST /api/companies/{company_id}/roster/schedule-range/` creates or updates
 consecutive roster entries starting at `start_date`. Supply either `days` (count
 of days) or `until` (inclusive end date). Optional `rest_weekdays` accepts
-three-letter weekday codes to mark as rest days.
+three-letter weekday codes to mark as rest days. Dates that coincide with
+calendar holidays are flagged automatically so later payroll calculations can
+distinguish holiday work.
 
 Example by number of days:
 
@@ -287,6 +296,16 @@ options.
 
 All models participate in the standard scoping and permission system so admins
 only manage objects within their company or branch.
+
+### Holiday recalculation
+
+Roster entries created before a holiday is edited or removed may become
+out of sync with the latest calendar. Pagasys treats the holiday table as the
+source of truth. Any holiday update or deletion automatically enqueues a
+Celery task that recalculates `is_holiday`/`was_holiday` flags for roster
+entries whose effective calendar matches the changed holiday. Manual overrides
+on existing entries are preserved, and an audit log records each holiday change
+for traceability.
 
 ## Testing & Linting
 
