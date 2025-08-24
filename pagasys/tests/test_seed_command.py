@@ -1,6 +1,9 @@
 from django.core.management import call_command
 from django.contrib.auth.models import Group
 from django.test import TestCase
+from django.utils import timezone
+from unittest.mock import patch
+
 from pagasys.models import (
     Company,
     Branch,
@@ -64,3 +67,12 @@ class SeedCommandTests(TestCase):
         self.assertEqual(counts["projects"], Project.objects.count())
         self.assertEqual(counts["employees"], Employee.objects.count())
         self.assertEqual(counts["groups"], Group.objects.count())
+
+    def test_seed_activates_company_timezones(self):
+        original = timezone.override
+        with patch("pagasys.management.commands.seed.timezone.override") as mock_override:
+            mock_override.side_effect = original
+            call_command("seed", verbosity=0)
+            zones = [getattr(args[0], "key", str(args[0])) for args, _ in mock_override.call_args_list]
+            self.assertIn("Asia/Dubai", zones)
+            self.assertIn("Asia/Kolkata", zones)
