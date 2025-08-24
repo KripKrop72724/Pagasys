@@ -32,6 +32,7 @@ from .models import (
     Employee,
     WorkCalendar,
     Holiday,
+    HolidayAuditLog,
     ShiftTemplate,
     ShiftRule,
     RosterEntry,
@@ -47,6 +48,7 @@ from .serializers import (
     EmployeeSerializer,
     WorkCalendarSerializer,
     HolidaySerializer,
+    HolidayAuditLogSerializer,
     ShiftTemplateSerializer,
     ShiftRuleSerializer,
     RosterEntrySerializer,
@@ -520,6 +522,46 @@ class HolidayViewSet(BulkCreateMixin, BulkUpdateMixin, BulkDeleteMixin, viewsets
         return scope_queryset(qs, self.request.user)
 
 
+class HolidayAuditLogFilter(filters.FilterSet):
+    """Filters for HolidayAuditLog with timestamp range support."""
+
+    timestamp_from = filters.DateTimeFilter(field_name="timestamp", lookup_expr="gte")
+    timestamp_to = filters.DateTimeFilter(field_name="timestamp", lookup_expr="lte")
+
+    class Meta:
+        model = HolidayAuditLog
+        fields = [
+            "calendar",
+            "name",
+            "old_date",
+            "new_date",
+            "action",
+            "timestamp",
+            "timestamp_from",
+            "timestamp_to",
+        ]
+
+
+@extend_schema_view(
+    list=extend_schema(description="List holiday audit log entries"),
+    retrieve=extend_schema(description="Retrieve a holiday audit log entry"),
+)
+class HolidayAuditLogViewSet(viewsets.ReadOnlyModelViewSet):
+    """Read-only access to holiday audit logs."""
+
+    queryset = HolidayAuditLog.objects.all()
+    serializer_class = HolidayAuditLogSerializer
+    permission_classes = [IsAuthenticated, DjangoModelPermissions, GroupRequiredPermission, CustomObjectPermission]
+    required_groups = ["Company Admin", "Payroll Manager"]
+    filter_backends = [DjangoFilterBackend, OrderingFilter]
+    filterset_class = HolidayAuditLogFilter
+    ordering_fields = ["timestamp", "old_date", "new_date", "name", "action"]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        return scope_queryset(qs, self.request.user)
+
+
 @extend_schema_view(
     bulk_create=extend_schema(
         request=ShiftTemplateSerializer(many=True),
@@ -919,6 +961,7 @@ class LeaveTypeViewSet(BulkCreateMixin, BulkUpdateMixin, BulkDeleteMixin, viewse
 
 document_filters(WorkCalendarViewSet)
 document_filters(HolidayViewSet)
+document_filters(HolidayAuditLogViewSet)
 document_filters(ShiftTemplateViewSet)
 document_filters(ShiftRuleViewSet)
 document_filters(LeaveTypeViewSet)

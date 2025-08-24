@@ -117,6 +117,7 @@ All resources expose standard RESTful endpoints using DRF viewsets:
 | `/api/employees/`   | Employee records                         |
 | `/api/calendars/`   | Company work calendars                   |
 | `/api/holidays/`    | Holiday definitions per calendar         |
+| `/api/holiday-audit-logs/` | Log of holiday create/update/delete events |
 | `/api/shift-templates/` | Reusable shift definitions           |
 | `/api/shift-rules/` | Policy rules applied to shifts           |
 | `/api/roster-entries/` | Employee shift assignments            |
@@ -308,7 +309,9 @@ source of truth. Any holiday update or deletion automatically enqueues a
 Celery task that recalculates `is_holiday`/`was_holiday` flags for roster
 entries whose effective calendar matches the changed holiday. Manual overrides
 on existing entries are preserved, and an audit log records each holiday change
-for traceability.
+for traceability. These records are exposed via `/api/holiday-audit-logs/`,
+which supports filtering by calendar, action and timestamp range with
+custom ordering options.
 
 ## Testing & Linting
 

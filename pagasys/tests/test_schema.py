@@ -18,7 +18,7 @@ class OpenAPISchemaTests(TestCase):
         models = [
             'Company', 'Branch', 'Designation', 'TradeLicense', 'Department',
             'Project', 'Employee', 'WorkCalendar', 'Holiday', 'ShiftTemplate',
-            'ShiftRule', 'RosterEntry', 'LeaveType',
+            'ShiftRule', 'RosterEntry', 'LeaveType', 'HolidayAuditLog',
         ]
         for name in models:
             self.assertIn(name, data['components']['schemas'])
@@ -113,6 +113,7 @@ class OpenAPISchemaTests(TestCase):
             s.ShiftRuleSerializer,
             s.RosterEntrySerializer,
             s.LeaveTypeSerializer,
+            s.HolidayAuditLogSerializer,
         ]
 
         for cls in serializer_classes:
@@ -145,6 +146,7 @@ class OpenAPISchemaTests(TestCase):
             '/api/shift-rules/': v.ShiftRuleViewSet,
             '/api/roster-entries/': v.RosterEntryViewSet,
             '/api/leave-types/': v.LeaveTypeViewSet,
+            '/api/holiday-audit-logs/': v.HolidayAuditLogViewSet,
         }
 
         for path, viewset in viewsets.items():

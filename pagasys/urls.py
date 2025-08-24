@@ -12,6 +12,7 @@ from .views import (
     EmployeeViewSet,
     WorkCalendarViewSet,
     HolidayViewSet,
+    HolidayAuditLogViewSet,
     ShiftTemplateViewSet,
     ShiftRuleViewSet,
     RosterEntryViewSet,
@@ -30,6 +31,7 @@ router.register(r'projects', ProjectViewSet)
 router.register(r'employees', EmployeeViewSet)
 router.register(r'calendars', WorkCalendarViewSet)
 router.register(r'holidays', HolidayViewSet)
+router.register(r'holiday-audit-logs', HolidayAuditLogViewSet)
 router.register(r'shift-templates', ShiftTemplateViewSet)
 router.register(r'shift-rules', ShiftRuleViewSet)
 router.register(r'roster-entries', RosterEntryViewSet)

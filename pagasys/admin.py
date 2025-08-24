@@ -20,6 +20,7 @@ from .models import (
     Employee,
     WorkCalendar,
     Holiday,
+    HolidayAuditLog,
     ShiftTemplate,
     ShiftRule,
     RosterEntry,
@@ -424,6 +425,32 @@ class HolidayAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
     list_filter = ["calendar", "is_public"]
     search_fields = ["name"]
     date_hierarchy = "date"
+
+
+@admin.register(HolidayAuditLog)
+class HolidayAuditLogAdmin(ScopedAdminMixin, admin.ModelAdmin):
+    """Read-only audit trail of holiday changes."""
+
+    list_display = [
+        "calendar",
+        "name",
+        "old_date",
+        "new_date",
+        "action",
+        "timestamp",
+    ]
+    list_filter = ["calendar", "action"]
+    search_fields = ["name"]
+    readonly_fields = ["calendar", "name", "old_date", "new_date", "action", "timestamp"]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(ShiftTemplate)

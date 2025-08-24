@@ -94,6 +94,7 @@ from .models import (
     Employee,
     WorkCalendar,
     Holiday,
+    HolidayAuditLog,
     ShiftTemplate,
     ShiftRule,
     RosterEntry,
@@ -224,6 +225,14 @@ class HolidaySerializer(ScopedSerializerMixin, serializers.ModelSerializer):
 
     class Meta:
         model = Holiday
+        fields = '__all__'
+
+
+class HolidayAuditLogSerializer(ScopedSerializerMixin, serializers.ModelSerializer):
+    """Serializer for HolidayAuditLog."""
+
+    class Meta:
+        model = HolidayAuditLog
         fields = '__all__'
 
 
