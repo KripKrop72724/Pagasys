@@ -55,18 +55,18 @@ jobs:
 
       - name: Wait for EB environment to be ready
         run: |
-          STATUS=$(aws elasticbeanstalk describe-environments --environment-names pagasys-dev-env --query 'Environments[0].Status' --output text)
+          STATUS=$(aws elasticbeanstalk describe-environments --environment-names pagasys-dev --query 'Environments[0].Status' --output text)
           while [ "$STATUS" != "Ready" ]; do
             echo "Environment status: $STATUS. Waiting..."
             sleep 20
-            STATUS=$(aws elasticbeanstalk describe-environments --environment-names pagasys-dev-env --query 'Environments[0].Status' --output text)
+            STATUS=$(aws elasticbeanstalk describe-environments --environment-names pagasys-dev --query 'Environments[0].Status' --output text)
           done
           echo "Environment is Ready."
 
       - name: Get current EB version
         id: prev-version
         run: |
-          PREV_VERSION=$(aws elasticbeanstalk describe-environments --environment-names pagasys-dev-env --query 'Environments[0].VersionLabel' --output text)
+          PREV_VERSION=$(aws elasticbeanstalk describe-environments --environment-names pagasys-dev --query 'Environments[0].VersionLabel' --output text)
           echo "version=$PREV_VERSION" >> $GITHUB_OUTPUT
 
 
@@ -82,20 +82,20 @@ jobs:
           aws_access_key:     ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws_secret_key:     ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           application_name:   pagasys-dev
-          environment_name:   pagasys-dev-env
+          environment_name:   pagasys-dev
           version_label:      ${{ github.sha }}
           region:             me-central-1
           deployment_package: deployment-package.zip
 
       - name: Wait for deployment to finish
-        run: aws elasticbeanstalk wait environment-updated --environment-name pagasys-dev-env
+        run: aws elasticbeanstalk wait environment-updated --environment-name pagasys-dev
 
       - name: Smoke test
         id: smoke
         continue-on-error: true
         run: |
           URL=$(aws elasticbeanstalk describe-environments \
-            --environment-names pagasys-dev-env \
+            --environment-names pagasys-dev \
             --query "Environments[0].CNAME" --output text)
             for i in {1..15}; do
               if curl -fsS "http://$URL/healthz" > /dev/null; then
@@ -109,8 +109,8 @@ jobs:
         if: steps.smoke.outcome == 'failure'
         run: |
           echo "Rolling back to version: ${{ steps.prev-version.outputs.version }}"
-          aws elasticbeanstalk update-environment --environment-name pagasys-dev-env --version-label "${{ steps.prev-version.outputs.version }}"
-          aws elasticbeanstalk wait environment-updated --environment-name pagasys-dev-env
+          aws elasticbeanstalk update-environment --environment-name pagasys-dev --version-label "${{ steps.prev-version.outputs.version }}"
+          aws elasticbeanstalk wait environment-updated --environment-name pagasys-dev
 
       - name: Fail workflow if smoke test failed
         if: steps.smoke.outcome == 'failure'
