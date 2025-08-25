@@ -104,6 +104,14 @@ For production deployments configure the standard `DB_NAME`, `DB_USER`,
 an optional `DATABASE_URL` if present, which takes precedence and should include
 `sslmode=require`.
 
+### Runtime tuning
+
+Static files are collected during the Docker image build, so rebuild the image after modifying assets.
+Gunicorn starts with three workers and a 60 second timeout by default; adjust
+`GUNICORN_WORKERS` and `GUNICORN_TIMEOUT` to suit your deployment.
+Monitor memory usage during startup and under load with tools like `docker stats`
+or `memory_profiler` and optimise routines or increase container memory limits as needed.
+
 ## API Endpoints
 
 All resources expose standard RESTful endpoints using DRF viewsets:
@@ -208,7 +216,7 @@ parameter. Additional paths include:
 * `/api/me/` – retrieve the logged-in user's profile
 * `/api/schema/` – machine readable OpenAPI schema
 * `/api/docs/` – interactive Swagger UI
-* `/healthz` – liveness endpoint returning `ok`
+* `/healthz` – liveness endpoint returning `ok`; `/` responds similarly for load balancer probes
 
 ### Roster schedule-range
 
