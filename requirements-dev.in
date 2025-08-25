@@ -3,3 +3,4 @@ pytest
 pytest-django
 pytest-docker
 flake8
+pytest-xdist
