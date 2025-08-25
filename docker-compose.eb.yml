@@ -4,6 +4,8 @@ services:
       context: .
       dockerfile: Dockerfile
       target: runtime
+    expose:
+      - "8000"
     environment:
       # Pass-through (if set on the host via EB Environment Properties)
       - RUN_MIGRATIONS=1
@@ -35,9 +37,12 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
+    environment:
+      - ACME_EMAIL
+      - APP_DOMAIN
     depends_on:
       - web
 
