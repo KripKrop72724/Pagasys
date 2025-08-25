@@ -1,9 +1,10 @@
 {
-    email {$ACME_EMAIL}
+    # Provide a default email so Caddy doesn't fail if ACME_EMAIL is unset
+    email {$ACME_EMAIL:test@example.com}
     # acme_ca https://acme-v02.api.letsencrypt.org/directory  # default
 }
 
-{$APP_DOMAIN} {
+{$APP_DOMAIN:localhost} {
     encode zstd gzip
     @health path /healthz
     handle @health {

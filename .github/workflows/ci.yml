@@ -35,6 +35,14 @@ jobs:
       - name: Lint with flake8
         run: flake8 .
 
+      - name: Validate Caddyfile
+        run: |
+          docker run --rm \
+            -v "$PWD/Caddyfile":/etc/caddy/Caddyfile \
+            -e ACME_EMAIL="${ACME_EMAIL:-test@example.com}" \
+            -e APP_DOMAIN="${APP_DOMAIN:-example.com}" \
+            caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+
       - name: Run tests
         run: pytest -q --disable-warnings --maxfail=1
 
