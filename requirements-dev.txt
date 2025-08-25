@@ -8,6 +8,8 @@
     # via -r requirements-dev.in
 attrs==25.3.0
     # via pytest-docker
+execnet==2.1.1
+    # via pytest-xdist
 flake8==7.3.0
     # via -r requirements-dev.in
 iniconfig==2.1.0
@@ -29,7 +31,10 @@ pytest==8.4.1
     #   -r requirements-dev.in
     #   pytest-django
     #   pytest-docker
+    #   pytest-xdist
 pytest-django==4.11.1
     # via -r requirements-dev.in
 pytest-docker==3.2.3
+    # via -r requirements-dev.in
+pytest-xdist==3.8.0
     # via -r requirements-dev.in
