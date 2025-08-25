@@ -12,6 +12,13 @@ from pagasys.models import (
     Department,
     Project,
     Employee,
+    WorkCalendar,
+    Holiday,
+    HolidayAuditLog,
+    ShiftTemplate,
+    ShiftRule,
+    RosterEntry,
+    LeaveType,
 )
 
 
@@ -88,7 +95,7 @@ class Command(BaseCommand):
             if created:
                 admin.set_password("admin")
                 admin.save()
-            Employee.objects.get_or_create(
+            acme_emp, _ = Employee.objects.get_or_create(
                 username="acme_emp",
                 defaults={
                     "password": "pass",
@@ -100,6 +107,48 @@ class Command(BaseCommand):
                     "employment_type": "permanent",
                     "designation": acme_des,
                 },
+            )
+
+            acme_cal, _ = WorkCalendar.objects.get_or_create(
+                company=acme, name="Acme Calendar", defaults={"is_default": True}
+            )
+            acme_b1.work_calendar = acme_cal
+            acme_b1.save(update_fields=["work_calendar"])
+            Holiday.objects.get_or_create(
+                calendar=acme_cal,
+                date="2024-12-25",
+                name="Christmas",
+                defaults={"is_public": True},
+            )
+            HolidayAuditLog.objects.get_or_create(
+                calendar=acme_cal,
+                name="Christmas",
+                old_date=None,
+                new_date="2024-12-25",
+                action="created",
+            )
+            acme_shift, _ = ShiftTemplate.objects.get_or_create(
+                company=acme,
+                name="Day Shift",
+                defaults={
+                    "start_time": "09:00",
+                    "end_time": "17:00",
+                    "break_minutes": 60,
+                },
+            )
+            ShiftRule.objects.get_or_create(
+                shift=acme_shift,
+                kind=ShiftRule.Kind.FIXED_BREAK_WINDOW,
+                value="12:00-12:30",
+                defaults={"params": {"paid": False, "enforcement": "warn", "min_minutes": 30}},
+            )
+            RosterEntry.objects.get_or_create(
+                employee=acme_emp,
+                date="2024-04-01",
+                shift=acme_shift,
+            )
+            LeaveType.objects.get_or_create(
+                company=acme, code="AL", defaults={"name": "Annual Leave"}
             )
 
         with timezone.override(ZoneInfo(beta.timezone)):
@@ -121,7 +170,7 @@ class Command(BaseCommand):
                 },
             )
             beta_lic.branches.set([beta_b1, beta_b2])
-            Employee.objects.get_or_create(
+            beta_emp, _ = Employee.objects.get_or_create(
                 username="beta_emp",
                 defaults={
                     "password": "pass",
@@ -133,5 +182,47 @@ class Command(BaseCommand):
                     "employment_type": "permanent",
                     "designation": beta_des,
                 },
+            )
+
+            beta_cal, _ = WorkCalendar.objects.get_or_create(
+                company=beta, name="Beta Calendar", defaults={"is_default": True}
+            )
+            beta_b1.work_calendar = beta_cal
+            beta_b1.save(update_fields=["work_calendar"])
+            Holiday.objects.get_or_create(
+                calendar=beta_cal,
+                date="2024-12-25",
+                name="Christmas",
+                defaults={"is_public": True},
+            )
+            HolidayAuditLog.objects.get_or_create(
+                calendar=beta_cal,
+                name="Christmas",
+                old_date=None,
+                new_date="2024-12-25",
+                action="created",
+            )
+            beta_shift, _ = ShiftTemplate.objects.get_or_create(
+                company=beta,
+                name="Day Shift",
+                defaults={
+                    "start_time": "09:00",
+                    "end_time": "17:00",
+                    "break_minutes": 60,
+                },
+            )
+            ShiftRule.objects.get_or_create(
+                shift=beta_shift,
+                kind=ShiftRule.Kind.FIXED_BREAK_WINDOW,
+                value="12:00-12:30",
+                defaults={"params": {"paid": False, "enforcement": "warn", "min_minutes": 30}},
+            )
+            RosterEntry.objects.get_or_create(
+                employee=beta_emp,
+                date="2024-04-01",
+                shift=beta_shift,
+            )
+            LeaveType.objects.get_or_create(
+                company=beta, code="AL", defaults={"name": "Annual Leave"}
             )
 
