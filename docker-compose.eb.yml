@@ -4,8 +4,6 @@ services:
       context: .
       dockerfile: Dockerfile
       target: runtime
-    ports:
-      - "80:8000"  # expose app on 80 for EB
     environment:
       # Pass-through (if set on the host via EB Environment Properties)
       - RUN_MIGRATIONS=1
@@ -30,6 +28,18 @@ services:
     restart: always
     depends_on:
       - redis
+
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - web
 
   redis:
     image: redis:7
@@ -56,3 +66,7 @@ services:
       - ENV
     depends_on:
       - redis
+
+volumes:
+  caddy_data:
+  caddy_config:
