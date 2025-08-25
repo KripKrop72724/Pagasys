@@ -97,13 +97,13 @@ jobs:
           URL=$(aws elasticbeanstalk describe-environments \
             --environment-names pagasys-dev-env \
             --query "Environments[0].CNAME" --output text)
-          for i in {1..15}; do
-            if curl -fsS "http://$URL/healthz" > /dev/null; then
-              echo "Smoke test passed"; exit 0
-            fi
-            echo "Waiting for app... ($i/15)"; sleep 10
-          done
-          echo "Smoke test failed"; exit 1
+            for i in {1..15}; do
+              if curl -fsS "http://$URL/healthz" > /dev/null; then
+                echo "Smoke test passed"; exit 0
+              fi
+              echo "Waiting for app... ($i/15)"; sleep 10
+            done
+            echo "Smoke test failed"; exit 1
 
       - name: Roll back on smoke failure
         if: steps.smoke.outcome == 'failure'

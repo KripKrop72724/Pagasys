@@ -91,8 +91,10 @@ Beanstalk:
   `RUN_MIGRATIONS=1`. The worker service skips migrations by default. The
   Docker image exposes this port by default.
 
-* **`docker-compose.eb.yml`** – contains only the web service and exposes it on
-  port 80. The CI pipeline renames this file to `docker-compose.yml` before
+* **`docker-compose.eb.yml`** – defines the web app, worker, Redis, and a
+  [Caddy](https://caddyserver.com/) reverse-proxy. Caddy terminates HTTPS on
+  ports 80 and 443 and forwards requests to the Django app running on port
+  8000. The CI pipeline renames this file to `docker-compose.yml` before
   packaging so Elastic Beanstalk never launches a local PostgreSQL container.
   Only the web container sets `RUN_MIGRATIONS=1`; the worker container runs
   the Celery worker without applying migrations.
