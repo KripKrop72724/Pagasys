@@ -26,4 +26,4 @@ class HardSeedCommandTests(TestCase):
                 is_staff=True,
             ).exists()
         )
-
+        
