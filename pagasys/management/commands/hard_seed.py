@@ -219,6 +219,21 @@ class Command(BaseCommand):
                 for name in ["Company Admin", "Department Manager", "Employee"]
             }
 
+            # Admin user for quick access to Django admin
+            admin = Employee.objects.create_superuser(
+                username="admin",
+                email="admin@example.com",
+                password="admin",
+                first_name="Admin",
+                last_name="User",
+                hire_date=date(2024, 1, 1),
+                employment_type="permanent",
+                visa_type="company",
+                trade_license=acme_lic,
+                department=acme_d1,
+            )
+            admin.groups.add(groups["Company Admin"])
+
             # Employees with variations
             emp_license = Employee.objects.create(
                 username="lic_emp",
@@ -233,6 +248,20 @@ class Command(BaseCommand):
             )
             emp_license.set_password("pass")
             emp_license.groups.add(groups["Company Admin"])
+
+            emp_license_only = Employee.objects.create(
+                username="lic_only_emp",
+                email="liconly@example.com",
+                first_name="Lenny",
+                last_name="License",
+                hire_date=date(2024, 1, 12),
+                employment_type="permanent",
+                visa_type="company",
+                trade_license=acme_lic,
+                project=acme_proj,
+            )
+            emp_license_only.set_password("pass")
+            emp_license_only.groups.add(groups["Employee"])
 
             emp_department = Employee.objects.create(
                 username="dept_emp",
@@ -314,9 +343,15 @@ class Command(BaseCommand):
             del_holiday.delete()
 
             try:
-                Holiday.objects.create(
-                    calendar=acme_cal_main, date=christmas.date, name="Christmas"
-                )
+                # Use a nested transaction so a duplicate insert does not break
+                # the surrounding atomic block. This mirrors real-world usage
+                # where concurrent seeds may attempt to insert the same holiday.
+                with transaction.atomic():
+                    Holiday.objects.create(
+                        calendar=acme_cal_main,
+                        date=christmas.date,
+                        name="Christmas",
+                    )
             except IntegrityError as exc:
                 failures.append(f"Duplicate holiday skipped: {exc}")
 
@@ -353,6 +388,14 @@ class Command(BaseCommand):
             RosterEntry.objects.create(
                 employee=emp_license,
                 date=christmas.date,
+                shift=day_shift,
+                is_holiday=flags[0],
+                was_holiday=flags[1],
+            )
+            flags = holiday_flags(emp_license_only, date(2024, 2, 5))
+            RosterEntry.objects.create(
+                employee=emp_license_only,
+                date=date(2024, 2, 5),
                 shift=day_shift,
                 is_holiday=flags[0],
                 was_holiday=flags[1],
