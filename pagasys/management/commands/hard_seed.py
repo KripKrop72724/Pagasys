@@ -219,6 +219,23 @@ class Command(BaseCommand):
                 for name in ["Company Admin", "Department Manager", "Employee"]
             }
 
+            # Admin user for quick access to Django admin
+            admin = Employee.objects.create(
+                username="admin",
+                email="admin@example.com",
+                first_name="Admin",
+                last_name="User",
+                hire_date=date(2024, 1, 1),
+                employment_type="permanent",
+                visa_type="company",
+                trade_license=acme_lic,
+                department=acme_d1,
+                is_staff=True,
+                is_superuser=True,
+            )
+            admin.set_password("admin")
+            admin.groups.add(groups["Company Admin"])
+
             # Employees with variations
             emp_license = Employee.objects.create(
                 username="lic_emp",

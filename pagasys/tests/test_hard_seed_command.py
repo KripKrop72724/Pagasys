@@ -19,3 +19,11 @@ class HardSeedCommandTests(TestCase):
             ).exists()
         )
 
+        self.assertTrue(
+            Employee.objects.filter(
+                username="admin",
+                is_superuser=True,
+                is_staff=True,
+            ).exists()
+        )
+        
