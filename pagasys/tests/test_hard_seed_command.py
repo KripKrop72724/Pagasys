@@ -29,4 +29,4 @@ class HardSeedCommandTests(TestCase):
 
         admin = Employee.objects.get(username="admin")
         self.assertTrue(admin.check_password("admin"))
-
+        
