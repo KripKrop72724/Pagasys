@@ -26,4 +26,7 @@ class HardSeedCommandTests(TestCase):
                 is_staff=True,
             ).exists()
         )
+
+        admin = Employee.objects.get(username="admin")
+        self.assertTrue(admin.check_password("admin"))
         

@@ -220,9 +220,10 @@ class Command(BaseCommand):
             }
 
             # Admin user for quick access to Django admin
-            admin = Employee.objects.create(
+            admin = Employee.objects.create_superuser(
                 username="admin",
                 email="admin@example.com",
+                password="admin",
                 first_name="Admin",
                 last_name="User",
                 hire_date=date(2024, 1, 1),
@@ -230,10 +231,7 @@ class Command(BaseCommand):
                 visa_type="company",
                 trade_license=acme_lic,
                 department=acme_d1,
-                is_staff=True,
-                is_superuser=True,
             )
-            admin.set_password("admin")
             admin.groups.add(groups["Company Admin"])
 
             # Employees with variations
