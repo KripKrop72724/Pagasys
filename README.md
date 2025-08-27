@@ -42,6 +42,33 @@ comprehensive automated test suite.
   scope validation. Raw events are stored for later summarization by the policy
   layer.
 
+### Capture layer
+
+The capture app records raw attendance punches and manages employee face
+enrollments. Images are stored in S3 using the following prefixes:
+
+```
+attendance-enroll/{company_id}/{employee_id}/{uuid}.jpg
+attendance-capture/{company_id}/{device_id}/{YYYY/MM/DD}/{uuid}.jpg
+```
+
+Faces are indexed into Amazon Rekognition collections named
+`reko-company-{company_id}`. Punches invoke
+`SearchFacesByImage` using a minimum confidence threshold taken from either the
+shift rule `FACE_MIN_CONF` or the default setting
+`FACE_MATCH_DEFAULT_MIN_CONF` (0.90).
+
+Two primary endpoints power the workflow:
+
+* `POST /companies/{cid}/employees/{eid}/face/enrollment-link` – generate a
+  one‑time link for employees to upload enrollment photos.
+* `POST /api/capture/punch` – device endpoint accepting punch metadata and an
+  optional image for face verification.
+
+All requests from capture devices use the `X-Device-Key` header for
+authentication and may optionally provide latitude/longitude for geofence
+enforcement.
+
 ## Tech Stack
 
 * Python 3.12

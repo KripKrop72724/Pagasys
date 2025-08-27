@@ -10,7 +10,19 @@ class ScopedAdminMixin:
 
 @admin.register(AttendanceDevice)
 class AttendanceDeviceAdmin(ScopedAdminMixin, admin.ModelAdmin):
-    list_display = ["name", "company", "branch", "department", "project", "is_active", "last_seen"]
+    list_display = [
+        "name",
+        "company",
+        "branch",
+        "department",
+        "project",
+        "is_active",
+        "last_seen",
+        "latitude",
+        "longitude",
+        "radius_m",
+        "note",
+    ]
     list_filter = ["company", "branch", "department", "project", "is_active"]
     search_fields = ["name", "api_key"]
 
@@ -35,15 +47,26 @@ class PunchEventAdmin(ScopedAdminMixin, admin.ModelAdmin):
         "action",
         "device_ts",
         "face_matched",
+        "face_confidence",
+        "requires_face",
+        "out_of_scope",
+        "geofence_ok",
+        "roster_date",
+        "external_id",
+    ]
+    list_filter = [
+        "company",
+        "device",
+        "face_matched",
+        "requires_face",
         "out_of_scope",
         "geofence_ok",
         "roster_date",
     ]
-    list_filter = ["company", "device", "face_matched", "out_of_scope", "geofence_ok", "roster_date"]
     search_fields = ["employee__username", "device__name", "external_id"]
 
 
 @admin.register(PunchException)
 class PunchExceptionAdmin(ScopedAdminMixin, admin.ModelAdmin):
-    list_display = ["event", "kind"]
+    list_display = ["event", "kind", "details"]
     list_filter = ["kind"]
