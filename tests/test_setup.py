@@ -6,8 +6,17 @@ def test_entrypoint_exists():
     entrypoint = Path('entrypoint.sh')
     assert entrypoint.exists(), 'entrypoint.sh should exist'
     content = entrypoint.read_text()
-    assert 'RUN_MIGRATIONS' in content, 'entrypoint should check RUN_MIGRATIONS'
+    assert 'RUN_MIGRATIONS' not in content, 'entrypoint should not run migrations'
     assert 'exec "$@"' in content, 'entrypoint should forward commands'
+
+
+def test_predeploy_hook_runs_migrations():
+    hook = Path('.platform/hooks/predeploy/10_run_migrations.sh')
+    assert hook.exists(), 'predeploy hook should exist'
+    content = hook.read_text()
+    expected = 'docker-compose run --rm web python manage.py migrate --noinput'
+    assert expected in content, 'hook should run migrations via docker-compose'
+    assert 'RDS_HOSTNAME' in content, 'hook should construct DATABASE_URL from RDS vars'
 
 
 def test_cmd_uses_port_env():

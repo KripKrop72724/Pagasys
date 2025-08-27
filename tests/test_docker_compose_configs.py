@@ -53,7 +53,10 @@ def test_migration_flag_and_commands():
 
         assert "command" not in web, f"web service in {fname} should use default CMD"
         web_env = extract_env(web)
-        assert web_env.get("RUN_MIGRATIONS") == "1", f"web in {fname} must set RUN_MIGRATIONS=1"
+        if fname.endswith("local.yml"):
+            assert web_env.get("RUN_MIGRATIONS") == "1", f"web in {fname} must set RUN_MIGRATIONS=1"
+        else:
+            assert web_env.get("RUN_MIGRATIONS") in (None, "0"), f"web in {fname} must not enable migrations"
 
         worker_env = extract_env(worker)
         assert "RUN_MIGRATIONS" not in worker_env, f"worker in {fname} must not set RUN_MIGRATIONS"
