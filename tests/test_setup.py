@@ -44,4 +44,3 @@ def test_whitenoise_configured():
     settings = Path('config/settings/base.py').read_text()
     assert 'whitenoise.middleware.WhiteNoiseMiddleware' in settings, 'whitenoise middleware missing'
     assert 'STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"' in settings
-
