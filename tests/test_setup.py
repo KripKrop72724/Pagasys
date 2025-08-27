@@ -16,6 +16,7 @@ def test_predeploy_hook_runs_migrations():
     content = hook.read_text()
     expected = 'docker-compose run --rm web python manage.py migrate --noinput'
     assert expected in content, 'hook should run migrations via docker-compose'
+    assert 'RDS_HOSTNAME' in content, 'hook should construct DATABASE_URL from RDS vars'
 
 
 def test_cmd_uses_port_env():
@@ -43,4 +44,3 @@ def test_whitenoise_configured():
     settings = Path('config/settings/base.py').read_text()
     assert 'whitenoise.middleware.WhiteNoiseMiddleware' in settings, 'whitenoise middleware missing'
     assert 'STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"' in settings
-
