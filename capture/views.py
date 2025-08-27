@@ -10,6 +10,8 @@ from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import viewsets, permissions, generics, parsers, filters as drf_filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from django_ratelimit.decorators import ratelimit
+from django.utils.decorators import method_decorator
 
 from pagasys.utils import scope_queryset
 from pagasys.policy.permissions import (
@@ -45,6 +47,7 @@ from .utils import (
     within_device_scope,
     geofence_ok,
     get_face_threshold,
+    get_geofence_requirement,
 )
 
 
@@ -141,25 +144,25 @@ class EnrollmentSubmitView(generics.GenericAPIView):
         ser = self.get_serializer(data=request.data)
         ser.is_valid(raise_exception=True)
         emp = link.employee
-        ensure_collection(company_collection_id(emp.company.id))
+        collection_id = company_collection_id(emp.company.id)
+        ensure_collection(collection_id)
+        fe = FaceEnrollment.objects.filter(employee=emp).first()
+        if fe:
+            delete_faces(fe.collection_id, fe.face_ids)
         face_ids = []
         for img in ser.validated_data["images"]:
             bytes_ = img.read()
             put_enroll_to_s3(emp.company.id, emp.id, bytes_)
             face_ids.extend(index_faces(emp.company.id, emp.id, bytes_))
-        fe, _ = FaceEnrollment.objects.get_or_create(
-            employee=emp,
-            defaults={
-                "collection_id": company_collection_id(emp.company.id),
-                "face_ids": face_ids,
-                "status": "active",
-            },
-        )
-        if fe and fe.pk:
-            merged = list({*fe.face_ids, *face_ids})
-            fe.face_ids = merged
-            fe.status = "active"
-            fe.save(update_fields=["face_ids", "status", "updated_at"])
+        with transaction.atomic():
+            FaceEnrollment.objects.update_or_create(
+                employee=emp,
+                defaults={
+                    "collection_id": collection_id,
+                    "face_ids": face_ids,
+                    "status": "active",
+                },
+            )
         link.mark_used()
         return Response({"faces_indexed": len(face_ids)})
 
@@ -167,6 +170,10 @@ class EnrollmentSubmitView(generics.GenericAPIView):
 # --------- Punch Capture (device-auth only) ---------
 
 
+@method_decorator(
+    ratelimit(key="ip", rate=settings.CAPTURE_PUNCH_RATE_LIMIT, block=True),
+    name="post",
+)
 class CapturePunchView(generics.GenericAPIView):
     authentication_classes = [DeviceKeyAuthentication]
     permission_classes = []
@@ -205,6 +212,8 @@ class CapturePunchView(generics.GenericAPIView):
         face_ok = False
         confidence = None
         requires_face = False
+        face_mismatch = False
+        geofence_rule = None
 
         if hinted_emp:
             roster_date, roster_entry = compute_roster_date(hinted_emp, company_local_dt)
@@ -214,18 +223,35 @@ class CapturePunchView(generics.GenericAPIView):
             if roster_entry:
                 threshold = get_face_threshold(roster_entry.shift, roster_date)
                 requires_face = roster_entry.shift.requires_face
+                geofence_rule = get_geofence_requirement(roster_entry.shift, roster_date)
             res = search_face_by_image(company.id, image_bytes, threshold)
             matches = res.get("FaceMatches", []) or []
-            if matches:
-                top = max(matches, key=lambda m: m.get("Similarity", 0))
-                sim = float(top.get("Similarity", 0))
-                confidence = sim / 100.0 if sim > 1 else sim
-                ext = top["Face"].get("ExternalImageId")
-                try:
-                    matched_emp = Employee.objects.get(pk=int(ext))
-                except Exception:
-                    matched_emp = hinted_emp
-                face_ok = True
+            if data.get("employee_id"):
+                if matches:
+                    top = max(matches, key=lambda m: m.get("Similarity", 0))
+                    sim = float(top.get("Similarity", 0))
+                    confidence = sim / 100.0 if sim > 1 else sim
+                    ext = top["Face"].get("ExternalImageId")
+                    if ext and ext.isdigit() and int(ext) == data["employee_id"]:
+                        matched_emp = Employee.objects.filter(pk=int(ext)).first()
+                        face_ok = bool(matched_emp)
+                    else:
+                        face_mismatch = True
+                else:
+                    face_mismatch = True
+            else:
+                if len(matches) == 1:
+                    top = matches[0]
+                    sim = float(top.get("Similarity", 0))
+                    confidence = sim / 100.0 if sim > 1 else sim
+                    ext = top["Face"].get("ExternalImageId")
+                    if ext and ext.isdigit():
+                        matched_emp = Employee.objects.filter(pk=int(ext)).first()
+                        face_ok = bool(matched_emp)
+                else:
+                    face_mismatch = True
+        elif roster_entry:
+            geofence_rule = get_geofence_requirement(roster_entry.shift, roster_date)
 
         employee = hinted_emp or matched_emp
         if employee:
@@ -233,23 +259,38 @@ class CapturePunchView(generics.GenericAPIView):
                 roster_date, roster_entry = compute_roster_date(employee, company_local_dt)
             if roster_entry:
                 requires_face = roster_entry.shift.requires_face
+                if geofence_rule is None:
+                    geofence_rule = get_geofence_requirement(roster_entry.shift, roster_date)
 
         out_scope = False
         if employee:
             out_scope = not within_device_scope(device, employee)
         geo_ok = geofence_ok(device, data.get("lat"), data.get("lon"))
+        geofence_rule_violation = False
+        if geofence_rule is not None:
+            if not (device.latitude and device.longitude and device.radius_m):
+                geofence_rule_violation = True
+            elif device.radius_m > geofence_rule:
+                geofence_rule_violation = True
 
         accepted = True
         reason = None
-        if requires_face:
+        if face_mismatch:
+            accepted = False
+            reason = "face_required_no_match"
+        elif requires_face:
             fe = getattr(employee, "face_enrollment", None) if employee else None
             if not (fe and fe.status == "active" and face_ok):
                 accepted = False
                 reason = "face_required_no_match"
 
-        if not geo_ok and getattr(settings, "CAPTURE_BLOCK_GEOFENCE", False):
+        if geo_ok is False and getattr(settings, "CAPTURE_BLOCK_GEOFENCE", False):
             accepted = False
             reason = reason or "geofence"
+
+        if geofence_rule_violation:
+            accepted = False
+            reason = "geofence"
 
         if out_scope and getattr(settings, "CAPTURE_BLOCK_OUT_OF_SCOPE", False):
             accepted = False
@@ -278,14 +319,20 @@ class CapturePunchView(generics.GenericAPIView):
         except IntegrityError:
             ev = PunchEvent.objects.filter(device=device, external_id=ext_id).first()
 
-        if (
-            (reason == "face_required_no_match")
-            or (out_scope and not settings.CAPTURE_BLOCK_OUT_OF_SCOPE)
-            or (not geo_ok and not settings.CAPTURE_BLOCK_GEOFENCE)
-        ):
+        if reason == "face_required_no_match":
             PunchException.objects.get_or_create(
                 event=ev,
-                defaults={"kind": reason or ("outside_scope" if out_scope else "geofence"), "details": {}},
+                defaults={"kind": "face_required_no_match", "details": {}},
+            )
+        elif out_scope and not settings.CAPTURE_BLOCK_OUT_OF_SCOPE:
+            PunchException.objects.get_or_create(
+                event=ev,
+                defaults={"kind": "outside_scope", "details": {}},
+            )
+        elif (geo_ok is False and not settings.CAPTURE_BLOCK_GEOFENCE) or geofence_rule_violation:
+            PunchException.objects.get_or_create(
+                event=ev,
+                defaults={"kind": "geofence", "details": {}},
             )
 
         payload = {

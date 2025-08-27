@@ -88,9 +88,23 @@ def distance_m(lat1, lon1, lat2, lon2) -> float:
 
 
 def geofence_ok(device, lat, lon):
-    """Return True if coordinates satisfy device geofence."""
+    """Return True/False/None depending on geofence evaluation."""
     if not (device.latitude and device.longitude and device.radius_m):
         return True
     if lat is None or lon is None:
-        return True
+        return None
     return distance_m(device.latitude, device.longitude, lat, lon) <= device.radius_m
+
+
+def get_geofence_requirement(shift: ShiftTemplate, roster_day: _date) -> int | None:
+    """Return GEOFENCE_REQUIRED rule value in meters if active for the day."""
+    rule = ShiftRule.objects.filter(
+        Q(active_from__isnull=True) | Q(active_from__lte=roster_day),
+        Q(active_to__isnull=True) | Q(active_to__gte=roster_day),
+        shift=shift,
+        kind=ShiftRule.Kind.GEOFENCE_REQUIRED,
+    ).first()
+    try:
+        return int(rule.value) if rule else None
+    except Exception:
+        return None

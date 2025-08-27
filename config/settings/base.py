@@ -63,6 +63,7 @@ INSTALLED_APPS = [
     "drf_spectacular",
     "pagasys",
     "capture",
+    "django_ratelimit",
 ]
 
 MIDDLEWARE = [
@@ -248,6 +249,8 @@ PUBLIC_BASE_URL = env("PUBLIC_BASE_URL", default="https://your.domain")
 FACE_MATCH_DEFAULT_MIN_CONF = env.float("FACE_MATCH_DEFAULT_MIN_CONF", default=0.90)
 CAPTURE_BLOCK_OUT_OF_SCOPE = env.bool("CAPTURE_BLOCK_OUT_OF_SCOPE", default=False)
 CAPTURE_BLOCK_GEOFENCE = env.bool("CAPTURE_BLOCK_GEOFENCE", default=False)
+# Maximum punch submissions per IP (e.g. "30/m" => 30 per minute)
+CAPTURE_PUNCH_RATE_LIMIT = env("CAPTURE_PUNCH_RATE_LIMIT", default="30/m")
 
 FACE_ENROLL_MIN_PHOTOS = env.int("FACE_ENROLL_MIN_PHOTOS", default=3)
 FACE_ENROLL_MAX_PHOTOS = env.int("FACE_ENROLL_MAX_PHOTOS", default=6)
@@ -264,3 +267,9 @@ CELERY_BROKER_URL = env('CELERY_BROKER_URL', default='redis://redis:6379/0')
 CELERY_RESULT_BACKEND = env('CELERY_RESULT_BACKEND', default=CELERY_BROKER_URL)
 CELERY_TASK_ALWAYS_EAGER = env.bool('CELERY_TASK_ALWAYS_EAGER', default=False)
 CELERY_TASK_EAGER_PROPAGATES = env.bool('CELERY_TASK_EAGER_PROPAGATES', default=True)
+
+SILENCED_SYSTEM_CHECKS = [
+    "security.W019",
+    "django_ratelimit.E003",
+    "django_ratelimit.W001",
+]

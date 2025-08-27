@@ -49,6 +49,8 @@ django-filter==25.1
     # via -r requirements.in
 django-grappelli==4.0.2
     # via -r requirements.in
+django-ratelimit==4.1.0
+    # via -r requirements.in
 djangorestframework==3.16.0
     # via
     #   -r requirements.in

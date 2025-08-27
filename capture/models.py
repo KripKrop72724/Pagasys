@@ -100,7 +100,7 @@ class PunchEvent(models.Model):
     roster_date = models.DateField(null=True, blank=True)
     requires_face = models.BooleanField(default=False)
     out_of_scope = models.BooleanField(default=False)
-    geofence_ok = models.BooleanField(default=True)
+    geofence_ok = models.BooleanField(null=True, blank=True)
     notes = models.CharField(max_length=255, blank=True)
 
     external_id = models.CharField(max_length=64, blank=True)
