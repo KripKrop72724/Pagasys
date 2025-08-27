@@ -38,9 +38,32 @@ jobs:
       - name: Run tests
         run: pytest -q --disable-warnings --maxfail=1
 
+  run-migrations:
+    needs: lint-and-test
+    runs-on: ubuntu-latest
+    env:
+      DJANGO_SETTINGS_MODULE: config.settings.prod
+      DB_HOST: ${{ secrets.DB_HOST }}
+      DB_PORT: ${{ secrets.DB_PORT }}
+      DB_NAME: ${{ secrets.DB_NAME }}
+      DB_USER: ${{ secrets.DB_USER }}
+      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Run migrations
+        run: python manage.py migrate --noinput
+
   deploy-to-eb:
     name: Deploy to Elastic Beanstalk
-    needs: lint-and-test
+    needs: [lint-and-test, run-migrations]
     runs-on: ubuntu-latest
     environment: production
     steps:
