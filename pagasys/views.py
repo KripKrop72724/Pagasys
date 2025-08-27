@@ -971,7 +971,8 @@ document_filters(LeaveTypeViewSet)
 def healthz(request):
     """Health check that confirms database connectivity."""
     try:
-        connections["default"].cursor()
+        with connections["default"].cursor() as cursor:
+            cursor.execute("SELECT 1")
     except OperationalError:
         return HttpResponse("database error", status=500)
     return HttpResponse("ok")

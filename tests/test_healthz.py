@@ -17,3 +17,10 @@ class HealthzEndpointTests(TestCase):
         mock_connections.__getitem__.return_value.cursor.side_effect = OperationalError()
         response = self.client.get('/healthz/')
         self.assertEqual(response.status_code, 500)
+
+    @patch('pagasys.views.connections')
+    def test_healthz_returns_error_when_query_fails(self, mock_connections):
+        cursor = mock_connections.__getitem__.return_value.cursor.return_value.__enter__.return_value
+        cursor.execute.side_effect = OperationalError()
+        response = self.client.get('/healthz/')
+        self.assertEqual(response.status_code, 500)
