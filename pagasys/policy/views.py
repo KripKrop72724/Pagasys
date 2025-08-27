@@ -60,8 +60,9 @@ class BasePolicyViewSet(CompanyScopedQuerysetMixin, viewsets.ModelViewSet):
     search_fields = []
 
     def perform_create(self, serializer):
+        model = serializer.Meta.model
         company = self.get_company()
-        if "company" in serializer.fields and "company" not in serializer.validated_data:
+        if hasattr(model, "company_id"):
             serializer.save(company=company)
         else:
             serializer.save()
@@ -208,6 +209,21 @@ class RosterViewSet(BasePolicyViewSet):
     serializer_class = RosterEntrySerializer
     filterset_class = RosterFilter
     ordering = ["date", "employee_id"]
+
+    def perform_create(self, serializer):
+        vd = serializer.validated_data
+        is_h, was_h = holiday_flags(vd["employee"], vd["date"], vd.get("is_holiday"))
+        serializer.save(is_holiday=is_h, was_holiday=was_h)
+
+    def perform_update(self, serializer):
+        inst = serializer.instance
+        vd = serializer.validated_data
+        emp = vd.get("employee", inst.employee)
+        d = vd.get("date", inst.date)
+        explicit = "is_holiday" in serializer.initial_data
+        override = serializer.initial_data.get("is_holiday") if explicit else inst.is_holiday
+        is_h, was_h = holiday_flags(emp, d, override if explicit else None)
+        serializer.save(is_holiday=is_h, was_holiday=was_h)
 
     @action(detail=False, methods=["post"], url_path="bulk-upsert")
     @extend_schema(

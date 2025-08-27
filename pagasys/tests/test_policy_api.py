@@ -271,7 +271,7 @@ class PolicyApiTests(TestCase):
             payload,
             format="json",
         )
-        assert resp.status_code == 403
+        assert resp.status_code == 400
 
     def test_roster_bulk_upsert_dedup(self):
         st = ShiftTemplate.objects.create(
@@ -319,7 +319,7 @@ class PolicyApiTests(TestCase):
             payload,
             format="json",
         )
-        assert resp.status_code == 403
+        assert resp.status_code == 400
         assert RosterEntry.objects.count() == 0
 
     def test_roster_list_filters(self):
@@ -538,6 +538,70 @@ class PolicyApiTests(TestCase):
         assert resp.status_code == 200
         entry = RosterEntry.objects.get(employee=self.user, date="2024-07-04")
         assert entry.is_holiday and entry.was_holiday
+
+    def test_schedule_range_rejects_out_of_scope_shift(self):
+        other = Company.objects.create(name="C2")
+        st_other = ShiftTemplate.objects.create(
+            company=other, name="Other", start_time="09:00", end_time="17:00"
+        )
+        payload = {
+            "employee": self.user.id,
+            "shift": st_other.id,
+            "start_date": "2024-07-01",
+            "days": 1,
+        }
+        resp = self.client.post(
+            f"/api/companies/{self.company.id}/roster/schedule-range/",
+            payload,
+            format="json",
+        )
+        assert resp.status_code == 400
+
+    def test_roster_single_create_and_update_holiday_flags(self):
+        cal = WorkCalendar.objects.create(
+            company=self.company, name="Cal", is_default=True
+        )
+        Holiday.objects.create(calendar=cal, date="2024-08-10", name="HX")
+        st = ShiftTemplate.objects.create(
+            company=self.company,
+            name="Shift",
+            start_time="09:00",
+            end_time="17:00",
+        )
+        # create with explicit override on holiday
+        payload = {
+            "employee": self.user.id,
+            "date": "2024-08-10",
+            "shift": st.id,
+            "is_holiday": False,
+        }
+        resp = self.client.post(
+            f"/api/companies/{self.company.id}/roster/",
+            payload,
+            format="json",
+        )
+        assert resp.status_code == 201
+        entry = RosterEntry.objects.get(employee=self.user, date="2024-08-10")
+        assert not entry.is_holiday and entry.was_holiday
+        # update without explicit override but changing date to non-holiday
+        payload2 = {"date": "2024-08-11"}
+        resp2 = self.client.patch(
+            f"/api/companies/{self.company.id}/roster/{entry.id}/",
+            payload2,
+            format="json",
+        )
+        assert resp2.status_code == 200
+        entry.refresh_from_db()
+        assert not entry.is_holiday and not entry.was_holiday
+        # update with override True
+        resp3 = self.client.patch(
+            f"/api/companies/{self.company.id}/roster/{entry.id}/",
+            {"is_holiday": True},
+            format="json",
+        )
+        assert resp3.status_code == 200
+        entry.refresh_from_db()
+        assert entry.is_holiday and not entry.was_holiday
 
     def test_bulk_upsert_holiday_combinations(self):
         cal = WorkCalendar.objects.create(

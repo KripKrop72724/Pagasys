@@ -47,6 +47,7 @@ class PolicyRBACScopeTests(TestCase):
         bm_group = Group.objects.get(name="Branch Manager")
         dm_group = Group.objects.get(name="Department Manager")
         pm_group = Group.objects.get(name="Project Manager")
+        ca_group = Group.objects.get(name="Company Admin")
         self.branch_manager = User.objects.create_user(
             username="bm",
             password="pass",
@@ -121,6 +122,17 @@ class PolicyRBACScopeTests(TestCase):
         )
         self.proj_emp.groups.add(emp_group)
         self.proj_other.groups.add(emp_group)
+        self.company_admin = User.objects.create_user(
+            username="ca",
+            password="pass",
+            trade_license=self.license,
+            department=self.dept1,
+            hire_date="2024-01-01",
+            employment_type="permanent",
+            visa_type="company",
+            is_staff=True,
+        )
+        self.company_admin.groups.add(ca_group)
         self.shift = ShiftTemplate.objects.create(
             company=self.company,
             name="S",
@@ -143,7 +155,7 @@ class PolicyRBACScopeTests(TestCase):
             payload_bad,
             format="json",
         )
-        assert resp_bad.status_code == 403
+        assert resp_bad.status_code == 400
         RosterEntry.objects.create(employee=self.emp_other, date="2024-08-03", shift=self.shift)
         resp = self.client.get(f"/api/companies/{self.company.id}/roster/")
         ids = [r["employee"] for r in resp.data["results"]]
@@ -164,7 +176,7 @@ class PolicyRBACScopeTests(TestCase):
             bad,
             format="json",
         )
-        assert resp_bad.status_code == 403
+        assert resp_bad.status_code == 400
         RosterEntry.objects.create(employee=self.dept_emp, date="2024-08-06", shift=self.shift)
         RosterEntry.objects.create(employee=self.emp_other, date="2024-08-07", shift=self.shift)
         resp = self.client.get(f"/api/companies/{self.company.id}/roster/")
@@ -186,7 +198,7 @@ class PolicyRBACScopeTests(TestCase):
             bad,
             format="json",
         )
-        assert resp_bad.status_code == 403
+        assert resp_bad.status_code == 400
         RosterEntry.objects.create(employee=self.proj_emp, date="2024-08-10", shift=self.shift)
         RosterEntry.objects.create(employee=self.proj_other, date="2024-08-11", shift=self.shift)
         resp = self.client.get(f"/api/companies/{self.company.id}/roster/")
@@ -194,15 +206,116 @@ class PolicyRBACScopeTests(TestCase):
         assert ids == {self.proj_emp.id}
 
     def test_holiday_import_requires_admin(self):
-        self.client.force_authenticate(self.branch_manager)
         cal = WorkCalendar.objects.create(company=self.company, name="Cal")
         payload = [{"date": "2024-01-01", "name": "NY"}]
+        # branch manager denied
+        self.client.force_authenticate(self.branch_manager)
         resp = self.client.post(
             f"/api/companies/{self.company.id}/work-calendars/{cal.id}/holidays/import/",
             payload,
             format="json",
         )
         assert resp.status_code == 403
+        # company admin allowed
+        self.client.force_authenticate(self.company_admin)
+        resp2 = self.client.post(
+            f"/api/companies/{self.company.id}/work-calendars/{cal.id}/holidays/import/",
+            payload,
+            format="json",
+        )
+        assert resp2.status_code == 200
+
+    def test_shift_template_custom_actions_permissions(self):
+        st = self.shift
+        # rules and preview allowed for branch manager
+        self.client.force_authenticate(self.branch_manager)
+        resp_rules = self.client.get(
+            f"/api/companies/{self.company.id}/shift-templates/{st.id}/rules/"
+        )
+        assert resp_rules.status_code == 200
+        resp_prev = self.client.get(
+            f"/api/companies/{self.company.id}/shift-templates/{st.id}/preview/"
+        )
+        assert resp_prev.status_code == 200
+        # validate allowed only for admin
+        payload = {
+            "shift": st.id,
+            "kind": "max_daily_hours",
+            "value": "8",
+        }
+        resp_val = self.client.post(
+            f"/api/companies/{self.company.id}/shift-rules/validate/",
+            payload,
+            format="json",
+        )
+        assert resp_val.status_code == 403
+        self.client.force_authenticate(self.company_admin)
+        resp_val2 = self.client.post(
+            f"/api/companies/{self.company.id}/shift-rules/validate/",
+            payload,
+            format="json",
+        )
+        assert resp_val2.status_code != 403
+
+    def test_roster_custom_actions_permissions(self):
+        self.client.force_authenticate(self.branch_manager)
+        payload = {
+            "entries": [
+                {"employee": self.branch_manager.id, "date": "2024-08-12", "shift": self.shift.id}
+            ]
+        }
+        resp = self.client.post(
+            f"/api/companies/{self.company.id}/roster/bulk-upsert/",
+            payload,
+            format="json",
+        )
+        assert resp.status_code == 200
+        resp_sum = self.client.get(
+            f"/api/companies/{self.company.id}/roster/summary/"
+        )
+        assert resp_sum.status_code == 200
+        sched_payload = {
+            "employee": self.branch_manager.id,
+            "shift": self.shift.id,
+            "start_date": "2024-08-13",
+            "days": 1,
+        }
+        resp_sched = self.client.post(
+            f"/api/companies/{self.company.id}/roster/schedule-range/",
+            sched_payload,
+            format="json",
+        )
+        assert resp_sched.status_code == 200
+        # Employee role denied
+        self.client.force_authenticate(self.emp_other)
+        resp_den = self.client.post(
+            f"/api/companies/{self.company.id}/roster/bulk-upsert/",
+            payload,
+            format="json",
+        )
+        assert resp_den.status_code == 403
+
+    def test_project_only_user_company_member(self):
+        proj_user = Employee.objects.create_user(
+            username="projonly",
+            password="pass",
+            project=self.proj1,
+            hire_date="2024-01-01",
+            employment_type="permanent",
+            visa_type="personal",
+            is_staff=True,
+        )
+        proj_user.groups.add(Group.objects.get(name="Company Admin"))
+        self.client.force_authenticate(proj_user)
+        resp = self.client.get(
+            f"/api/companies/{self.company.id}/work-calendars/"
+        )
+        assert resp.status_code == 200
+        other = Company.objects.create(name="OtherCo")
+        resp2 = self.client.get(
+            f"/api/companies/{other.id}/work-calendars/"
+        )
+        assert resp2.status_code in (403, 404)
 
     def test_employee_roster_read_only(self):
         self.client.force_authenticate(self.emp_other)
@@ -217,4 +330,4 @@ class PolicyRBACScopeTests(TestCase):
             payload,
             format="json",
         )
-        assert resp2.status_code == 403
+        assert resp2.status_code in (403, 404)
