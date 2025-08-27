@@ -6,7 +6,7 @@ def test_entrypoint_exists():
     entrypoint = Path('entrypoint.sh')
     assert entrypoint.exists(), 'entrypoint.sh should exist'
     content = entrypoint.read_text()
-    assert 'RUN_MIGRATIONS' in content, 'entrypoint should check RUN_MIGRATIONS'
+    assert 'RUN_MIGRATIONS' not in content, 'entrypoint should not run migrations'
     assert 'exec "$@"' in content, 'entrypoint should forward commands'
 
 
