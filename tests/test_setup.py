@@ -10,6 +10,14 @@ def test_entrypoint_exists():
     assert 'exec "$@"' in content, 'entrypoint should forward commands'
 
 
+def test_predeploy_hook_runs_migrations():
+    hook = Path('.platform/hooks/predeploy/10_run_migrations.sh')
+    assert hook.exists(), 'predeploy hook should exist'
+    content = hook.read_text()
+    expected = 'docker-compose run --rm web python manage.py migrate --noinput'
+    assert expected in content, 'hook should run migrations via docker-compose'
+
+
 def test_cmd_uses_port_env():
     dockerfile = Path('Dockerfile').read_text()
     assert '${PORT:-8000}' in dockerfile, 'Dockerfile CMD should use PORT env'
