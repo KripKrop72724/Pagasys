@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import datetime
+from django.utils import timezone
 import hashlib
 import uuid
 
@@ -60,9 +60,10 @@ def search_face_by_image(company_id: int, image_bytes: bytes, threshold: float):
 
 def put_capture_to_s3(company_id: int, device_id: int, image_bytes: bytes) -> tuple[str, str]:
     """Upload capture image to S3 and return key and SHA256 hash."""
+    today = timezone.localdate()
     key = (
         "attendance-capture/"
-        f"{company_id}/{device_id}/{datetime.date.today():%Y/%m/%d}/"
+        f"{company_id}/{device_id}/{today:%Y/%m/%d}/"
         f"{uuid.uuid4().hex}.jpg"
     )
     return _put_to_s3(settings.AWS_S3_BUCKET_CAPTURE, key, image_bytes)

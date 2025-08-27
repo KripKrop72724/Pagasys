@@ -1,6 +1,7 @@
 import pytest
 from decimal import Decimal
 from datetime import datetime, date, time, timezone as dt_timezone
+from django.utils import timezone
 from zoneinfo import ZoneInfo
 
 from capture.utils import (
@@ -46,7 +47,7 @@ def departments(branches):
 @pytest.fixture
 def projects(branches):
     b1, b2 = branches
-    today = date.today()
+    today = timezone.localdate()
     p1 = Project.objects.create(branch=b1, name="P1", start_date=today)
     p2 = Project.objects.create(branch=b2, name="P2", start_date=today)
     return p1, p2
@@ -59,7 +60,7 @@ def employees(departments, projects):
     e1 = Employee.objects.create_user(
         username="e1",
         password="pw",
-        hire_date=date.today(),
+        hire_date=timezone.localdate(),
         employment_type="permanent",
         department=d1,
         visa_type="personal",
@@ -67,7 +68,7 @@ def employees(departments, projects):
     e2 = Employee.objects.create_user(
         username="e2",
         password="pw",
-        hire_date=date.today(),
+        hire_date=timezone.localdate(),
         employment_type="permanent",
         project=p1,
         visa_type="personal",
@@ -75,7 +76,7 @@ def employees(departments, projects):
     e3 = Employee.objects.create_user(
         username="e3",
         password="pw",
-        hire_date=date.today(),
+        hire_date=timezone.localdate(),
         employment_type="permanent",
         department=d2,
         visa_type="personal",
@@ -83,7 +84,7 @@ def employees(departments, projects):
     e4 = Employee.objects.create_user(
         username="e4",
         password="pw",
-        hire_date=date.today(),
+        hire_date=timezone.localdate(),
         employment_type="permanent",
         project=p2,
         visa_type="personal",

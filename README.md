@@ -64,6 +64,10 @@ Two primary endpoints power the workflow:
   one‑time link for employees to upload enrollment photos.
 * `POST /api/capture/punch` – device endpoint accepting punch metadata and an
   optional image for face verification.
+* `GET|POST /companies/{cid}/devices/` – register capture devices and rotate
+  API keys.
+* `GET /companies/{cid}/punch-events/` – list captured punches with filtering
+  and scope enforcement.
 
 All requests from capture devices use the `X-Device-Key` header for
 authentication and may optionally provide latitude/longitude for geofence
