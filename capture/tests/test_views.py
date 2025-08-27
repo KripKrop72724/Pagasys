@@ -14,6 +14,7 @@ from pagasys.models import (
     Employee,
     ShiftTemplate,
     RosterEntry,
+    ShiftRule,
 )
 
 
@@ -227,3 +228,63 @@ def test_face_match_success(client, company, device, employee, roster, monkeypat
     data = resp.json()
     assert data["matched_employee"] == employee.id
     assert data["face_confidence"] == pytest.approx(0.947, rel=1e-3)
+
+
+def test_face_mismatch_rejects(client, company, device, employee, employee_other, roster, monkeypatch):
+    def fake_put_capture_to_s3(company_id, device_id, bytes_):
+        return ("k", "h")
+
+    def fake_search(company_id, image_bytes, threshold):
+        return {"FaceMatches": [{"Similarity": 99.0, "Face": {"ExternalImageId": str(employee_other.id)}}]}
+
+    monkeypatch.setattr("capture.views.put_capture_to_s3", fake_put_capture_to_s3)
+    monkeypatch.setattr("capture.views.search_face_by_image", fake_search)
+
+    img_b64 = base64.b64encode(b"img").decode()
+    ts = datetime(2024, 7, 1, 9, 0, tzinfo=dt_timezone.utc)
+    resp = client.post(
+        "/api/capture/punch",
+        {
+            "employee_id": employee.id,
+            "action": "in",
+            "timestamp": ts.isoformat(),
+            "image_b64": img_b64,
+        },
+        **auth_headers(device),
+    )
+    assert resp.status_code == 403
+    data = resp.json()
+    assert data["matched_employee"] is None
+    assert data["accepted"] is False
+    ev = PunchEvent.objects.get(id=data["event_id"])
+    assert ev.exception.kind == "face_required_no_match"
+
+
+def test_geofence_required_rule_enforced(client, company, device, employee, roster):
+    device.latitude = Decimal("25.0")
+    device.longitude = Decimal("55.0")
+    device.radius_m = 100
+    device.save()
+    ShiftRule.objects.create(
+        shift=roster.shift,
+        kind=ShiftRule.Kind.GEOFENCE_REQUIRED,
+        value="50",
+    )
+    ts = datetime(2024, 7, 1, 9, 0, tzinfo=dt_timezone.utc)
+    resp = client.post(
+        "/api/capture/punch",
+        {
+            "employee_id": employee.id,
+            "action": "in",
+            "timestamp": ts.isoformat(),
+            "lat": 25.0,
+            "lon": 55.0,
+        },
+        **auth_headers(device),
+    )
+    assert resp.status_code == 403
+    data = resp.json()
+    assert data["accepted"] is False
+    assert data["geofence_ok"] is True
+    ev = PunchEvent.objects.get(id=data["event_id"])
+    assert ev.exception.kind == "geofence"

@@ -13,3 +13,4 @@ dj-database-url
 
 celery
 redis
+django-ratelimit

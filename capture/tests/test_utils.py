@@ -187,7 +187,7 @@ def test_geofence_ok(company):
     )
     assert geofence_ok(device, Decimal("25.000500"), Decimal("55.000500"))
     assert not geofence_ok(device, Decimal("25.002000"), Decimal("55.002000"))
-    assert geofence_ok(device, None, Decimal("55.000000"))
     device2 = AttendanceDevice.objects.create(company=company, name="dev2", api_key="k2")
     assert geofence_ok(device2, Decimal("0"), Decimal("0"))
+    assert geofence_ok(device, None, Decimal("55.000000")) is None
 
