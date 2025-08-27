@@ -1,12 +1,6 @@
 import pytest
-from rest_framework.test import APIRequestFactory
 from rest_framework import exceptions
-
-from capture.authentication import DeviceKeyAuthentication
-
-import pytest
 from rest_framework.test import APIRequestFactory
-from rest_framework import exceptions
 
 from capture.authentication import DeviceKeyAuthentication
 from capture.models import AttendanceDevice
@@ -57,4 +51,3 @@ def test_device_key_authentication_inactive(company):
     auth = DeviceKeyAuthentication()
     with pytest.raises(exceptions.AuthenticationFailed):
         auth.authenticate(request)
-

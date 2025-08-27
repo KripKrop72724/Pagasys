@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
-import datetime
+from django.utils import timezone
 import hashlib
 import uuid
 
-import boto3
+try:  # pragma: no cover - boto3 is optional in tests
+    import boto3  # type: ignore
+except ModuleNotFoundError:  # pragma: no cover
+    boto3 = None  # type: ignore
 from django.conf import settings
 
 
@@ -17,6 +20,8 @@ def company_collection_id(company_id: int) -> str:
 
 def ensure_collection(collection_id: str) -> None:
     """Ensure the given Rekognition collection exists."""
+    if boto3 is None:  # pragma: no cover
+        raise RuntimeError("boto3 is required for Rekognition operations")
     rk = boto3.client("rekognition", region_name=settings.AWS_REKOGNITION_REGION)
     try:
         rk.describe_collection(CollectionId=collection_id)
@@ -27,6 +32,8 @@ def ensure_collection(collection_id: str) -> None:
 def index_faces(company_id: int, employee_id: int, image_bytes: bytes) -> list[str]:
     """Index a face for an employee and return new FaceIds."""
     ensure_collection(company_collection_id(company_id))
+    if boto3 is None:  # pragma: no cover
+        raise RuntimeError("boto3 is required for Rekognition operations")
     rk = boto3.client("rekognition", region_name=settings.AWS_REKOGNITION_REGION)
     resp = rk.index_faces(
         CollectionId=company_collection_id(company_id),
@@ -43,12 +50,16 @@ def delete_faces(company_id: int, face_ids: list[str]) -> None:
     """Delete the given FaceIds from the company's collection."""
     if not face_ids:
         return
+    if boto3 is None:  # pragma: no cover
+        raise RuntimeError("boto3 is required for Rekognition operations")
     rk = boto3.client("rekognition", region_name=settings.AWS_REKOGNITION_REGION)
     rk.delete_faces(CollectionId=company_collection_id(company_id), FaceIds=face_ids)
 
 
 def search_face_by_image(company_id: int, image_bytes: bytes, threshold: float):
     """Search for faces in the company's collection."""
+    if boto3 is None:  # pragma: no cover
+        raise RuntimeError("boto3 is required for Rekognition operations")
     rk = boto3.client("rekognition", region_name=settings.AWS_REKOGNITION_REGION)
     return rk.search_faces_by_image(
         CollectionId=company_collection_id(company_id),
@@ -60,9 +71,10 @@ def search_face_by_image(company_id: int, image_bytes: bytes, threshold: float):
 
 def put_capture_to_s3(company_id: int, device_id: int, image_bytes: bytes) -> tuple[str, str]:
     """Upload capture image to S3 and return key and SHA256 hash."""
+    today = timezone.localdate()
     key = (
         "attendance-capture/"
-        f"{company_id}/{device_id}/{datetime.date.today():%Y/%m/%d}/"
+        f"{company_id}/{device_id}/{today:%Y/%m/%d}/"
         f"{uuid.uuid4().hex}.jpg"
     )
     return _put_to_s3(settings.AWS_S3_BUCKET_CAPTURE, key, image_bytes)
@@ -75,6 +87,8 @@ def put_enroll_to_s3(company_id: int, employee_id: int, image_bytes: bytes) -> t
 
 
 def _put_to_s3(bucket: str, key: str, image_bytes: bytes) -> tuple[str, str]:
+    if boto3 is None:  # pragma: no cover
+        raise RuntimeError("boto3 is required for S3 operations")
     s3 = boto3.client("s3")
     s3.put_object(Bucket=bucket, Key=key, Body=image_bytes, ContentType="image/jpeg")
     sha256 = hashlib.sha256(image_bytes).hexdigest()
