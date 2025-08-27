@@ -37,6 +37,10 @@ comprehensive automated test suite.
 * **Archiving over deletion** – Branches, departments and projects linked to
   employees are protected from hard deletion. Mark them inactive to archive
   instead of deleting.
+* **Capture layer** – Dedicated app for registering capture devices, face
+  enrollment with Amazon Rekognition, and raw punch ingestion with geofence and
+  scope validation. Raw events are stored for later summarization by the policy
+  layer.
 
 ## Tech Stack
 

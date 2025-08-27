@@ -62,6 +62,7 @@ INSTALLED_APPS = [
     "django_filters",
     "drf_spectacular",
     "pagasys",
+    "capture",
 ]
 
 MIDDLEWARE = [
@@ -234,9 +235,22 @@ REST_FRAMEWORK = {
 
 SPECTACULAR_SETTINGS = {
     'TITLE': 'Pagasys Payroll API',
-    'DESCRIPTION': 'Complete HR and payroll management for UAE companies',
+    'DESCRIPTION': 'Complete HR, payroll, and capture management for UAE companies',
     'VERSION': '1.0.0',
 }
+
+# --- CAPTURE LAYER CONFIG ---
+AWS_REKOGNITION_REGION = env("AWS_REKOGNITION_REGION", default="me-south-1")
+AWS_S3_BUCKET_ENROLL = env("AWS_S3_BUCKET_ENROLL", default="your-enroll-bucket")
+AWS_S3_BUCKET_CAPTURE = env("AWS_S3_BUCKET_CAPTURE", default="your-capture-bucket")
+PUBLIC_BASE_URL = env("PUBLIC_BASE_URL", default="https://your.domain")
+
+FACE_MATCH_DEFAULT_MIN_CONF = env.float("FACE_MATCH_DEFAULT_MIN_CONF", default=0.90)
+CAPTURE_BLOCK_OUT_OF_SCOPE = env.bool("CAPTURE_BLOCK_OUT_OF_SCOPE", default=False)
+CAPTURE_BLOCK_GEOFENCE = env.bool("CAPTURE_BLOCK_GEOFENCE", default=False)
+
+FACE_ENROLL_MIN_PHOTOS = env.int("FACE_ENROLL_MIN_PHOTOS", default=3)
+FACE_ENROLL_MAX_PHOTOS = env.int("FACE_ENROLL_MAX_PHOTOS", default=6)
 
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(seconds=int(env('SIMPLE_JWT_ACCESS_TOKEN_LIFETIME', default='3600'))),
