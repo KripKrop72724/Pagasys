@@ -118,23 +118,28 @@ class ShiftRuleSerializer(CleanModelMixin, serializers.ModelSerializer):
 
 
 class RosterEntrySerializer(CleanModelMixin, serializers.ModelSerializer):
-    def validate(self, attrs):
-        request = self.context.get("request")
-        if request:
-            allowed_emps = set(scope_queryset(Employee.objects.all(), request.user).values_list("id", flat=True))
-            allowed_shifts = set(scope_queryset(ShiftTemplate.objects.all(), request.user).values_list("id", flat=True))
-            if attrs["employee"].id not in allowed_emps or attrs["shift"].id not in allowed_shifts:
-                from rest_framework.exceptions import PermissionDenied
-                raise PermissionDenied("employee or shift outside your scope")
-        return super().validate(attrs)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        req = self.context.get("request")
+        if req:
+            self.fields["employee"].queryset = scope_queryset(
+                Employee.objects.all(), req.user
+            )
+            self.fields["shift"].queryset = scope_queryset(
+                ShiftTemplate.objects.all(), req.user
+            )
+
     employee_name = serializers.CharField(source="employee.get_full_name", read_only=True)
     shift_name = serializers.CharField(source="shift.name", read_only=True)
+    is_holiday = serializers.BooleanField(required=False)
+    was_holiday = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = RosterEntry
         fields = [
             "id", "employee", "date", "shift",
             "override_start", "override_end", "is_rest_day",
+            "is_holiday", "was_holiday",
             "employee_name", "shift_name",
         ]
         ref_name = "PolicyRosterEntry"
@@ -176,6 +181,17 @@ class RosterRangeSerializer(serializers.Serializer):
         required=False,
         help_text="Weekday codes to mark as rest days, e.g. ['SAT','SUN']",
     )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        req = self.context.get("request")
+        if req:
+            self.fields["employee"].queryset = scope_queryset(
+                Employee.objects.all(), req.user
+            )
+            self.fields["shift"].queryset = scope_queryset(
+                ShiftTemplate.objects.all(), req.user
+            )
 
     def validate(self, attrs):
         days = attrs.get("days")
