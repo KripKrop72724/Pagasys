@@ -17,7 +17,8 @@ from drf_spectacular.utils import (
 from django_filters.rest_framework import DjangoFilterBackend
 from django_filters import rest_framework as filters
 
-from django.db import IntegrityError, models, transaction
+from django.db import IntegrityError, models, transaction, connections
+from django.db.utils import OperationalError
 
 from .permissions import CustomObjectPermission, GroupRequiredPermission
 from .utils import scope_queryset
@@ -968,5 +969,9 @@ document_filters(LeaveTypeViewSet)
 
 
 def healthz(request):
-    """Simple health check returning HTTP 200."""
+    """Health check that confirms database connectivity."""
+    try:
+        connections["default"].cursor()
+    except OperationalError:
+        return HttpResponse("database error", status=500)
     return HttpResponse("ok")
