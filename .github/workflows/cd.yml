@@ -63,7 +63,11 @@ jobs:
             --comment "Run Django migrations" \
             --parameters 'commands=[
               "cd /var/app/current",
-              "nslookup $DB_HOST || { echo DB_HOST does not resolve; exit 1; }",
+              "echo \"DB_HOST value: $DB_HOST\"",
+              "echo \"DB_PORT value: $DB_PORT\"",
+              "nslookup www.google.com || { echo \"Cannot resolve public domain (DNS issue in VPC)\"; exit 1; }",
+              "echo \"Public DNS resolution works.\"",
+              "nslookup $DB_HOST || { echo \"DB_HOST does not resolve\"; exit 1; }",
               "python - <<'PY'",
               "import os, socket, sys, time",
               "host = os.environ.get(\"DB_HOST\")",
