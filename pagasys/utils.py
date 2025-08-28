@@ -16,6 +16,7 @@ from .models import (
     RosterEntry,
     LeaveType,
 )
+from capture.models import AttendanceDevice
 
 SCOPED_MODELS = {
     Company,
@@ -31,6 +32,7 @@ SCOPED_MODELS = {
     ShiftRule,
     RosterEntry,
     LeaveType,
+    AttendanceDevice,
 }
 
 
@@ -156,6 +158,26 @@ def scope_queryset(queryset, user):
         if role == "project_manager" and user.project:
             return queryset.filter(employee__project=user.project)
         return queryset.filter(employee=user)
+
+    if model is AttendanceDevice:
+        if role in ("company_admin", "payroll_manager") and company:
+            return queryset.filter(company=company)
+        if role == "branch_manager" and branch:
+            return queryset.filter(
+                models.Q(branch=branch)
+                | models.Q(department__branch=branch)
+                | models.Q(project__branch=branch)
+                | (
+                    models.Q(branch__isnull=True)
+                    & models.Q(department__isnull=True)
+                    & models.Q(project__isnull=True)
+                )
+            )
+        if role == "department_manager" and user.department:
+            return queryset.filter(department=user.department)
+        if role == "project_manager" and user.project:
+            return queryset.filter(project=user.project)
+        return queryset.none()
 
     if model is LeaveType:
         if company:
