@@ -80,6 +80,8 @@ POLICY_WRITE = {
     "ShiftRule": ADMIN_ROLES,
     "LeaveType": ADMIN_ROLES,
     "RosterEntry": ADMIN_ROLES | MANAGER_ROLES,
+    "AttendanceDevice": ADMIN_ROLES | MANAGER_ROLES,
+    "PunchEvent": ADMIN_ROLES | MANAGER_ROLES,
 }
 POLICY_READ = {
     "WorkCalendar": ADMIN_ROLES | MANAGER_ROLES,
@@ -88,6 +90,8 @@ POLICY_READ = {
     "ShiftRule": ADMIN_ROLES | MANAGER_ROLES,
     "LeaveType": ADMIN_ROLES | MANAGER_ROLES | {EMPLOYEE_ROLE},
     "RosterEntry": ADMIN_ROLES | MANAGER_ROLES | {EMPLOYEE_ROLE},
+    "AttendanceDevice": ADMIN_ROLES | MANAGER_ROLES,
+    "PunchEvent": ADMIN_ROLES | MANAGER_ROLES,
 }
 CUSTOM_ACTION = {
     "import_holidays": ADMIN_ROLES,
@@ -97,6 +101,10 @@ CUSTOM_ACTION = {
     "bulk_upsert": ADMIN_ROLES | MANAGER_ROLES,
     "summary": ADMIN_ROLES | MANAGER_ROLES,
     "schedule_range": ADMIN_ROLES | MANAGER_ROLES,
+    "create_link": ADMIN_ROLES | MANAGER_ROLES,
+    "status": ADMIN_ROLES | MANAGER_ROLES,
+    "revoke": ADMIN_ROLES | MANAGER_ROLES,
+    "rotate_key": ADMIN_ROLES | MANAGER_ROLES,
 }
 
 class ActionRolePermission(BasePermission):

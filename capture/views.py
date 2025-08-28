@@ -13,12 +13,13 @@ from rest_framework.response import Response
 from django_ratelimit.decorators import ratelimit
 from django.utils.decorators import method_decorator
 
-from pagasys.utils import scope_queryset
+from pagasys.utils import scope_queryset, ensure_in_scope
 from pagasys.policy.permissions import (
     IsCompanyMember,
     ActionRolePermission,
     CompanyScopedQuerysetMixin,
 )
+from pagasys.policy.backends import ScopeFilterBackend
 from pagasys.models import Company, Employee, RosterEntry, ShiftTemplate
 from .models import AttendanceDevice, FaceEnrollment, EnrollmentLink, PunchEvent, PunchException
 from .serializers import (
@@ -57,17 +58,29 @@ from .utils import (
 class AttendanceDeviceViewSet(CompanyScopedQuerysetMixin, viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated, IsCompanyMember, ActionRolePermission]
     serializer_class = AttendanceDeviceSerializer
-    filter_backends = [DjangoFilterBackend, drf_filters.OrderingFilter, drf_filters.SearchFilter]
+    queryset = AttendanceDevice.objects.all()
+    filter_backends = [ScopeFilterBackend, DjangoFilterBackend, drf_filters.OrderingFilter, drf_filters.SearchFilter]
     filterset_class = AttendanceDeviceFilter
     ordering = ["id"]
     search_fields = ["name", "api_key"]
 
+    def _ensure_scope(self, serializer):
+        for field in ("branch", "department", "project"):
+            obj = serializer.validated_data.get(field)
+            if obj:
+                ensure_in_scope(obj, self.request.user, field)
+
     def get_queryset(self):
-        qs = AttendanceDevice.objects.select_related("company", "branch", "department", "project")
+        qs = self.queryset.select_related("company", "branch", "department", "project")
         return super().get_queryset().filter(company=self.get_company())
 
     def perform_create(self, serializer):
+        self._ensure_scope(serializer)
         serializer.save(company=self.get_company(), api_key=secrets.token_urlsafe(32))
+
+    def perform_update(self, serializer):
+        self._ensure_scope(serializer)
+        serializer.save()
 
     @action(detail=True, methods=["post"], url_path="rotate-key")
     def rotate_key(self, request, company_id=None, pk=None):
@@ -93,33 +106,52 @@ class FaceEnrollmentViewSet(viewsets.ViewSet):
     @action(detail=True, methods=["get"], url_path=r"employees/(?P<employee_id>\d+)/face")
     def status(self, request, company_id=None, pk=None, employee_id=None):
         emp = self._get_employee(company_id, employee_id)
+        if isinstance(emp, Response):
+            return emp
         fe = getattr(emp, "face_enrollment", None)
         if not fe:
             return Response({"status": "none"})
         return Response(FaceEnrollmentStatusSerializer(fe).data)
 
-    @action(detail=True, methods=["post"], url_path=r"employees/(?P<employee_id>\d+)/face/enrollment-link")
+    @action(
+        detail=True,
+        methods=["post", "delete"],
+        url_path=r"employees/(?P<employee_id>\d+)/face/enrollment-link",
+    )
     def create_link(self, request, company_id=None, pk=None, employee_id=None):
         emp = self._get_employee(company_id, employee_id)
-        ser = EnrollmentLinkCreateSerializer(data=request.data or {})
-        ser.is_valid(raise_exception=True)
-        token = secrets.token_urlsafe(32)
-        expires = timezone.now() + timedelta(hours=ser.validated_data["expires_in_hours"])
-        EnrollmentLink.objects.create(
+        if isinstance(emp, Response):
+            return emp
+        if request.method == "POST":
+            ser = EnrollmentLinkCreateSerializer(data=request.data or {})
+            ser.is_valid(raise_exception=True)
+            token = secrets.token_urlsafe(32)
+            expires = timezone.now() + timedelta(hours=ser.validated_data["expires_in_hours"])
+            EnrollmentLink.objects.create(
+                employee=emp,
+                token=token,
+                expires_at=expires,
+                max_uses=ser.validated_data["max_uses"],
+            )
+            return Response(
+                {
+                    "url": f"{settings.PUBLIC_BASE_URL}/api/face/enroll/{token}",
+                    "token": token,
+                    "expires_at": expires,
+                }
+            )
+        EnrollmentLink.objects.filter(
             employee=emp,
-            token=token,
-            expires_at=expires,
-            max_uses=ser.validated_data["max_uses"],
-        )
-        return Response({
-            "url": f"{settings.PUBLIC_BASE_URL}/api/face/enroll/{token}",
-            "token": token,
-            "expires_at": expires,
-        })
+            used_at__isnull=True,
+            expires_at__gt=timezone.now(),
+        ).update(expires_at=timezone.now())
+        return Response(status=204)
 
     @action(detail=True, methods=["delete"], url_path=r"employees/(?P<employee_id>\d+)/face")
     def revoke(self, request, company_id=None, pk=None, employee_id=None):
         emp = self._get_employee(company_id, employee_id)
+        if isinstance(emp, Response):
+            return emp
         fe = getattr(emp, "face_enrollment", None)
         if fe:
             delete_faces(emp.company.id, fe.face_ids)
@@ -370,13 +402,14 @@ class CapturePunchView(generics.GenericAPIView):
 class PunchEventViewSet(CompanyScopedQuerysetMixin, viewsets.ReadOnlyModelViewSet):
     permission_classes = [permissions.IsAuthenticated, IsCompanyMember, ActionRolePermission]
     serializer_class = PunchEventSerializer
-    filter_backends = [DjangoFilterBackend, drf_filters.OrderingFilter, drf_filters.SearchFilter]
+    queryset = PunchEvent.objects.all()
+    filter_backends = [ScopeFilterBackend, DjangoFilterBackend, drf_filters.OrderingFilter, drf_filters.SearchFilter]
     filterset_class = PunchEventFilter
     ordering = ["-server_ts"]
     search_fields = ["employee__username", "device__name", "external_id"]
 
     def get_queryset(self):
-        qs = PunchEvent.objects.select_related("device", "company", "employee", "matched_employee")
+        qs = self.queryset.select_related("device", "company", "employee", "matched_employee")
         company = self.get_company()
         qs = qs.filter(company=company)
         allowed_emp_ids = scope_queryset(Employee.objects.all(), self.request.user).values_list("id", flat=True)
