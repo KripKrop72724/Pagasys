@@ -209,26 +209,80 @@ jobs:
           pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Smoke test
+      - name: Smoke test (HTTP + DB in VPC)
         id: smoke
         continue-on-error: true
         run: |
-          export DB_HOST=${{ secrets.DB_HOST }}
-          export DB_PORT=${{ secrets.DB_PORT }}
-          export DB_NAME=${{ secrets.DB_NAME }}
-          export DB_USER=${{ secrets.DB_USER }}
-          export DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+          # 1) App HTTP health check from outside (runner)
           URL=$(aws elasticbeanstalk describe-environments \
             --environment-names pagasys-dev \
             --query "Environments[0].CNAME" --output text)
-            for i in {1..15}; do
-              if curl -fsS "http://$URL/healthz" > /dev/null && \
-                 python manage.py shell -c "from django.db import connection; connection.cursor().execute('SELECT 1')"; then
-                echo "Smoke test passed"; exit 0
-              fi
-              echo "Waiting for app... ($i/15)"; sleep 10
-            done
-            echo "Smoke test failed"; exit 1
+
+          for i in {1..15}; do
+            if curl -fsS "http://$URL/healthz" > /dev/null; then
+              echo "HTTP health OK"
+              break
+            fi
+            echo "Waiting for app... ($i/15)"
+            sleep 10
+          done
+
+          if ! curl -fsS "http://$URL/healthz" > /dev/null; then
+            echo "HTTP health check failed"
+            exit 1
+          fi
+
+          # 2) DB check INSIDE the VPC (on the EB instance, in the web container)
+          cat >/tmp/db-check.sh <<'BASH'
+          #!/usr/bin/env bash
+          set -e
+          CONTAINER_NAME=current-web-1
+          if ! docker ps -q -f "name=${CONTAINER_NAME}" | grep -q .; then
+            echo "Container ${CONTAINER_NAME} not running"; exit 1
+          fi
+          docker exec -i "${CONTAINER_NAME}" sh -lc '
+            cd /app || exit 1
+            python manage.py shell -c "from django.db import connection; connection.cursor().execute(\"SELECT 1\"); print(\"DB OK\")"
+          '
+          BASH
+          chmod +x /tmp/db-check.sh
+
+          DB_B64=$(base64 -w0 /tmp/db-check.sh || base64 /tmp/db-check.sh)
+
+          jq -n --arg b "$DB_B64" '{commands: [
+            "set -e",
+            "echo \"$b\" | base64 -d > /tmp/db-check.sh",
+            "chmod +x /tmp/db-check.sh",
+            "/tmp/db-check.sh"
+          ]}' >/tmp/ssm-db.json
+
+          CMD_ID=$(aws ssm send-command \
+            --targets "Key=tag:elasticbeanstalk:environment-name,Values=pagasys-dev" \
+            --document-name "AWS-RunShellScript" \
+            --comment "Smoke test DB check" \
+            --parameters file:///tmp/ssm-db.json \
+            --query "Command.CommandId" --output text)
+
+          INSTANCE_ID=$(aws ec2 describe-instances \
+            --filters "Name=tag:elasticbeanstalk:environment-name,Values=pagasys-dev" "Name=instance-state-name,Values=running" \
+            --query "Reservations[0].Instances[0].InstanceId" --output text)
+
+          for i in {1..60}; do
+            INV=$(aws ssm get-command-invocation --command-id "$CMD_ID" --instance-id "$INSTANCE_ID")
+            STATUS=$(echo "$INV" | jq -r .Status)
+            if [ "$STATUS" = "InProgress" ] || [ "$STATUS" = "Pending" ] || [ "$STATUS" = "Delayed" ]; then
+              echo "DB check status: $STATUS. Waiting... ($i/60)"
+              sleep 5
+              continue
+            fi
+            echo "DB check completed with status: $STATUS"
+            echo "STDOUT:"; echo "$INV" | jq -r .StandardOutputContent
+            echo "STDERR:"; echo "$INV" | jq -r .StandardErrorContent
+            [ "$STATUS" = "Success" ] && exit 0 || exit 1
+          done
+
+          echo "DB check timed out"
+          exit 1
 
       - name: Roll back on smoke failure
         if: steps.smoke.outcome == 'failure'
