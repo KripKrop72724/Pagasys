@@ -1,8 +1,13 @@
+---
+# yamllint disable rule:line-length
 name: CI/CD
 
-on:
+'on':
   push:
-    branches: [ main ]
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
 
 concurrency:
   group: pagasys-deploy-${{ github.ref }}
@@ -51,45 +56,45 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
-          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region:           me-central-1
+          aws-region: me-central-1
       - name: Run migrations in VPC
         id: run-migrations
         run: |
           SCRIPT=$(cat <<EOF
-CONTAINER_NAME=current-web-1
-if [ -z "$CONTAINER_NAME" ]; then echo "Container name not set"; exit 1; fi
-if ! docker ps -q -f name=$CONTAINER_NAME | grep -q .; then echo "Container $CONTAINER_NAME not running"; exit 1; fi
-docker exec -i -e DB_HOST=$DB_HOST -e DB_PORT=$DB_PORT $CONTAINER_NAME sh <<'INNER'
-cd /app || { echo "App directory not found in container"; exit 1; }
-echo "DB_HOST value: \$DB_HOST"
-echo "DB_PORT value: \$DB_PORT"
-apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y dnsutils
-nslookup www.google.com || { echo "Cannot resolve public domain (DNS issue in container)"; exit 1; }
-echo "Public DNS resolution works."
-nslookup \$DB_HOST || { echo "DB_HOST does not resolve"; exit 1; }
-python - <<'PY'
-import os, socket, sys, time
-host = os.environ.get("DB_HOST")
-port = int(os.environ.get("DB_PORT", "5432"))
-if not host:
-    print("DB_HOST is not set"); sys.exit(1)
-for _ in range(30):
-    try:
-        socket.create_connection((host, port), timeout=5).close()
-        print("Database is reachable"); break
-    except socket.gaierror:
-        print("DB_HOST does not resolve"); sys.exit(1)
-    except OSError as e:
-        print(f"Waiting for database: {e}"); time.sleep(2)
-else:
-    print("Database not reachable"); sys.exit(1)
-PY
-python manage.py migrate --noinput --verbosity 2
-INNER
-EOF
-)
+          CONTAINER_NAME=current-web-1
+          if [ -z "$CONTAINER_NAME" ]; then echo "Container name not set"; exit 1; fi
+          if ! docker ps -q -f name=$CONTAINER_NAME | grep -q .; then echo "Container $CONTAINER_NAME not running"; exit 1; fi
+          docker exec -i -e DB_HOST=$DB_HOST -e DB_PORT=$DB_PORT -e DB_NAME=$DB_NAME -e DB_USER=$DB_USER -e DB_PASSWORD=$DB_PASSWORD $CONTAINER_NAME sh <<'INNER'
+          cd /app || { echo "App directory not found in container"; exit 1; }
+          echo "DB_HOST value: \$DB_HOST"
+          echo "DB_PORT value: \$DB_PORT"
+          apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y dnsutils
+          nslookup www.google.com || { echo "Cannot resolve public domain (DNS issue in container)"; exit 1; }
+          echo "Public DNS resolution works."
+          nslookup \$DB_HOST || { echo "DB_HOST does not resolve"; exit 1; }
+          python - <<'PY'
+          import os, socket, sys, time
+          host = os.environ.get("DB_HOST")
+          port = int(os.environ.get("DB_PORT", "5432"))
+          if not host:
+              print("DB_HOST is not set"); sys.exit(1)
+          for _ in range(30):
+              try:
+                  socket.create_connection((host, port), timeout=5).close()
+                  print("Database is reachable"); break
+              except socket.gaierror:
+                  print("DB_HOST does not resolve"); sys.exit(1)
+              except OSError as e:
+                  print(f"Waiting for database: {e}"); time.sleep(2)
+          else:
+              print("Database not reachable"); sys.exit(1)
+          PY
+          python manage.py migrate --noinput --verbosity 2
+          INNER
+          EOF
+          )
           COMMAND_ID=$(aws ssm send-command \
             --targets "Key=tag:elasticbeanstalk:environment-name,Values=pagasys-dev" \
             --document-name "AWS-RunShellScript" \
@@ -105,42 +110,42 @@ EOF
                       "Name=instance-state-name,Values=running" \
             --query "Reservations[0].Instances[0].InstanceId" \
             --output text)
-          
+
           if [ -z "$INSTANCE_ID" ]; then
             echo "No running instance found for environment pagasys-dev"
             exit 1
           fi
-          
+
           COMMAND_ID="${{ steps.run-migrations.outputs.command_id }}"
-          
+
           for i in {1..60}; do
             INVOCATION=$(aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID")
             STATUS=$(echo "$INVOCATION" | jq -r .Status)
-            
+
             if [ "$STATUS" = "InProgress" ] || [ "$STATUS" = "Pending" ] || [ "$STATUS" = "Delayed" ]; then
               echo "Command status: $STATUS. Waiting... ($i/60)"
               sleep 10
               continue
             fi
-            
+
             OUTPUT=$(echo "$INVOCATION" | jq -r .StandardOutputContent)
             ERROR=$(echo "$INVOCATION" | jq -r .StandardErrorContent)
             RESPONSE_CODE=$(echo "$INVOCATION" | jq -r .ResponseCode)
-            
+
             echo "Command completed with status: $STATUS"
             echo "Response code: $RESPONSE_CODE"
             echo "Standard Output:"
             echo "$OUTPUT"
             echo "Standard Error:"
             echo "$ERROR"
-            
+
             if [ "$STATUS" = "Success" ]; then
               exit 0
             else
               exit 1
             fi
           done
-          
+
           echo "Command timed out after 10 minutes"
           exit 1
 
@@ -148,16 +153,16 @@ EOF
     name: Deploy to Elastic Beanstalk
     needs: [lint-and-test, migrate]
     runs-on: ubuntu-latest
-    environment: production
+    environment: pagasys-dev
     steps:
       - uses: actions/checkout@v4
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
-          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region:           me-central-1
+          aws-region: me-central-1
 
       - name: Wait for EB environment to be ready
         run: |
@@ -185,12 +190,12 @@ EOF
       - name: Deploy to Elastic Beanstalk
         uses: einaregilsson/beanstalk-deploy@v22
         with:
-          aws_access_key:     ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws_secret_key:     ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          application_name:   pagasys-dev
-          environment_name:   pagasys-dev
-          version_label:      ${{ github.sha }}
-          region:             me-central-1
+          aws_access_key: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws_secret_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          application_name: pagasys-dev
+          environment_name: pagasys-dev
+          version_label: ${{ github.sha }}
+          region: me-central-1
           deployment_package: deployment-package.zip
 
       - name: Wait for deployment to finish
@@ -210,6 +215,11 @@ EOF
         id: smoke
         continue-on-error: true
         run: |
+          export DB_HOST=${{ secrets.DB_HOST }}
+          export DB_PORT=${{ secrets.DB_PORT }}
+          export DB_NAME=${{ secrets.DB_NAME }}
+          export DB_USER=${{ secrets.DB_USER }}
+          export DB_PASSWORD=${{ secrets.DB_PASSWORD }}
           URL=$(aws elasticbeanstalk describe-environments \
             --environment-names pagasys-dev \
             --query "Environments[0].CNAME" --output text)
@@ -232,4 +242,3 @@ EOF
       - name: Fail workflow if smoke test failed
         if: steps.smoke.outcome == 'failure'
         run: exit 1
-
