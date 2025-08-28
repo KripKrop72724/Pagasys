@@ -1,5 +1,5 @@
 import base64
-from datetime import datetime, date, time, timezone as dt_timezone
+from datetime import datetime, date, time, timezone as dt_timezone, timedelta
 from django.utils import timezone
 from decimal import Decimal
 
@@ -288,3 +288,19 @@ def test_geofence_required_rule_enforced(client, company, device, employee, rost
     assert data["geofence_ok"] is True
     ev = PunchEvent.objects.get(id=data["event_id"])
     assert ev.exception.kind == "geofence"
+
+
+def test_device_last_seen_updated(client, company, device, employee, roster):
+    old = timezone.now() - timedelta(days=1)
+    device.last_seen = old
+    device.save(update_fields=["last_seen"])
+    ts = datetime(2024, 7, 1, 9, 0, tzinfo=dt_timezone.utc)
+    resp = client.post(
+        "/api/capture/punch",
+        {"employee_id": employee.id, "action": "in", "timestamp": ts.isoformat()},
+        **auth_headers(device),
+    )
+    assert resp.status_code == 200
+    device.refresh_from_db()
+    assert device.last_seen is not None
+    assert device.last_seen > old

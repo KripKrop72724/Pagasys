@@ -182,6 +182,8 @@ class CapturePunchView(generics.GenericAPIView):
 
     def post(self, request):
         device = request.device
+        device.last_seen = timezone.now()
+        device.save(update_fields=["last_seen"])
         company = device.company
         ser = self.get_serializer(data=request.data)
         ser.is_valid(raise_exception=True)
