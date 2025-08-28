@@ -230,7 +230,7 @@ def test_face_match_success(client, company, device, employee, roster, monkeypat
     assert data["face_confidence"] == pytest.approx(0.947, rel=1e-3)
 
 
-def test_face_mismatch_rejects(client, company, device, employee, employee_other, roster, monkeypatch):
+def _mismatch_setup(monkeypatch, employee_other):
     def fake_put_capture_to_s3(company_id, device_id, bytes_):
         return ("k", "h")
 
@@ -240,6 +240,12 @@ def test_face_mismatch_rejects(client, company, device, employee, employee_other
     monkeypatch.setattr("capture.views.put_capture_to_s3", fake_put_capture_to_s3)
     monkeypatch.setattr("capture.views.search_face_by_image", fake_search)
 
+
+def test_face_mismatch_rejected_when_required(
+    client, company, device, employee, employee_other, face_roster, monkeypatch
+):
+    _mismatch_setup(monkeypatch, employee_other)
+    FaceEnrollment.objects.create(employee=employee, collection_id="c1", face_ids=["f1"], status="active")
     img_b64 = base64.b64encode(b"img").decode()
     ts = datetime(2024, 7, 1, 9, 0, tzinfo=dt_timezone.utc)
     resp = client.post(
@@ -254,10 +260,61 @@ def test_face_mismatch_rejects(client, company, device, employee, employee_other
     )
     assert resp.status_code == 403
     data = resp.json()
-    assert data["matched_employee"] is None
     assert data["accepted"] is False
     ev = PunchEvent.objects.get(id=data["event_id"])
     assert ev.exception.kind == "face_required_no_match"
+
+
+def test_face_mismatch_accepted_when_not_required(
+    client, company, device, employee, employee_other, roster, monkeypatch
+):
+    _mismatch_setup(monkeypatch, employee_other)
+    img_b64 = base64.b64encode(b"img").decode()
+    ts = datetime(2024, 7, 1, 9, 0, tzinfo=dt_timezone.utc)
+    resp = client.post(
+        "/api/capture/punch",
+        {
+            "employee_id": employee.id,
+            "action": "in",
+            "timestamp": ts.isoformat(),
+            "image_b64": img_b64,
+        },
+        **auth_headers(device),
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["accepted"] is True
+    ev = PunchEvent.objects.get(id=data["event_id"])
+    assert ev.exception.kind == "face_mismatch"
+
+
+def test_face_required_no_enrollment(client, company, device, employee, face_roster):
+    ts = datetime(2024, 7, 1, 9, 0, tzinfo=dt_timezone.utc)
+    resp = client.post(
+        "/api/capture/punch",
+        {"employee_id": employee.id, "action": "in", "timestamp": ts.isoformat()},
+        **auth_headers(device),
+    )
+    assert resp.status_code == 403
+    data = resp.json()
+    assert data["accepted"] is False
+    ev = PunchEvent.objects.get(id=data["event_id"])
+    assert ev.exception.kind == "no_enrollment"
+
+
+@pytest.mark.parametrize("status", ["revoked", "pending"])
+def test_face_required_inactive_enrollment(client, company, device, employee, face_roster, status):
+    FaceEnrollment.objects.create(employee=employee, collection_id="c1", face_ids=["f1"], status=status)
+    ts = datetime(2024, 7, 1, 9, 0, tzinfo=dt_timezone.utc)
+    resp = client.post(
+        "/api/capture/punch",
+        {"employee_id": employee.id, "action": "in", "timestamp": ts.isoformat()},
+        **auth_headers(device),
+    )
+    assert resp.status_code == 403
+    data = resp.json()
+    ev = PunchEvent.objects.get(id=data["event_id"])
+    assert ev.exception.kind == "no_enrollment"
 
 
 def test_geofence_required_rule_enforced(client, company, device, employee, roster):

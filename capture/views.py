@@ -268,6 +268,8 @@ class CapturePunchView(generics.GenericAPIView):
         if employee:
             out_scope = not within_device_scope(device, employee)
         geo_ok = geofence_ok(device, data.get("lat"), data.get("lon"))
+        if geo_ok is None:
+            geo_ok = True
         geofence_rule_violation = False
         if geofence_rule is not None:
             if not (device.latitude and device.longitude and device.radius_m):
@@ -277,12 +279,12 @@ class CapturePunchView(generics.GenericAPIView):
 
         accepted = True
         reason = None
-        if face_mismatch:
-            accepted = False
-            reason = "face_required_no_match"
-        elif requires_face:
-            fe = getattr(employee, "face_enrollment", None) if employee else None
-            if not (fe and fe.status == "active" and face_ok):
+        fe = getattr(employee, "face_enrollment", None) if employee else None
+        if requires_face:
+            if not (fe and fe.status == "active"):
+                accepted = False
+                reason = "no_enrollment"
+            elif face_mismatch or not face_ok:
                 accepted = False
                 reason = "face_required_no_match"
 
@@ -326,6 +328,11 @@ class CapturePunchView(generics.GenericAPIView):
                 event=ev,
                 defaults={"kind": "face_required_no_match", "details": {}},
             )
+        elif reason == "no_enrollment":
+            PunchException.objects.get_or_create(
+                event=ev,
+                defaults={"kind": "no_enrollment", "details": {}},
+            )
         elif out_scope and not settings.CAPTURE_BLOCK_OUT_OF_SCOPE:
             PunchException.objects.get_or_create(
                 event=ev,
@@ -335,6 +342,11 @@ class CapturePunchView(generics.GenericAPIView):
             PunchException.objects.get_or_create(
                 event=ev,
                 defaults={"kind": "geofence", "details": {}},
+            )
+        elif face_mismatch:
+            PunchException.objects.get_or_create(
+                event=ev,
+                defaults={"kind": "face_mismatch", "details": {}},
             )
 
         payload = {

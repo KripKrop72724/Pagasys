@@ -7,7 +7,7 @@ from django.core.exceptions import ValidationError
 from django.utils import timezone
 
 from pagasys.models import Company, Branch, Department, Project, Employee
-from capture.models import AttendanceDevice, EnrollmentLink, PunchEvent
+from capture.models import AttendanceDevice, EnrollmentLink, PunchEvent, FaceEnrollment
 
 
 @pytest.fixture
@@ -115,3 +115,27 @@ def test_attendance_device_valid_geofence(company, branch):
         radius_m=50,
     )
     device.full_clean()  # should not raise
+
+
+def test_punchevent_geofence_defaults_and_validation(company, branch):
+    device = AttendanceDevice.objects.create(company=company, name="dev", api_key="k1", branch=branch)
+    ts = timezone.now()
+    ev = PunchEvent.objects.create(device=device, company=company, device_ts=ts)
+    assert ev.geofence_ok is True
+    ev2 = PunchEvent.objects.create(device=device, company=company, device_ts=ts + timedelta(seconds=1), geofence_ok=False)
+    assert ev2.geofence_ok is False
+    ev3 = PunchEvent(device=device, company=company, device_ts=ts + timedelta(seconds=2), geofence_ok=None)
+    with pytest.raises(ValidationError):
+        ev3.full_clean()
+
+
+@pytest.mark.parametrize("status", ["active", "revoked", "pending"])
+def test_faceenrollment_status_valid(employee, status):
+    fe = FaceEnrollment(employee=employee, collection_id="c", face_ids=["f1"], status=status)
+    fe.full_clean()  # should not raise
+
+
+def test_faceenrollment_status_invalid(employee):
+    fe = FaceEnrollment(employee=employee, collection_id="c", face_ids=["f1"], status="invalid")
+    with pytest.raises(ValidationError):
+        fe.full_clean()
