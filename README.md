@@ -139,6 +139,21 @@ For production deployments configure the standard `DB_NAME`, `DB_USER`,
 an optional `DATABASE_URL` if present, which takes precedence and should include
 `sslmode=require`.
 
+### CI/CD database access
+
+GitHub-hosted runners operate on public networks and cannot reach private
+database endpoints. When running migrations from the workflow, `DB_HOST` must
+resolve publicly or the job must execute from a runner inside your VPC.
+The migration step requires these variables:
+
+- `DB_NAME`
+- `DB_USER`
+- `DB_PASSWORD`
+- `DB_HOST`
+
+Private RDS endpoints therefore need migrations to be triggered from a
+network-local environment such as an AWS SSM command or Elastic Beanstalk instance.
+
 ### Runtime tuning
 
 Static files are collected during the Docker image build, so rebuild the image after modifying assets.
