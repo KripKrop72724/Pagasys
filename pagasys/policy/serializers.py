@@ -68,6 +68,10 @@ class ShiftRuleSerializer(CleanModelMixin, serializers.ModelSerializer):
                 ShiftTemplate.objects.all(), req.user
             )
 
+    kind = extend_schema_field(
+        {"type": "string", "enum": [k for k, _ in ShiftRule.Kind.choices]}
+    )(serializers.ChoiceField(choices=ShiftRule.Kind.choices, help_text="Rule kind"))
+
     params = extend_schema_field(
         {
             "type": "object",

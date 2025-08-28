@@ -45,7 +45,14 @@ def _generate_parameters(viewset) -> List[OpenApiParameter]:
     for name in _get_filter_fields(viewset):
         filt = filters.get(name)
         is_bool = isinstance(filt, df.BooleanFilter)
+        is_choice = isinstance(filt, df.ChoiceFilter)
         example = "true" if is_bool else "<value>"
+        enum = None
+        if is_choice:
+            choices = [c[0] for c in filt.extra.get("choices", [])]
+            enum = choices if choices else None
+            if choices:
+                example = choices[0]
         params.append(
             OpenApiParameter(
                 name,
@@ -53,6 +60,7 @@ def _generate_parameters(viewset) -> List[OpenApiParameter]:
                 OpenApiParameter.QUERY,
                 description=f"Filter by {name}. Combine multiple parameters for compound filtering.",
                 examples=[OpenApiExample("Example", value=example)],
+                enum=enum,
             )
         )
     params.append(
