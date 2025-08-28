@@ -39,7 +39,16 @@ class ShiftTemplateFilter(df.FilterSet):
 
 class ShiftRuleFilter(df.FilterSet):
     shift = df.NumberFilter(field_name="shift_id")
-    kind = df.ChoiceFilter(field_name="kind", choices=ShiftRule.Kind.choices)
+    # `kind` values are stored as plain strings on the model.  While the
+    # `ShiftRule.Kind` enum documents the supported built-in values, the API
+    # shouldn't reject arbitrary strings.  Using a ``ChoiceFilter`` here causes
+    # django-filter to validate the query parameter against the enum choices and
+    # raise a ``ValidationError`` for unknown kinds.  The API tests expect that
+    # filtering with any value simply performs an exact lookup (returning an
+    # empty result if nothing matches) rather than responding with *400 Bad
+    # Request*.  Switching to a simple ``CharFilter`` removes that validation and
+    # allows free-form kind strings while still supporting the documented ones.
+    kind = df.CharFilter(field_name="kind")
     active_on = df.DateFilter(method="filter_active_on")
     weekday = df.CharFilter(method="filter_weekday")
 
