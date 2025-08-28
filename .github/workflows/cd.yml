@@ -55,8 +55,9 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region:           me-central-1
       - name: Run migrations in VPC
+        id: run-migrations
         run: |
-          aws ssm send-command \
+          COMMAND_ID=$(aws ssm send-command \
             --targets "Key=tag:elasticbeanstalk:environment-name,Values=pagasys-dev" \
             --document-name "AWS-RunShellScript" \
             --comment "Run Django migrations" \
@@ -80,9 +81,20 @@ jobs:
               "else:",
               "    print(\"Database not reachable\"); sys.exit(1)",
               "PY",
-              "python manage.py migrate --noinput"
+              "python manage.py migrate --noinput --verbosity 2"
             ]' \
-            --output text
+            --query "Command.CommandId" --output text)
+          echo "command_id=$COMMAND_ID" >> $GITHUB_OUTPUT
+
+      - name: Wait for migration command
+        run: |
+          INSTANCE_ID=$(aws ec2 describe-instances \
+            --filters "Name=tag:elasticbeanstalk:environment-name,Values=pagasys-dev" \
+                      "Name=instance-state-name,Values=running" \
+            --query "Reservations[0].Instances[0].InstanceId" \
+            --output text)
+          aws ssm wait command-executed --command-id "${{ steps.run-migrations.outputs.command_id }}" --instance-id "$INSTANCE_ID"
+          aws ssm get-command-invocation --command-id "${{ steps.run-migrations.outputs.command_id }}" --instance-id "$INSTANCE_ID" --query 'StandardOutputContent' --output text
 
 
   deploy-to-eb:
