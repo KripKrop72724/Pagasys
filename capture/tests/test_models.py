@@ -122,7 +122,12 @@ def test_punchevent_geofence_defaults_and_validation(company, branch):
     ts = timezone.now()
     ev = PunchEvent.objects.create(device=device, company=company, device_ts=ts)
     assert ev.geofence_ok is True
-    ev2 = PunchEvent.objects.create(device=device, company=company, device_ts=ts + timedelta(seconds=1), geofence_ok=False)
+    ev2 = PunchEvent.objects.create(
+        device=device,
+        company=company,
+        device_ts=ts + timedelta(seconds=1),
+        geofence_ok=False,
+    )
     assert ev2.geofence_ok is False
     ev3 = PunchEvent(device=device, company=company, device_ts=ts + timedelta(seconds=2), geofence_ok=None)
     with pytest.raises(ValidationError):
