@@ -57,50 +57,48 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: me-central-1
+
       - name: Run migrations in VPC
         id: run-migrations
         run: |
-          # Build the script (values like $DB_HOST expand here on the runner)
-          SCRIPT=$(cat <<'EOF'
+          # 1) Fail early if any secret is missing (runner side)
+          : "${DB_HOST:?DB_HOST missing}"; : "${DB_PORT:?DB_PORT missing}"
+          : "${DB_NAME:?DB_NAME missing}"; : "${DB_USER:?DB_USER missing}"; : "${DB_PASSWORD:?DB_PASSWORD missing}"
+
+          # 2) Write the remote script locally (SECRETS EXPAND HERE on the runner)
+          cat >/tmp/remote-migrate.sh <<'BASH'
+          #!/usr/bin/env bash
           set -Eeuo pipefail
 
           CONTAINER_NAME=current-web-1
 
-          if [ -z "$CONTAINER_NAME" ]; then
-            echo "Container name not set"; exit 1
+          if ! docker ps -q -f "name=${CONTAINER_NAME}" | grep -q .; then
+            echo "Container ${CONTAINER_NAME} not running"; exit 1
           fi
 
-          if ! docker ps -q -f name="$CONTAINER_NAME" | grep -q .; then
-            echo "Container $CONTAINER_NAME not running"; exit 1
-          fi
-
+          # Run inside the app container with DB_* env vars
           docker exec -i \
-            -e DB_HOST='"$DB_HOST"' \
-            -e DB_PORT='"$DB_PORT"' \
-            -e DB_NAME='"$DB_NAME"' \
-            -e DB_USER='"$DB_USER"' \
-            -e DB_PASSWORD='"$DB_PASSWORD"' \
-            "$CONTAINER_NAME" sh <<'INNER'
+            -e DB_HOST="${DB_HOST}" \
+            -e DB_PORT="${DB_PORT}" \
+            -e DB_NAME="${DB_NAME}" \
+            -e DB_USER="${DB_USER}" \
+            -e DB_PASSWORD="${DB_PASSWORD}" \
+            "${CONTAINER_NAME}" sh -s <<'INNER'
           set -e
 
           cd /app || { echo "App directory not found in container"; exit 1; }
 
-          echo "DB_HOST value: $DB_HOST"
-          echo "DB_PORT value: $DB_PORT"
-
-          # Try to install DNS tools in both Debian/Alpine/RHEL-ish images
+          # Try to install DNS tools depending on base image
           if command -v apk >/dev/null 2>&1; then
             apk add --no-cache bind-tools
           elif command -v apt-get >/dev/null 2>&1; then
-            apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y dnsutils
+            apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y dnsutils >/dev/null
           elif command -v yum >/dev/null 2>&1; then
-            yum install -y bind-utils
+            yum install -y bind-utils >/dev/null
           fi
 
-          nslookup www.google.com || { echo "Cannot resolve public domain (DNS issue in container)"; exit 1; }
-          echo "Public DNS resolution works."
-
-          nslookup "$DB_HOST" || { echo "DB_HOST does not resolve"; exit 1; }
+          nslookup www.google.com >/dev/null || { echo "Public DNS broken"; exit 1; }
+          nslookup "$DB_HOST"     >/dev/null || { echo "DB_HOST does not resolve: $DB_HOST"; exit 1; }
 
           python - <<'PY'
           import os, socket, sys, time
@@ -122,12 +120,24 @@ jobs:
 
           python manage.py migrate --noinput --verbosity 2
           INNER
-          EOF
-          )
+          BASH
+          chmod +x /tmp/remote-migrate.sh
 
-          # JSON-encode the script as the single commands[] entry
-          jq -n --arg s "$SCRIPT" '{commands: [$s]}' > /tmp/ssm-params.json
+          # 3) Base64-encode it so JSON/SSM can’t mangle it
+          REMOTE_B64=$(base64 -w0 /tmp/remote-migrate.sh || base64 /tmp/remote-migrate.sh)
 
+          # 4) Build SSM parameters: reconstruct the script on the instance and run it
+          jq -n --arg b "$REMOTE_B64" --arg host "$DB_HOST" --arg port "$DB_PORT" --arg name "$DB_NAME" --arg user "$DB_USER" --arg pass "$DB_PASSWORD" '{
+            commands: [
+              "set -e",
+              "echo \"$b\" | base64 -d > /tmp/remote-migrate.sh",
+              "chmod +x /tmp/remote-migrate.sh",
+              # Pass DB_* to the script as env on the EC2 host (will be forwarded into docker exec)
+              "DB_HOST=\"\($host)\" DB_PORT=\"\($port)\" DB_NAME=\"\($name)\" DB_USER=\"\($user)\" DB_PASSWORD=\"\($pass)\" /tmp/remote-migrate.sh"
+            ]
+          }' >/tmp/ssm-params.json
+
+          # 5) Send command
           COMMAND_ID=$(aws ssm send-command \
             --targets "Key=tag:elasticbeanstalk:environment-name,Values=pagasys-dev" \
             --document-name "AWS-RunShellScript" \
@@ -136,53 +146,6 @@ jobs:
             --query "Command.CommandId" --output text)
 
           echo "command_id=$COMMAND_ID" >> $GITHUB_OUTPUT
-      
-
-      - name: Wait for migration command and capture output
-        run: |
-          INSTANCE_ID=$(aws ec2 describe-instances \
-            --filters "Name=tag:elasticbeanstalk:environment-name,Values=pagasys-dev" \
-                      "Name=instance-state-name,Values=running" \
-            --query "Reservations[0].Instances[0].InstanceId" \
-            --output text)
-
-          if [ -z "$INSTANCE_ID" ]; then
-            echo "No running instance found for environment pagasys-dev"
-            exit 1
-          fi
-
-          COMMAND_ID="${{ steps.run-migrations.outputs.command_id }}"
-
-          for i in {1..60}; do
-            INVOCATION=$(aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID")
-            STATUS=$(echo "$INVOCATION" | jq -r .Status)
-
-            if [ "$STATUS" = "InProgress" ] || [ "$STATUS" = "Pending" ] || [ "$STATUS" = "Delayed" ]; then
-              echo "Command status: $STATUS. Waiting... ($i/60)"
-              sleep 10
-              continue
-            fi
-
-            OUTPUT=$(echo "$INVOCATION" | jq -r .StandardOutputContent)
-            ERROR=$(echo "$INVOCATION" | jq -r .StandardErrorContent)
-            RESPONSE_CODE=$(echo "$INVOCATION" | jq -r .ResponseCode)
-
-            echo "Command completed with status: $STATUS"
-            echo "Response code: $RESPONSE_CODE"
-            echo "Standard Output:"
-            echo "$OUTPUT"
-            echo "Standard Error:"
-            echo "$ERROR"
-
-            if [ "$STATUS" = "Success" ]; then
-              exit 0
-            else
-              exit 1
-            fi
-          done
-
-          echo "Command timed out after 10 minutes"
-          exit 1
 
   deploy-to-eb:
     name: Deploy to Elastic Beanstalk
