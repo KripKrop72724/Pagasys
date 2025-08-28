@@ -5,8 +5,6 @@ name: CI/CD
 'on':
   push:
     branches: [main]
-  pull_request:
-    branches: [main]
   workflow_dispatch:
 
 concurrency:
@@ -62,11 +60,17 @@ jobs:
       - name: Run migrations in VPC
         id: run-migrations
         run: |
-          SCRIPT=$(cat <<EOF
+          SCRIPT=$(cat <<'EOF'
           CONTAINER_NAME=current-web-1
           if [ -z "$CONTAINER_NAME" ]; then echo "Container name not set"; exit 1; fi
           if ! docker ps -q -f name=$CONTAINER_NAME | grep -q .; then echo "Container $CONTAINER_NAME not running"; exit 1; fi
-          docker exec -i -e DB_HOST=$DB_HOST -e DB_PORT=$DB_PORT -e DB_NAME=$DB_NAME -e DB_USER=$DB_USER -e DB_PASSWORD=$DB_PASSWORD $CONTAINER_NAME sh <<'INNER'
+          docker exec -i \
+            -e DB_HOST=$DB_HOST \
+            -e DB_PORT=$DB_PORT \
+            -e DB_NAME=$DB_NAME \
+            -e DB_USER=$DB_USER \
+            -e DB_PASSWORD=$DB_PASSWORD \
+            $CONTAINER_NAME sh <<'INNER'
           cd /app || { echo "App directory not found in container"; exit 1; }
           echo "DB_HOST value: \$DB_HOST"
           echo "DB_PORT value: \$DB_PORT"
@@ -94,12 +98,12 @@ jobs:
           python manage.py migrate --noinput --verbosity 2
           INNER
           EOF
-          )
+          SCRIPT=$(jq -Rs . <<<"$SCRIPT")
           COMMAND_ID=$(aws ssm send-command \
             --targets "Key=tag:elasticbeanstalk:environment-name,Values=pagasys-dev" \
             --document-name "AWS-RunShellScript" \
             --comment "Run Django migrations" \
-            --parameters commands="$SCRIPT" \
+            --parameters commands=$SCRIPT \
             --query "Command.CommandId" --output text)
           echo "command_id=$COMMAND_ID" >> $GITHUB_OUTPUT
 
