@@ -3,6 +3,7 @@ from rest_framework import serializers
 from rest_framework.exceptions import PermissionDenied
 from django.db import models
 from django.contrib.auth.models import Group
+from drf_spectacular.utils import extend_schema_field
 
 from .utils import ensure_in_scope
 
@@ -257,10 +258,13 @@ class ShiftTemplateSerializer(ScopedSerializerMixin, serializers.ModelSerializer
 
 class ShiftRuleSerializer(ScopedSerializerMixin, serializers.ModelSerializer):
     """Serializer for ShiftRule"""
+    kind = extend_schema_field(
+        {"type": "string", "enum": [k for k, _ in ShiftRule.Kind.choices]}
+    )(serializers.ChoiceField(choices=ShiftRule.Kind.choices, help_text="Rule kind"))
 
     class Meta:
         model = ShiftRule
-        fields = '__all__'
+        fields = "__all__"
 
     def validate(self, attrs):
         attrs = super().validate(attrs)

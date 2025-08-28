@@ -39,7 +39,7 @@ class ShiftTemplateFilter(df.FilterSet):
 
 class ShiftRuleFilter(df.FilterSet):
     shift = df.NumberFilter(field_name="shift_id")
-    kind = df.CharFilter(field_name="kind")
+    kind = df.ChoiceFilter(field_name="kind", choices=ShiftRule.Kind.choices)
     active_on = df.DateFilter(method="filter_active_on")
     weekday = df.CharFilter(method="filter_weekday")
 
