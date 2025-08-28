@@ -62,6 +62,7 @@ jobs:
             --document-name "AWS-RunShellScript" \
             --comment "Run Django migrations" \
             --parameters 'commands=[
+              "docker ps --format \"table {{.ID}}\t{{.Names}}\t{{.Status}}\t{{.Ports}}\"",
               "cd /var/app/current",
               "echo \"DB_HOST value: $DB_HOST\"",
               "echo \"DB_PORT value: $DB_PORT\"",
