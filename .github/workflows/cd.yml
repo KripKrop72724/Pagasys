@@ -70,7 +70,7 @@ jobs:
           #!/usr/bin/env bash
           set -Eeuo pipefail
 
-          CONTAINER_NAME=current-web-1
+          CONTAINER_NAME=$(docker ps --format '{{.Names}}' | grep -E 'web|django' | head -n1)
 
           if ! docker ps -q -f "name=${CONTAINER_NAME}" | grep -q .; then
             echo "Container ${CONTAINER_NAME} not running"; exit 1
@@ -236,7 +236,7 @@ jobs:
           cat >/tmp/db-check.sh <<'BASH'
           #!/usr/bin/env bash
           set -e
-          CONTAINER_NAME=current-web-1
+          CONTAINER_NAME=$(docker ps --format '{{.Names}}' | grep -E 'web|django' | head -n1)
           if ! docker ps -q -f "name=${CONTAINER_NAME}" | grep -q .; then
             echo "Container ${CONTAINER_NAME} not running"; exit 1
           fi
