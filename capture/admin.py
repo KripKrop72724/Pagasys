@@ -51,6 +51,8 @@ class PunchEventAdmin(ScopedAdminMixin, admin.ModelAdmin):
         "requires_face",
         "out_of_scope",
         "geofence_ok",
+        "geofence_rule_violation",
+        "roster_fallback",
         "roster_date",
         "external_id",
     ]
@@ -61,6 +63,8 @@ class PunchEventAdmin(ScopedAdminMixin, admin.ModelAdmin):
         "requires_face",
         "out_of_scope",
         "geofence_ok",
+        "geofence_rule_violation",
+        "roster_fallback",
         "roster_date",
     ]
     search_fields = ["employee__username", "device__name", "external_id"]

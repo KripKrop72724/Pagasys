@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
-from django.utils import timezone
 import hashlib
 import uuid
+
+from django.conf import settings
+from django.utils import timezone
 
 try:  # pragma: no cover - boto3 is optional in tests
     import boto3  # type: ignore
 except ModuleNotFoundError:  # pragma: no cover
     boto3 = None  # type: ignore
-from django.conf import settings
 
 
 def company_collection_id(company_id: int) -> str:

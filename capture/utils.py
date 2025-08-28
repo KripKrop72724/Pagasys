@@ -48,7 +48,13 @@ def get_face_threshold(shift: ShiftTemplate, roster_day: _date) -> float:
 
 
 def compute_roster_date(employee, company_local_dt: datetime):
-    """Pick the roster entry whose shift window contains the timestamp."""
+    """Pick the roster entry whose shift window contains the timestamp.
+
+    Returns a tuple of ``(date, roster_entry, roster_fallback)`` where
+    ``roster_fallback`` is ``True`` when no shift window matched and the date
+    is based on a fallback lookup.
+    """
+
     d0 = company_local_dt.date()
     candidates = list(
         RosterEntry.objects.filter(employee=employee, date__in=[d0, d0 - timedelta(days=1)]).select_related("shift")
@@ -59,9 +65,9 @@ def compute_roster_date(employee, company_local_dt: datetime):
         end_date = cand.date + timedelta(days=1 if s.cross_midnight and s.end_time <= s.start_time else 0)
         end = datetime.combine(end_date, s.end_time, tzinfo=company_local_dt.tzinfo)
         if start <= company_local_dt <= end:
-            return cand.date, cand
+            return cand.date, cand, False
     same = next((c for c in candidates if c.date == d0), None)
-    return (same.date if same else None), (same or None)
+    return (same.date if same else None), (same or None), True
 
 
 def within_device_scope(device, employee) -> bool:

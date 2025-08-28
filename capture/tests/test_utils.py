@@ -10,6 +10,7 @@ from capture.utils import (
     compute_roster_date,
     within_device_scope,
     geofence_ok,
+    get_geofence_requirement,
 )
 from capture.models import AttendanceDevice
 from pagasys.models import (
@@ -142,9 +143,69 @@ def test_compute_roster_date_cross_midnight(company, employees):
     dt1 = datetime(2024, 7, 1, 23, 0, tzinfo=tz)
     dt2 = datetime(2024, 7, 2, 1, 0, tzinfo=tz)
     dt3 = datetime(2024, 7, 2, 7, 0, tzinfo=tz)
-    assert compute_roster_date(e1, dt1)[0] == date(2024, 7, 1)
-    assert compute_roster_date(e1, dt2)[0] == date(2024, 7, 1)
-    assert compute_roster_date(e1, dt3)[0] is None
+    d, entry, fb = compute_roster_date(e1, dt1)
+    assert d == date(2024, 7, 1) and fb is False and entry is not None
+    d, entry, fb = compute_roster_date(e1, dt2)
+    assert d == date(2024, 7, 1) and fb is False and entry is not None
+    d, entry, fb = compute_roster_date(e1, dt3)
+    assert d is None and entry is None and fb is True
+
+
+def test_compute_roster_date_cross_midnight_bounds(company, employees):
+    """Events exactly at shift boundaries map to the correct roster day."""
+    e1 = employees[0]
+    tz = ZoneInfo("Asia/Dubai")
+    shift = ShiftTemplate.objects.create(
+        company=company,
+        name="Night",
+        start_time=time(22, 0),
+        end_time=time(6, 0),
+        cross_midnight=True,
+    )
+    RosterEntry.objects.create(employee=e1, date=date(2024, 7, 1), shift=shift)
+    start_dt = datetime(2024, 7, 1, 22, 0, tzinfo=tz)
+    end_dt = datetime(2024, 7, 2, 6, 0, tzinfo=tz)
+    after_dt = datetime(2024, 7, 2, 6, 1, tzinfo=tz)
+    d, _, fb = compute_roster_date(e1, start_dt)
+    assert d == date(2024, 7, 1) and fb is False
+    d, _, fb = compute_roster_date(e1, end_dt)
+    assert d == date(2024, 7, 1) and fb is False
+    d, entry, fb = compute_roster_date(e1, after_dt)
+    assert d is None and entry is None and fb is True
+
+
+def test_compute_roster_date_previous_day_non_cross(company, employees):
+    """Non-cross-midnight shifts on the previous day are not matched."""
+    e1 = employees[0]
+    tz = ZoneInfo("Asia/Dubai")
+    shift = ShiftTemplate.objects.create(
+        company=company,
+        name="Day",
+        start_time=time(9, 0),
+        end_time=time(17, 0),
+        cross_midnight=False,
+    )
+    RosterEntry.objects.create(employee=e1, date=date(2024, 7, 1), shift=shift)
+    early = datetime(2024, 7, 2, 8, 0, tzinfo=tz)
+    d, entry, fb = compute_roster_date(e1, early)
+    assert d is None and entry is None and fb is True
+
+
+def test_compute_roster_date_same_day_fallback(company, employees):
+    """If no shift window matches but roster exists that day, flag fallback."""
+    e1 = employees[0]
+    tz = ZoneInfo("Asia/Dubai")
+    shift = ShiftTemplate.objects.create(
+        company=company,
+        name="Day",
+        start_time=time(9, 0),
+        end_time=time(17, 0),
+        cross_midnight=False,
+    )
+    RosterEntry.objects.create(employee=e1, date=date(2024, 7, 1), shift=shift)
+    late = datetime(2024, 7, 1, 18, 0, tzinfo=tz)
+    d, entry, fb = compute_roster_date(e1, late)
+    assert d == date(2024, 7, 1) and entry is not None and fb is True
 
 
 def test_within_device_scope(company, branches, departments, projects, employees):
@@ -190,4 +251,36 @@ def test_geofence_ok(company):
     device2 = AttendanceDevice.objects.create(company=company, name="dev2", api_key="k2")
     assert geofence_ok(device2, Decimal("0"), Decimal("0"))
     assert geofence_ok(device, None, Decimal("55.000000")) is None
+
+
+def test_get_geofence_requirement_valid_and_invalid(company):
+    day = date(2024, 7, 1)
+    shift_valid = ShiftTemplate.objects.create(
+        company=company,
+        name="Day",
+        start_time=time(9, 0),
+        end_time=time(17, 0),
+        cross_midnight=False,
+    )
+    assert get_geofence_requirement(shift_valid, day) is None
+    ShiftRule.objects.create(
+        shift=shift_valid,
+        kind=ShiftRule.Kind.GEOFENCE_REQUIRED,
+        value="100",
+    )
+    assert get_geofence_requirement(shift_valid, day) == 100
+
+    shift_invalid = ShiftTemplate.objects.create(
+        company=company,
+        name="Night",
+        start_time=time(20, 0),
+        end_time=time(4, 0),
+        cross_midnight=True,
+    )
+    ShiftRule.objects.create(
+        shift=shift_invalid,
+        kind=ShiftRule.Kind.GEOFENCE_REQUIRED,
+        value="oops",
+    )
+    assert get_geofence_requirement(shift_invalid, day) is None
 
