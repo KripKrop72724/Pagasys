@@ -60,7 +60,7 @@ jobs:
       - name: Run migrations in VPC
         id: run-migrations
         run: |
-          SCRIPT=$(cat <<'EOF' | jq -Rs .)
+          SCRIPT=$(cat <<'EOF'
           CONTAINER_NAME=current-web-1
           if [ -z "$CONTAINER_NAME" ]; then echo "Container name not set"; exit 1; fi
           if ! docker ps -q -f name=$CONTAINER_NAME | grep -q .; then echo "Container $CONTAINER_NAME not running"; exit 1; fi
@@ -98,7 +98,7 @@ jobs:
           python manage.py migrate --noinput --verbosity 2
           INNER
           EOF
-          )
+          SCRIPT=$(jq -Rs . <<<"$SCRIPT")
           COMMAND_ID=$(aws ssm send-command \
             --targets "Key=tag:elasticbeanstalk:environment-name,Values=pagasys-dev" \
             --document-name "AWS-RunShellScript" \
