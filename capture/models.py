@@ -45,7 +45,8 @@ class FaceEnrollment(models.Model):
     employee = models.OneToOneField(Employee, on_delete=models.CASCADE, related_name="face_enrollment")
     collection_id = models.CharField(max_length=128)
     face_ids = models.JSONField(default=list)
-    status = models.CharField(max_length=20, default="active")
+    STATUS_CHOICES = [("active", "active"), ("revoked", "revoked"), ("pending", "pending")]
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="active")
     updated_at = models.DateTimeField(auto_now=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -100,7 +101,7 @@ class PunchEvent(models.Model):
     roster_date = models.DateField(null=True, blank=True)
     requires_face = models.BooleanField(default=False)
     out_of_scope = models.BooleanField(default=False)
-    geofence_ok = models.BooleanField(null=True, blank=True)
+    geofence_ok = models.BooleanField(default=True)
     notes = models.CharField(max_length=255, blank=True)
 
     external_id = models.CharField(max_length=64, blank=True)
@@ -129,6 +130,7 @@ class PunchException(models.Model):
         choices=[
             ("face_required_no_match", "face required but no match"),
             ("no_enrollment", "employee has no active face enrollment"),
+            ("face_mismatch", "face mismatch"),
             ("outside_scope", "outside scope"),
             ("geofence", "geofence violation"),
         ],
