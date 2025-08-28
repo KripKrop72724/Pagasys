@@ -57,42 +57,44 @@ jobs:
       - name: Run migrations in VPC
         id: run-migrations
         run: |
+          SCRIPT=$(cat <<EOF
+CONTAINER_NAME=current-web-1
+if [ -z "$CONTAINER_NAME" ]; then echo "Container name not set"; exit 1; fi
+if ! docker ps -q -f name=$CONTAINER_NAME | grep -q .; then echo "Container $CONTAINER_NAME not running"; exit 1; fi
+docker exec -i -e DB_HOST=$DB_HOST -e DB_PORT=$DB_PORT $CONTAINER_NAME sh <<'INNER'
+cd /app || { echo "App directory not found in container"; exit 1; }
+echo "DB_HOST value: \$DB_HOST"
+echo "DB_PORT value: \$DB_PORT"
+apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y dnsutils
+nslookup www.google.com || { echo "Cannot resolve public domain (DNS issue in container)"; exit 1; }
+echo "Public DNS resolution works."
+nslookup \$DB_HOST || { echo "DB_HOST does not resolve"; exit 1; }
+python - <<'PY'
+import os, socket, sys, time
+host = os.environ.get("DB_HOST")
+port = int(os.environ.get("DB_PORT", "5432"))
+if not host:
+    print("DB_HOST is not set"); sys.exit(1)
+for _ in range(30):
+    try:
+        socket.create_connection((host, port), timeout=5).close()
+        print("Database is reachable"); break
+    except socket.gaierror:
+        print("DB_HOST does not resolve"); sys.exit(1)
+    except OSError as e:
+        print(f"Waiting for database: {e}"); time.sleep(2)
+else:
+    print("Database not reachable"); sys.exit(1)
+PY
+python manage.py migrate --noinput --verbosity 2
+INNER
+EOF
+)
           COMMAND_ID=$(aws ssm send-command \
             --targets "Key=tag:elasticbeanstalk:environment-name,Values=pagasys-dev" \
             --document-name "AWS-RunShellScript" \
             --comment "Run Django migrations" \
-            --parameters 'commands=[
-              "CONTAINER_NAME=current-web-1",
-              "if [ -z \"$CONTAINER_NAME\" ]; then echo \"Container name not set\"; exit 1; fi",
-              "if ! docker ps -q -f name=$CONTAINER_NAME | grep -q .; then echo \"Container $CONTAINER_NAME not running\"; exit 1; fi",
-              "docker exec -i -e DB_HOST=${{ secrets.DB_HOST }} -e DB_PORT=${{ secrets.DB_PORT }} $CONTAINER_NAME sh <<'EOF'",
-              "cd /app || { echo \"App directory not found in container\"; exit 1; }",
-              "echo \"DB_HOST value: $DB_HOST\"",
-              "echo \"DB_PORT value: $DB_PORT\"",
-              "apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y dnsutils",
-              "nslookup www.google.com || { echo \"Cannot resolve public domain (DNS issue in container)\"; exit 1; }",
-              "echo \"Public DNS resolution works.\"",
-              "nslookup $DB_HOST || { echo \"DB_HOST does not resolve\"; exit 1; }",
-              "python - <<'PY'",
-              "import os, socket, sys, time",
-              "host = os.environ.get(\"DB_HOST\")",
-              "port = int(os.environ.get(\"DB_PORT\", \"5432\"))",
-              "if not host:",
-              "    print(\"DB_HOST is not set\"); sys.exit(1)",
-              "for _ in range(30):",
-              "    try:",
-              "        socket.create_connection((host, port), timeout=5).close()",
-              "        print(\"Database is reachable\"); break",
-              "    except socket.gaierror:",
-              "        print(\"DB_HOST does not resolve\"); sys.exit(1)",
-              "    except OSError as e:",
-              "        print(f\"Waiting for database: {e}\"); time.sleep(2)",
-              "else:",
-              "    print(\"Database not reachable\"); sys.exit(1)",
-              "PY",
-              "python manage.py migrate --noinput --verbosity 2",
-              "EOF"
-            ]' \
+            --parameters commands="$SCRIPT" \
             --query "Command.CommandId" --output text)
           echo "command_id=$COMMAND_ID" >> $GITHUB_OUTPUT
 
