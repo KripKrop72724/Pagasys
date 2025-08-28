@@ -62,11 +62,14 @@ jobs:
             --document-name "AWS-RunShellScript" \
             --comment "Run Django migrations" \
             --parameters 'commands=[
-              "docker ps --format \"table {{.ID}}\t{{.Names}}\t{{.Status}}\t{{.Ports}}\"",
-              "cd /var/app/current",
+              "CONTAINER_NAME=current-web-1",
+              "if [ -z \"$CONTAINER_NAME\" ]; then echo \"Container name not set\"; exit 1; fi",
+              "if ! docker ps -q -f name=$CONTAINER_NAME | grep -q .; then echo \"Container $CONTAINER_NAME not running\"; exit 1; fi",
+              "docker exec -i $CONTAINER_NAME sh <<'EOF'",
+              "cd /var/app/current || { echo \"App directory not found in container\"; exit 1; }",
               "echo \"DB_HOST value: $DB_HOST\"",
               "echo \"DB_PORT value: $DB_PORT\"",
-              "nslookup www.google.com || { echo \"Cannot resolve public domain (DNS issue in VPC)\"; exit 1; }",
+              "nslookup www.google.com || { echo \"Cannot resolve public domain (DNS issue in container)\"; exit 1; }",
               "echo \"Public DNS resolution works.\"",
               "nslookup $DB_HOST || { echo \"DB_HOST does not resolve\"; exit 1; }",
               "python - <<'PY'",
@@ -86,7 +89,8 @@ jobs:
               "else:",
               "    print(\"Database not reachable\"); sys.exit(1)",
               "PY",
-              "python manage.py migrate --noinput --verbosity 2"
+              "python manage.py migrate --noinput --verbosity 2",
+              "EOF"
             ]' \
             --query "Command.CommandId" --output text)
           echo "command_id=$COMMAND_ID" >> $GITHUB_OUTPUT
