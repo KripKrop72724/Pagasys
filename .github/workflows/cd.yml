@@ -69,6 +69,7 @@ jobs:
               "cd /app || { echo \"App directory not found in container\"; exit 1; }",
               "echo \"DB_HOST value: $DB_HOST\"",
               "echo \"DB_PORT value: $DB_PORT\"",
+              "apt-get update && apt-get install -y dnsutils",
               "nslookup www.google.com || { echo \"Cannot resolve public domain (DNS issue in container)\"; exit 1; }",
               "echo \"Public DNS resolution works.\"",
               "nslookup $DB_HOST || { echo \"DB_HOST does not resolve\"; exit 1; }",
