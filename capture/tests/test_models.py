@@ -121,7 +121,9 @@ def test_punchevent_geofence_defaults_and_validation(company, branch):
     device = AttendanceDevice.objects.create(company=company, name="dev", api_key="k1", branch=branch)
     ts = timezone.now()
     ev = PunchEvent.objects.create(device=device, company=company, device_ts=ts)
-    assert ev.geofence_ok is True
+    assert ev.geofence_ok is None
+    assert ev.geofence_rule_violation is False
+    assert ev.roster_fallback is False
     ev2 = PunchEvent.objects.create(
         device=device,
         company=company,
@@ -130,8 +132,7 @@ def test_punchevent_geofence_defaults_and_validation(company, branch):
     )
     assert ev2.geofence_ok is False
     ev3 = PunchEvent(device=device, company=company, device_ts=ts + timedelta(seconds=2), geofence_ok=None)
-    with pytest.raises(ValidationError):
-        ev3.full_clean()
+    ev3.full_clean()
 
 
 @pytest.mark.parametrize("status", ["active", "revoked", "pending"])

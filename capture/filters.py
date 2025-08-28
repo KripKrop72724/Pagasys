@@ -21,7 +21,17 @@ class PunchEventFilter(df.FilterSet):
     face_matched = df.BooleanFilter()
     out_of_scope = df.BooleanFilter()
     geofence_ok = df.BooleanFilter()
+    geofence_rule_violation = df.BooleanFilter()
+    roster_fallback = df.BooleanFilter()
 
     class Meta:
         model = PunchEvent
-        fields = ["employee", "device", "face_matched", "out_of_scope", "geofence_ok"]
+        fields = [
+            "employee",
+            "device",
+            "face_matched",
+            "out_of_scope",
+            "geofence_ok",
+            "geofence_rule_violation",
+            "roster_fallback",
+        ]

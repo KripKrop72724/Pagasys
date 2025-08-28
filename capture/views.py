@@ -241,7 +241,7 @@ class CapturePunchView(generics.GenericAPIView):
             s3_key, sha256 = put_capture_to_s3(company.id, device.id, image_bytes)
 
         company_local_dt = localize_to_company(company, data["timestamp"])
-        roster_date, roster_entry = (None, None)
+        roster_date, roster_entry, roster_fallback = (None, None, False)
         matched_emp = None
         face_ok = False
         confidence = None
@@ -250,7 +250,7 @@ class CapturePunchView(generics.GenericAPIView):
         geofence_rule = None
 
         if hinted_emp:
-            roster_date, roster_entry = compute_roster_date(hinted_emp, company_local_dt)
+            roster_date, roster_entry, roster_fallback = compute_roster_date(hinted_emp, company_local_dt)
 
         if image_bytes:
             threshold = float(settings.FACE_MATCH_DEFAULT_MIN_CONF)
@@ -290,7 +290,7 @@ class CapturePunchView(generics.GenericAPIView):
         employee = hinted_emp or matched_emp
         if employee:
             if roster_entry is None:
-                roster_date, roster_entry = compute_roster_date(employee, company_local_dt)
+                roster_date, roster_entry, roster_fallback = compute_roster_date(employee, company_local_dt)
             if roster_entry:
                 requires_face = roster_entry.shift.requires_face
                 if geofence_rule is None:
@@ -300,14 +300,17 @@ class CapturePunchView(generics.GenericAPIView):
         if employee:
             out_scope = not within_device_scope(device, employee)
         geo_ok = geofence_ok(device, data.get("lat"), data.get("lon"))
-        if geo_ok is None:
-            geo_ok = True
         geofence_rule_violation = False
+        geofence_rule_reason = None
         if geofence_rule is not None:
             if not (device.latitude and device.longitude and device.radius_m):
                 geofence_rule_violation = True
+                geofence_rule_reason = "missing_device_geofence"
             elif device.radius_m > geofence_rule:
                 geofence_rule_violation = True
+                geofence_rule_reason = "radius_exceeds_rule"
+        if geofence_rule_violation:
+            geo_ok = None
 
         accepted = True
         reason = None
@@ -326,7 +329,7 @@ class CapturePunchView(generics.GenericAPIView):
 
         if geofence_rule_violation:
             accepted = False
-            reason = "geofence"
+            reason = "geofence_rule"
 
         if out_scope and getattr(settings, "CAPTURE_BLOCK_OUT_OF_SCOPE", False):
             accepted = False
@@ -349,6 +352,8 @@ class CapturePunchView(generics.GenericAPIView):
                     requires_face=bool(requires_face),
                     out_of_scope=out_scope,
                     geofence_ok=geo_ok,
+                    geofence_rule_violation=geofence_rule_violation,
+                    roster_fallback=roster_fallback,
                     external_id=ext_id,
                     notes=reason or "",
                 )
@@ -370,7 +375,15 @@ class CapturePunchView(generics.GenericAPIView):
                 event=ev,
                 defaults={"kind": "outside_scope", "details": {}},
             )
-        elif (geo_ok is False and not settings.CAPTURE_BLOCK_GEOFENCE) or geofence_rule_violation:
+        elif geofence_rule_violation:
+            PunchException.objects.get_or_create(
+                event=ev,
+                defaults={
+                    "kind": "geofence_rule",
+                    "details": {"reason": geofence_rule_reason} if geofence_rule_reason else {},
+                },
+            )
+        elif geo_ok is False and not settings.CAPTURE_BLOCK_GEOFENCE:
             PunchException.objects.get_or_create(
                 event=ev,
                 defaults={"kind": "geofence", "details": {}},
@@ -389,6 +402,8 @@ class CapturePunchView(generics.GenericAPIView):
             "requires_face": ev.requires_face,
             "out_of_scope": ev.out_of_scope,
             "geofence_ok": ev.geofence_ok,
+            "geofence_rule_violation": ev.geofence_rule_violation,
+            "roster_fallback": ev.roster_fallback,
             "notes": ev.notes,
             "event_id": ev.id,
         }

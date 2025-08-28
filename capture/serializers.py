@@ -49,9 +49,16 @@ class EnrollmentSubmitSerializer(serializers.Serializer):
     images = serializers.ListField(
         child=serializers.ImageField(allow_empty_file=False, use_url=False),
         allow_empty=False,
-        min_length=getattr(settings, "FACE_ENROLL_MIN_PHOTOS", 3),
-        max_length=getattr(settings, "FACE_ENROLL_MAX_PHOTOS", 6),
     )
+
+    def validate_images(self, value):
+        min_photos = getattr(settings, "FACE_ENROLL_MIN_PHOTOS", 4)
+        max_photos = getattr(settings, "FACE_ENROLL_MAX_PHOTOS", 5)
+        if not (min_photos <= len(value) <= max_photos):
+            raise serializers.ValidationError(
+                f"Provide between {min_photos} and {max_photos} images"
+            )
+        return value
 
 
 class PunchRequestSerializer(serializers.Serializer):
@@ -81,6 +88,8 @@ class PunchEventSerializer(serializers.ModelSerializer):
             "requires_face",
             "out_of_scope",
             "geofence_ok",
+            "geofence_rule_violation",
+            "roster_fallback",
             "notes",
             "external_id",
         ]
