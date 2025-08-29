@@ -1,9 +1,11 @@
-from datetime import date, time
+from datetime import date, time, timedelta
+from decimal import Decimal
 
 from django.contrib.auth.models import Group
 from django.core.management import BaseCommand, call_command
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
+from django.utils import timezone
 
 from pagasys.models import (
     Branch,
@@ -20,6 +22,14 @@ from pagasys.models import (
     TradeLicense,
     WorkCalendar,
     holiday_flags,
+)
+
+from capture.models import (
+    AttendanceDevice,
+    FaceEnrollment,
+    EnrollmentLink,
+    PunchEvent,
+    PunchException,
 )
 
 
@@ -448,6 +458,206 @@ class Command(BaseCommand):
             except ValidationError as exc:
                 failures.append(f"Cross-company roster prevented: {exc}")
 
+            # Attendance capture module
+            # Devices with various scopes and geofence
+            dev_branch = AttendanceDevice.objects.create(
+                company=acme,
+                name="B1 Tablet",
+                api_key="dev-b1-key",
+                branch=acme_b1,
+                latitude=Decimal("25.204800"),
+                longitude=Decimal("55.270800"),
+                radius_m=100,
+            )
+            dev_department = AttendanceDevice.objects.create(
+                company=acme,
+                name="HR Phone",
+                api_key="dev-hr-key",
+                department=acme_d1,
+            )
+            dev_project = AttendanceDevice.objects.create(
+                company=acme,
+                name="Project X Kiosk",
+                api_key="dev-proj-key",
+                project=acme_proj,
+            )
+            AttendanceDevice.objects.create(
+                company=dst_co,
+                name="DST HQ Tablet",
+                api_key="dev-dst-key",
+                branch=dst_branch,
+            )
+
+            # Enrollment links demonstrating valid, used, and expired states
+            link_active = EnrollmentLink.objects.create(
+                employee=emp_license,
+                token="enroll-active",
+                expires_at=timezone.now() + timedelta(days=7),
+            )
+            link_used = EnrollmentLink.objects.create(
+                employee=emp_license_only,
+                token="enroll-used",
+                expires_at=timezone.now() + timedelta(days=7),
+            )
+            link_used.mark_used()
+            EnrollmentLink.objects.create(
+                employee=emp_department,
+                token="enroll-expired",
+                expires_at=timezone.now() - timedelta(days=1),
+            )
+
+            # Face enrollments with varied statuses
+            FaceEnrollment.objects.create(
+                employee=emp_license,
+                collection_id="acme-collection",
+                face_ids=["f1", "f2"],
+                status="active",
+            )
+            FaceEnrollment.objects.create(
+                employee=emp_department,
+                collection_id="acme-collection",
+                face_ids=["f3"],
+                status="revoked",
+            )
+            FaceEnrollment.objects.create(
+                employee=emp_project,
+                collection_id="acme-collection",
+                face_ids=[],
+                status="pending",
+            )
+
+            ts = timezone.now()
+
+            # Successful matched punch
+            PunchEvent.objects.create(
+                device=dev_branch,
+                company=acme,
+                employee=emp_license,
+                matched_employee=emp_license,
+                action="in",
+                device_ts=ts,
+                face_matched=True,
+                face_confidence=Decimal("95.123"),
+                roster_date=date(2024, 2, 1),
+                geofence_ok=True,
+            )
+
+            # Face required but no match
+            ev_no_match = PunchEvent.objects.create(
+                device=dev_branch,
+                company=acme,
+                employee=emp_license,
+                action="in",
+                device_ts=ts + timedelta(minutes=1),
+                requires_face=True,
+                face_matched=False,
+                roster_date=date(2024, 2, 1),
+            )
+            PunchException.objects.create(
+                event=ev_no_match,
+                kind="face_required_no_match",
+                details={"msg": "face not recognized"},
+            )
+
+            # No active enrollment
+            ev_no_enroll = PunchEvent.objects.create(
+                device=dev_branch,
+                company=acme,
+                employee=emp_custom_cal,
+                action="in",
+                device_ts=ts + timedelta(minutes=2),
+                roster_date=date(2024, 2, 20),
+            )
+            PunchException.objects.create(
+                event=ev_no_enroll,
+                kind="no_enrollment",
+                details={},
+            )
+
+            # Outside scope
+            ev_out_scope = PunchEvent.objects.create(
+                device=dev_department,
+                company=acme,
+                employee=emp_project,
+                action="in",
+                device_ts=ts + timedelta(minutes=3),
+                roster_date=date(2024, 3, 1),
+                out_of_scope=True,
+            )
+            PunchException.objects.create(
+                event=ev_out_scope,
+                kind="outside_scope",
+                details={"expected": "HR", "got": "Project X"},
+            )
+
+            # Geofence violation
+            ev_geo = PunchEvent.objects.create(
+                device=dev_branch,
+                company=acme,
+                employee=emp_license,
+                action="in",
+                device_ts=ts + timedelta(minutes=4),
+                roster_date=date(2024, 2, 1),
+                geofence_ok=False,
+            )
+            PunchException.objects.create(
+                event=ev_geo,
+                kind="geofence",
+                details={"distance": 150},
+            )
+
+            # Geofence rule violation
+            ev_geo_rule = PunchEvent.objects.create(
+                device=dev_branch,
+                company=acme,
+                employee=emp_license,
+                action="out",
+                device_ts=ts + timedelta(minutes=5),
+                roster_date=date(2024, 2, 1),
+                geofence_ok=True,
+                geofence_rule_violation=True,
+            )
+            PunchException.objects.create(
+                event=ev_geo_rule,
+                kind="geofence_rule",
+                details={"rule": "max daily hours"},
+            )
+
+            # Face mismatch
+            ev_mismatch = PunchEvent.objects.create(
+                device=dev_branch,
+                company=acme,
+                employee=emp_license,
+                matched_employee=emp_department,
+                action="in",
+                device_ts=ts + timedelta(minutes=6),
+                roster_date=date(2024, 2, 1),
+                face_matched=False,
+            )
+            PunchException.objects.create(
+                event=ev_mismatch,
+                kind="face_mismatch",
+                details={},
+            )
+
+            # Idempotency test - duplicate external_id
+            try:
+                with transaction.atomic():
+                    PunchEvent.objects.create(
+                        device=dev_branch,
+                        company=acme,
+                        device_ts=ts + timedelta(minutes=7),
+                        external_id="dup-1",
+                    )
+                    PunchEvent.objects.create(
+                        device=dev_branch,
+                        company=acme,
+                        device_ts=ts + timedelta(minutes=8),
+                        external_id="dup-1",
+                    )
+            except IntegrityError as exc:
+                failures.append(f"Duplicate punch skipped: {exc}")
+
         summary = {
             "companies": Company.objects.count(),
             "branches": Branch.objects.count(),
@@ -462,6 +672,11 @@ class Command(BaseCommand):
             "employees": Employee.objects.count(),
             "roster_entries": RosterEntry.objects.count(),
             "leave_types": LeaveType.objects.count(),
+            "devices": AttendanceDevice.objects.count(),
+            "face_enrollments": FaceEnrollment.objects.count(),
+            "enrollment_links": EnrollmentLink.objects.count(),
+            "punch_events": PunchEvent.objects.count(),
+            "punch_exceptions": PunchException.objects.count(),
         }
 
         self.stdout.write(self.style.SUCCESS("Hard seed complete"))
