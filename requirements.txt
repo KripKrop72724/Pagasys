@@ -60,6 +60,8 @@ djangorestframework-simplejwt==5.5.1
     # via -r requirements.in
 drf-spectacular==0.28.0
     # via -r requirements.in
+flake8==7.3.0
+    # via -r requirements.in
 gunicorn==23.0.0
     # via -r requirements.in
 inflection==0.5.1
@@ -74,6 +76,8 @@ packaging==25.0
     # via
     #   gunicorn
     #   kombu
+pillow==11.3.0
+    # via -r requirements.in
 prompt-toolkit==3.0.51
     # via click-repl
 psycopg2-binary==2.9.10
