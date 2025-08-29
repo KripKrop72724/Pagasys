@@ -73,6 +73,22 @@ All requests from capture devices use the `X-Device-Key` header for
 authentication and may optionally provide latitude/longitude for geofence
 enforcement.
 
+#### Typical Capture Flow
+
+1. **Register device** – `POST /companies/{cid}/devices/` with a name and optional
+   `branch`, `department` or `project` to scope its usage. The response includes an
+   `api_key` which the hardware stores and sends in the `X-Device-Key` header.
+2. **Generate enrollment link** – managers call
+   `POST /companies/{cid}/employees/{eid}/face/enrollment-link` with optional
+   `expires_in_hours` and `max_uses` parameters. The returned URL allows an employee
+   to upload between 4‑5 images to `/api/face/enroll/{token}`.
+3. **Capture punch** – devices submit `POST /api/capture/punch` with punch
+   `action`, ISO `timestamp`, optional `employee_id`, `external_id` and GPS
+   coordinates (`lat`/`lon`). An image file or `image_b64` payload triggers face
+   verification.
+4. **Review events** – managers can browse `GET /companies/{cid}/punch-events/`
+   or the Django admin to review raw punches and any generated exceptions.
+
 ## Tech Stack
 
 * Python 3.12

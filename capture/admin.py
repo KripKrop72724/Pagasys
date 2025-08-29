@@ -10,6 +10,7 @@ class ScopedAdminMixin:
 
 @admin.register(AttendanceDevice)
 class AttendanceDeviceAdmin(ScopedAdminMixin, admin.ModelAdmin):
+    """Admin interface for configuring capture devices and geofence settings."""
     list_display = [
         "name",
         "company",
@@ -29,17 +30,20 @@ class AttendanceDeviceAdmin(ScopedAdminMixin, admin.ModelAdmin):
 
 @admin.register(FaceEnrollment)
 class FaceEnrollmentAdmin(ScopedAdminMixin, admin.ModelAdmin):
+    """View and manage employee face enrollments."""
     list_display = ["employee", "status", "created_at", "updated_at"]
 
 
 @admin.register(EnrollmentLink)
 class EnrollmentLinkAdmin(ScopedAdminMixin, admin.ModelAdmin):
+    """Inspect enrollment links issued to employees."""
     list_display = ["employee", "token", "expires_at", "used_at", "uses", "max_uses"]
     readonly_fields = ["uses", "used_at"]
 
 
 @admin.register(PunchEvent)
 class PunchEventAdmin(ScopedAdminMixin, admin.ModelAdmin):
+    """Review raw punch events and their validation state."""
     list_display = [
         "company",
         "device",
@@ -72,5 +76,6 @@ class PunchEventAdmin(ScopedAdminMixin, admin.ModelAdmin):
 
 @admin.register(PunchException)
 class PunchExceptionAdmin(ScopedAdminMixin, admin.ModelAdmin):
+    """Display punch events that triggered exceptions."""
     list_display = ["event", "kind", "details"]
     list_filter = ["kind"]
