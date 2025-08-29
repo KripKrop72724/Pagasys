@@ -6,6 +6,7 @@ from django.db import transaction, IntegrityError
 from django.db.models import Q
 from django.utils import timezone
 from django.shortcuts import get_object_or_404
+from django.template.response import TemplateResponse
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import viewsets, permissions, generics, parsers, filters as drf_filters
 from rest_framework.decorators import action
@@ -53,6 +54,7 @@ from .utils import (
     get_face_threshold,
     get_geofence_requirement,
 )
+from .image_validators import validate_image, ImageValidationError
 
 
 # --------- Device management ---------
@@ -201,6 +203,17 @@ class EnrollmentSubmitView(generics.GenericAPIView):
     serializer_class = EnrollmentSubmitSerializer
     parser_classes = [parsers.MultiPartParser, parsers.FormParser]
 
+    def get(self, request, token: str):
+        link = get_object_or_404(EnrollmentLink, token=token)
+        if not link.is_valid:
+            return TemplateResponse(
+                request,
+                "capture/enroll.html",
+                {"error": "Link invalid or expired"},
+                status=403,
+            )
+        return TemplateResponse(request, "capture/enroll.html", {"token": token})
+
     def post(self, request, token: str):
         link = get_object_or_404(EnrollmentLink, token=token)
         if not link.is_valid:
@@ -216,6 +229,10 @@ class EnrollmentSubmitView(generics.GenericAPIView):
         face_ids = []
         for img in ser.validated_data["images"]:
             bytes_ = img.read()
+            try:
+                validate_image(bytes_)
+            except ImageValidationError as exc:
+                return Response({"detail": str(exc)}, status=400)
             put_enroll_to_s3(emp.company.id, emp.id, bytes_)
             face_ids.extend(index_faces(emp.company.id, emp.id, bytes_))
         with transaction.atomic():

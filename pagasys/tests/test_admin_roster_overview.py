@@ -76,7 +76,20 @@ class RosterEntryOverviewTests(ModelFactoryMixin, TestCase):
         url = reverse("admin:pagasys_rosterentry_overview") + "?start=bad&days=-5"
         res = self.client.get(url)
         self.assertEqual(res.status_code, 200)
-        today = timezone.localdate()
+        with timezone.override(self.company.timezone):
+            today = timezone.localdate()
+        self.assertContains(res, today.isoformat())
+        self.assertContains(res, (today + timedelta(days=6)).isoformat())
+
+    def test_overview_negative_days_defaults_to_seven(self):
+        with timezone.override(self.company.timezone):
+            today = timezone.localdate()
+        url = (
+            reverse("admin:pagasys_rosterentry_overview")
+            + f"?start={today.isoformat()}&days=-3"
+        )
+        res = self.client.get(url)
+        self.assertEqual(res.status_code, 200)
         self.assertContains(res, today.isoformat())
         self.assertContains(res, (today + timedelta(days=6)).isoformat())
 

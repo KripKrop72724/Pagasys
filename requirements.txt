@@ -117,3 +117,5 @@ wcwidth==0.2.13
     # via prompt-toolkit
 whitenoise==6.9.0
     # via -r requirements.in
+opencv-python-headless==4.12.0.88
+    # via capture image validation
