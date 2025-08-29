@@ -12,6 +12,8 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from django_ratelimit.decorators import ratelimit
 from django.utils.decorators import method_decorator
+from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiResponse, OpenApiParameter
+from drf_spectacular.types import OpenApiTypes
 
 from pagasys.utils import scope_queryset, ensure_in_scope
 from pagasys.policy.permissions import (
@@ -21,6 +23,7 @@ from pagasys.policy.permissions import (
 )
 from pagasys.policy.backends import ScopeFilterBackend
 from pagasys.models import Company, Employee, RosterEntry, ShiftTemplate
+from pagasys.openapi_utils import document_filters
 from .models import AttendanceDevice, FaceEnrollment, EnrollmentLink, PunchEvent, PunchException
 from .serializers import (
     AttendanceDeviceSerializer,
@@ -55,7 +58,18 @@ from .utils import (
 # --------- Device management ---------
 
 
+@extend_schema_view(
+    list=extend_schema(description="List registered capture devices."),
+    create=extend_schema(description="Register a new capture device."),
+    retrieve=extend_schema(description="Retrieve a specific capture device."),
+    update=extend_schema(description="Update a capture device."),
+    partial_update=extend_schema(description="Partially update a capture device."),
+    destroy=extend_schema(description="Delete a capture device."),
+)
+@extend_schema(tags=["Capture"], description="Manage attendance capture devices and API keys.")
 class AttendanceDeviceViewSet(CompanyScopedQuerysetMixin, viewsets.ModelViewSet):
+    """CRUD interface for attendance capture devices."""
+
     permission_classes = [permissions.IsAuthenticated, IsCompanyMember, ActionRolePermission]
     serializer_class = AttendanceDeviceSerializer
     queryset = AttendanceDevice.objects.all()
@@ -82,6 +96,10 @@ class AttendanceDeviceViewSet(CompanyScopedQuerysetMixin, viewsets.ModelViewSet)
         self._ensure_scope(serializer)
         serializer.save()
 
+    @extend_schema(
+        description="Generate a new API key for the device.",
+        responses=RotateKeyResponseSerializer,
+    )
     @action(detail=True, methods=["post"], url_path="rotate-key")
     def rotate_key(self, request, company_id=None, pk=None):
         device = self.get_object()
@@ -93,6 +111,7 @@ class AttendanceDeviceViewSet(CompanyScopedQuerysetMixin, viewsets.ModelViewSet)
 # --------- Face Enrollment (authenticated, manager/admin scope) ---------
 
 
+@extend_schema(tags=["Capture"], description="Manage employee face enrollments.")
 class FaceEnrollmentViewSet(viewsets.ViewSet):
     permission_classes = [permissions.IsAuthenticated, IsCompanyMember, ActionRolePermission]
 
@@ -103,6 +122,10 @@ class FaceEnrollmentViewSet(viewsets.ViewSet):
             return Response({"detail": "Employee outside your scope", "errors": {}}, status=403)
         return emp
 
+    @extend_schema(
+        description="Retrieve face enrollment status for an employee.",
+        responses=FaceEnrollmentStatusSerializer,
+    )
     @action(detail=True, methods=["get"], url_path=r"employees/(?P<employee_id>\d+)/face")
     def status(self, request, company_id=None, pk=None, employee_id=None):
         emp = self._get_employee(company_id, employee_id)
@@ -113,6 +136,10 @@ class FaceEnrollmentViewSet(viewsets.ViewSet):
             return Response({"status": "none"})
         return Response(FaceEnrollmentStatusSerializer(fe).data)
 
+    @extend_schema(
+        description="Create or revoke a face enrollment link for an employee.",
+        request=EnrollmentLinkCreateSerializer,
+    )
     @action(
         detail=True,
         methods=["post", "delete"],
@@ -147,6 +174,7 @@ class FaceEnrollmentViewSet(viewsets.ViewSet):
         ).update(expires_at=timezone.now())
         return Response(status=204)
 
+    @extend_schema(description="Revoke an employee's existing face enrollment.")
     @action(detail=True, methods=["delete"], url_path=r"employees/(?P<employee_id>\d+)/face")
     def revoke(self, request, company_id=None, pk=None, employee_id=None):
         emp = self._get_employee(company_id, employee_id)
@@ -164,6 +192,10 @@ class FaceEnrollmentViewSet(viewsets.ViewSet):
 # --------- Public Enrollment Submit (token) ---------
 
 
+@extend_schema(
+    tags=["Capture"],
+    description="Submit enrollment photos using a one-time token.",
+)
 class EnrollmentSubmitView(generics.GenericAPIView):
     permission_classes = []
     serializer_class = EnrollmentSubmitSerializer
@@ -205,6 +237,19 @@ class EnrollmentSubmitView(generics.GenericAPIView):
 @method_decorator(
     ratelimit(key="ip", rate=settings.CAPTURE_PUNCH_RATE_LIMIT, block=True),
     name="post",
+)
+@extend_schema(
+    tags=["Capture"],
+    description="Capture a punch event from a device.",
+    parameters=[
+        OpenApiParameter(
+            "X-Device-Key",
+            OpenApiTypes.STR,
+            OpenApiParameter.HEADER,
+            description="Device API key",
+            required=True,
+        )
+    ],
 )
 class CapturePunchView(generics.GenericAPIView):
     authentication_classes = [DeviceKeyAuthentication]
@@ -414,6 +459,11 @@ class CapturePunchView(generics.GenericAPIView):
 # --------- Punch event listing (RBAC & scope) ---------
 
 
+@extend_schema_view(
+    list=extend_schema(description="List captured punch events."),
+    retrieve=extend_schema(description="Retrieve a captured punch event."),
+)
+@extend_schema(tags=["Capture"], description="Read-only access to captured punch events.")
 class PunchEventViewSet(CompanyScopedQuerysetMixin, viewsets.ReadOnlyModelViewSet):
     permission_classes = [permissions.IsAuthenticated, IsCompanyMember, ActionRolePermission]
     serializer_class = PunchEventSerializer
@@ -433,3 +483,7 @@ class PunchEventViewSet(CompanyScopedQuerysetMixin, viewsets.ReadOnlyModelViewSe
             (Q(employee_id__in=allowed_emp_ids) | Q(matched_employee_id__in=allowed_emp_ids))
             | Q(device_id__in=allowed_dev_ids)
         )
+
+
+document_filters(AttendanceDeviceViewSet)
+document_filters(PunchEventViewSet)

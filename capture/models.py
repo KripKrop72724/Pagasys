@@ -5,21 +5,73 @@ from pagasys.models import Company, Branch, Department, Project, Employee
 
 
 class AttendanceDevice(models.Model):
-    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="devices")
-    name = models.CharField(max_length=120)
-    api_key = models.CharField(max_length=64, unique=True)
-    is_active = models.BooleanField(default=True)
+    """Capture device used to record employee punches."""
 
-    branch = models.ForeignKey(Branch, null=True, blank=True, on_delete=models.SET_NULL, related_name="devices")
-    department = models.ForeignKey(Department, null=True, blank=True, on_delete=models.SET_NULL, related_name="devices")
-    project = models.ForeignKey(Project, null=True, blank=True, on_delete=models.SET_NULL, related_name="devices")
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="devices",
+        help_text="Owning company for the device",
+    )
+    name = models.CharField(max_length=120, help_text="Human friendly device label")
+    api_key = models.CharField(
+        max_length=64,
+        unique=True,
+        help_text="Generated key supplied via the X-Device-Key header",
+    )
+    is_active = models.BooleanField(
+        default=True, help_text="Inactive devices may not submit punches"
+    )
 
-    latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
-    longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
-    radius_m = models.PositiveIntegerField(null=True, blank=True)
+    branch = models.ForeignKey(
+        Branch,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="devices",
+        help_text="Limit device usage to this branch",
+    )
+    department = models.ForeignKey(
+        Department,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="devices",
+        help_text="Limit device usage to this department",
+    )
+    project = models.ForeignKey(
+        Project,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="devices",
+        help_text="Limit device usage to this project",
+    )
 
-    last_seen = models.DateTimeField(null=True, blank=True)
-    note = models.CharField(max_length=255, blank=True)
+    latitude = models.DecimalField(
+        max_digits=9,
+        decimal_places=6,
+        null=True,
+        blank=True,
+        help_text="Geofence latitude in decimal degrees",
+    )
+    longitude = models.DecimalField(
+        max_digits=9,
+        decimal_places=6,
+        null=True,
+        blank=True,
+        help_text="Geofence longitude in decimal degrees",
+    )
+    radius_m = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Geofence radius in metres",
+    )
+
+    last_seen = models.DateTimeField(
+        null=True, blank=True, help_text="Last time the device contacted the API"
+    )
+    note = models.CharField(max_length=255, blank=True, help_text="Internal note")
 
     class Meta:
         indexes = [
@@ -42,25 +94,58 @@ class AttendanceDevice(models.Model):
 
 
 class FaceEnrollment(models.Model):
-    employee = models.OneToOneField(Employee, on_delete=models.CASCADE, related_name="face_enrollment")
-    collection_id = models.CharField(max_length=128)
-    face_ids = models.JSONField(default=list)
+    """Links an employee to stored face templates in AWS Rekognition."""
+
+    employee = models.OneToOneField(
+        Employee,
+        on_delete=models.CASCADE,
+        related_name="face_enrollment",
+        help_text="Employee that owns the indexed faces",
+    )
+    collection_id = models.CharField(
+        max_length=128, help_text="Rekognition collection identifier"
+    )
+    face_ids = models.JSONField(
+        default=list, help_text="List of Rekognition face IDs for the employee"
+    )
     STATUS_CHOICES = [("active", "active"), ("revoked", "revoked"), ("pending", "pending")]
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="active")
-    updated_at = models.DateTimeField(auto_now=True)
-    created_at = models.DateTimeField(auto_now_add=True)
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default="active",
+        help_text="Current enrollment status",
+    )
+    updated_at = models.DateTimeField(auto_now=True, help_text="Last update timestamp")
+    created_at = models.DateTimeField(auto_now_add=True, help_text="Creation timestamp")
 
     def __str__(self):
         return f"{self.employee_id}:{self.status} ({len(self.face_ids)} faces)"
 
 
 class EnrollmentLink(models.Model):
-    employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name="enrollment_links")
-    token = models.CharField(max_length=64, unique=True)
-    expires_at = models.DateTimeField()
-    used_at = models.DateTimeField(null=True, blank=True)
-    max_uses = models.PositiveSmallIntegerField(default=1)
-    uses = models.PositiveSmallIntegerField(default=0)
+    """One-time link for employees to submit enrollment photos."""
+
+    employee = models.ForeignKey(
+        Employee,
+        on_delete=models.CASCADE,
+        related_name="enrollment_links",
+        help_text="Employee who will use this link",
+    )
+    token = models.CharField(
+        max_length=64,
+        unique=True,
+        help_text="Unique token embedded in the enrollment URL",
+    )
+    expires_at = models.DateTimeField(help_text="Timestamp when the link expires")
+    used_at = models.DateTimeField(
+        null=True, blank=True, help_text="When the link was used"
+    )
+    max_uses = models.PositiveSmallIntegerField(
+        default=1, help_text="Maximum times the link may be used"
+    )
+    uses = models.PositiveSmallIntegerField(
+        default=0, help_text="Number of times the link has been used"
+    )
 
     class Meta:
         indexes = [models.Index(fields=["token", "expires_at"])]
@@ -77,36 +162,95 @@ class EnrollmentLink(models.Model):
 
 
 class PunchEvent(models.Model):
-    device = models.ForeignKey(AttendanceDevice, on_delete=models.PROTECT, related_name="events")
-    company = models.ForeignKey(Company, on_delete=models.PROTECT)
-    employee = models.ForeignKey(Employee, null=True, blank=True, on_delete=models.SET_NULL)
+    """Raw attendance punch captured by a device."""
+
+    device = models.ForeignKey(
+        AttendanceDevice,
+        on_delete=models.PROTECT,
+        related_name="events",
+        help_text="Device that recorded the punch",
+    )
+    company = models.ForeignKey(
+        Company, on_delete=models.PROTECT, help_text="Owning company"
+    )
+    employee = models.ForeignKey(
+        Employee,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        help_text="Employee identifier supplied by the device",
+    )
     matched_employee = models.ForeignKey(
         Employee,
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
         related_name="matched_events",
+        help_text="Employee matched via face recognition",
     )
-    action = models.CharField(max_length=8, choices=[("in", "in"), ("out", "out"), ("auto", "auto")], default="auto")
+    action = models.CharField(
+        max_length=8,
+        choices=[("in", "in"), ("out", "out"), ("auto", "auto")],
+        default="auto",
+        help_text="Punch direction supplied by the device",
+    )
 
-    device_ts = models.DateTimeField()
-    server_ts = models.DateTimeField(auto_now_add=True)
+    device_ts = models.DateTimeField(
+        help_text="Timestamp reported by the device"
+    )
+    server_ts = models.DateTimeField(
+        auto_now_add=True, help_text="Timestamp recorded by the server"
+    )
 
-    s3_key = models.CharField(max_length=300, blank=True)
-    image_bytes_sha256 = models.CharField(max_length=64, blank=True)
+    s3_key = models.CharField(
+        max_length=300, blank=True, help_text="S3 key where the image is stored"
+    )
+    image_bytes_sha256 = models.CharField(
+        max_length=64, blank=True, help_text="SHA256 hash of the uploaded image"
+    )
 
-    face_matched = models.BooleanField(default=False)
-    face_confidence = models.DecimalField(max_digits=6, decimal_places=3, null=True, blank=True)
+    face_matched = models.BooleanField(
+        default=False, help_text="True when a face match was found"
+    )
+    face_confidence = models.DecimalField(
+        max_digits=6,
+        decimal_places=3,
+        null=True,
+        blank=True,
+        help_text="Confidence score from Rekognition",
+    )
 
-    roster_date = models.DateField(null=True, blank=True)
-    requires_face = models.BooleanField(default=False)
-    out_of_scope = models.BooleanField(default=False)
-    geofence_ok = models.BooleanField(null=True, blank=True, default=None)
-    geofence_rule_violation = models.BooleanField(default=False)
-    roster_fallback = models.BooleanField(default=False)
-    notes = models.CharField(max_length=255, blank=True)
+    roster_date = models.DateField(
+        null=True, blank=True, help_text="Resolved roster date for the punch"
+    )
+    requires_face = models.BooleanField(
+        default=False, help_text="Shift required face verification"
+    )
+    out_of_scope = models.BooleanField(
+        default=False, help_text="Employee outside the device's scope"
+    )
+    geofence_ok = models.BooleanField(
+        null=True,
+        blank=True,
+        default=None,
+        help_text="True if the punch was within the device geofence",
+    )
+    geofence_rule_violation = models.BooleanField(
+        default=False, help_text="Device or shift violated geofence rule"
+    )
+    roster_fallback = models.BooleanField(
+        default=False,
+        help_text="Roster date was inferred from last punch",
+    )
+    notes = models.CharField(
+        max_length=255, blank=True, help_text="Reason punch was not accepted"
+    )
 
-    external_id = models.CharField(max_length=64, blank=True)
+    external_id = models.CharField(
+        max_length=64,
+        blank=True,
+        help_text="Optional client supplied identifier to deduplicate events",
+    )
 
     class Meta:
         indexes = [
@@ -126,7 +270,14 @@ class PunchEvent(models.Model):
 
 
 class PunchException(models.Model):
-    event = models.OneToOneField(PunchEvent, on_delete=models.CASCADE, related_name="exception")
+    """Reason a captured punch was flagged for review."""
+
+    event = models.OneToOneField(
+        PunchEvent,
+        on_delete=models.CASCADE,
+        related_name="exception",
+        help_text="Punch event that triggered the exception",
+    )
     kind = models.CharField(
         max_length=40,
         choices=[
@@ -137,8 +288,11 @@ class PunchException(models.Model):
             ("geofence", "geofence violation"),
             ("geofence_rule", "geofence rule violation"),
         ],
+        help_text="Type of exception encountered",
     )
-    details = models.JSONField(default=dict)
+    details = models.JSONField(
+        default=dict, help_text="Additional structured details for debugging"
+    )
 
     def __str__(self):
         return f"{self.event_id}:{self.kind}"
