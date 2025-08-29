@@ -205,3 +205,41 @@ class RosterRangeSerializer(serializers.Serializer):
         if until and until < attrs["start_date"]:
             raise serializers.ValidationError({"until": "must be on or after start_date"})
         return attrs
+
+
+class HolidayImportResponseSerializer(serializers.Serializer):
+    count = serializers.IntegerField()
+
+
+class ShiftTemplatePreviewSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    name = serializers.CharField()
+    duration_min = serializers.IntegerField()
+    unpaid_break_min = serializers.IntegerField()
+    rounded_increment_min = serializers.IntegerField()
+    cross_midnight = serializers.BooleanField()
+
+
+class ShiftRuleValidateResponseSerializer(serializers.Serializer):
+    valid = serializers.BooleanField()
+    normalized = serializers.JSONField()
+
+
+class RosterBulkUpsertRequestSerializer(serializers.Serializer):
+    entries = RosterEntrySerializer(many=True, allow_empty=False)
+
+
+class RosterBulkUpsertResponseSerializer(serializers.Serializer):
+    upserted = serializers.IntegerField()
+
+
+class RosterSummarySerializer(serializers.Serializer):
+    employee = serializers.IntegerField(required=False)
+    first_name = serializers.CharField(required=False, source="employee__first_name")
+    last_name = serializers.CharField(required=False, source="employee__last_name")
+    shift = serializers.IntegerField(required=False)
+    shift_name = serializers.CharField(required=False, source="shift__name")
+    date = serializers.DateField(required=False)
+    days = serializers.IntegerField(required=False)
+    entries = serializers.IntegerField(required=False)
+    rest_days = serializers.IntegerField()
