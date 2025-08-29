@@ -10,8 +10,10 @@ from drf_spectacular.utils import (
     extend_schema,
     OpenApiExample,
     OpenApiResponse,
+    OpenApiParameter,
     inline_serializer,
 )
+from drf_spectacular.types import OpenApiTypes
 
 from pagasys.models import (
     WorkCalendar,
@@ -28,9 +30,15 @@ from .serializers import (
     HolidaySerializer,
     ShiftTemplateSerializer,
     ShiftRuleSerializer,
+    ShiftRuleValidateResponseSerializer,
     RosterEntrySerializer,
     LeaveTypeSerializer,
     RosterRangeSerializer,
+    HolidayImportResponseSerializer,
+    ShiftTemplatePreviewSerializer,
+    RosterBulkUpsertRequestSerializer,
+    RosterBulkUpsertResponseSerializer,
+    RosterSummarySerializer,
 )
 from .filters import (
     WorkCalendarFilter,
@@ -80,6 +88,7 @@ class WorkCalendarViewSet(BasePolicyViewSet):
     search_fields = ["name"]
 
     @action(detail=True, methods=["get"])
+    @extend_schema(responses=HolidaySerializer(many=True))
     def holidays(self, request, company_id=None, pk=None):
         cal = self.get_object()
         qs = cal.holidays.all()
@@ -100,6 +109,8 @@ class WorkCalendarViewSet(BasePolicyViewSet):
                 value=[{"date": "2024-01-01", "name": "New Year", "is_public": True}],
             )
         ],
+        request=HolidaySerializer(many=True),
+        responses=HolidayImportResponseSerializer,
     )
     def import_holidays(self, request, company_id=None, pk=None):
         cal = self.get_object()
@@ -121,7 +132,8 @@ class WorkCalendarViewSet(BasePolicyViewSet):
                 update_fields=["name", "is_public"],
                 unique_fields=["calendar", "date"],
             )
-        return Response({"count": len(to_create)}, status=200)
+        payload = {"count": len(to_create)}
+        return Response(HolidayImportResponseSerializer(payload).data, status=200)
 
 class HolidayViewSet(BasePolicyViewSet):
     """Policy layer holiday operations.
@@ -145,6 +157,7 @@ class ShiftTemplateViewSet(BasePolicyViewSet):
     search_fields = ["name"]
 
     @action(detail=True, methods=["get"])
+    @extend_schema(responses=ShiftRuleSerializer(many=True))
     def rules(self, request, company_id=None, pk=None):
         tpl = self.get_object()
         qs = tpl.rules.all()
@@ -154,6 +167,7 @@ class ShiftTemplateViewSet(BasePolicyViewSet):
         return self.get_paginated_response(ser.data) if page else Response(ser.data)
 
     @action(detail=True, methods=["get"])
+    @extend_schema(responses=ShiftTemplatePreviewSerializer)
     def preview(self, request, company_id=None, pk=None):
         from pagasys.models import _minutes_between
         tpl = self.get_object()
@@ -188,6 +202,7 @@ class ShiftRuleViewSet(BasePolicyViewSet):
                 },
             )
         ],
+        responses=ShiftRuleValidateResponseSerializer,
     )
     def validate(self, request, company_id=None):
         ser = self.get_serializer(data=request.data)
@@ -196,7 +211,8 @@ class ShiftRuleViewSet(BasePolicyViewSet):
         shift = normalized.get("shift")
         if shift is not None:
             normalized["shift"] = getattr(shift, "id", shift)
-        return Response({"valid": True, "normalized": normalized})
+        payload = {"valid": True, "normalized": normalized}
+        return Response(ShiftRuleValidateResponseSerializer(payload).data)
 
 class RosterViewSet(BasePolicyViewSet):
     queryset = RosterEntry.objects.select_related(
@@ -249,20 +265,19 @@ class RosterViewSet(BasePolicyViewSet):
                 },
             )
         ],
+        request=RosterBulkUpsertRequestSerializer,
+        responses={200: RosterBulkUpsertResponseSerializer},
     )
     def bulk_upsert(self, request, company_id=None):
-        entries = request.data.get("entries", [])
-        if not isinstance(entries, list) or not entries:
-            return Response({"detail": "entries must be a non-empty list", "errors": {}}, status=400)
+        req = RosterBulkUpsertRequestSerializer(data=request.data, context={"request": request})
+        if not req.is_valid():
+            return Response({"detail": "entries must be a non-empty list", "errors": req.errors}, status=400)
         validated = []
-        for item in entries:
-            ser = self.get_serializer(data=item)
-            ser.is_valid(raise_exception=True)
-            v = ser.validated_data
-            v["is_holiday"], v["was_holiday"] = holiday_flags(
-                v["employee"], v["date"], item.get("is_holiday")
+        for item, raw in zip(req.validated_data["entries"], req.initial_data["entries"]):
+            item["is_holiday"], item["was_holiday"] = holiday_flags(
+                item["employee"], item["date"], raw.get("is_holiday")
             )
-            validated.append(v)
+            validated.append(item)
         allowed_emp_ids = set(scope_queryset(Employee.objects.all(), request.user).values_list("id", flat=True))
         allowed_shift_ids = set(scope_queryset(ShiftTemplate.objects.all(), request.user).values_list("id", flat=True))
         bad_emp = sorted({v["employee"].id for v in validated if v["employee"].id not in allowed_emp_ids})
@@ -288,7 +303,8 @@ class RosterViewSet(BasePolicyViewSet):
                 ],
                 unique_fields=["employee", "date"],
             )
-        return Response({"upserted": len(to_create)}, status=200)
+        payload = {"upserted": len(to_create)}
+        return Response(RosterBulkUpsertResponseSerializer(payload).data, status=200)
 
     @action(detail=False, methods=["post"], url_path="schedule-range")
     @extend_schema(
@@ -384,6 +400,19 @@ class RosterViewSet(BasePolicyViewSet):
         return Response({"count": len(entries)}, status=200)
 
     @action(detail=False, methods=["get"])
+    @extend_schema(
+        description="Summarize roster entries grouped by employee, shift, or date.",
+        parameters=[
+            OpenApiParameter(
+                "group_by",
+                OpenApiTypes.STR,
+                OpenApiParameter.QUERY,
+                enum=["employee", "shift", "date"],
+                description="Grouping field",
+            )
+        ],
+        responses=RosterSummarySerializer(many=True),
+    )
     def summary(self, request, company_id=None):
         group_by = request.query_params.get("group_by", "employee")
         qs = self.filter_queryset(self.get_queryset())
@@ -402,7 +431,8 @@ class RosterViewSet(BasePolicyViewSet):
                 qs.values("date")
                 .annotate(entries=Count("id"), rest_days=Count("id", filter=Q(is_rest_day=True)))
             )
-        return Response(list(data))
+        ser = RosterSummarySerializer(data, many=True)
+        return Response(ser.data)
 
 class LeaveTypeViewSet(BasePolicyViewSet):
     queryset = LeaveType.objects.all()

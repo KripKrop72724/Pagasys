@@ -31,8 +31,11 @@ from .serializers import (
     RotateKeyResponseSerializer,
     FaceEnrollmentStatusSerializer,
     EnrollmentLinkCreateSerializer,
+    EnrollmentLinkResponseSerializer,
     EnrollmentSubmitSerializer,
+    EnrollmentSubmitResponseSerializer,
     PunchRequestSerializer,
+    PunchResponseSerializer,
     PunchEventSerializer,
 )
 from .filters import AttendanceDeviceFilter, PunchEventFilter
@@ -141,6 +144,10 @@ class FaceEnrollmentViewSet(viewsets.ViewSet):
     @extend_schema(
         description="Create or revoke a face enrollment link for an employee.",
         request=EnrollmentLinkCreateSerializer,
+        responses={
+            200: EnrollmentLinkResponseSerializer,
+            204: OpenApiResponse(description="Link revoked"),
+        },
     )
     @action(
         detail=True,
@@ -162,13 +169,12 @@ class FaceEnrollmentViewSet(viewsets.ViewSet):
                 expires_at=expires,
                 max_uses=ser.validated_data["max_uses"],
             )
-            return Response(
-                {
-                    "url": f"{settings.PUBLIC_BASE_URL}/api/face/enroll/{token}",
-                    "token": token,
-                    "expires_at": expires,
-                }
-            )
+            payload = {
+                "url": f"{settings.PUBLIC_BASE_URL}/api/face/enroll/{token}",
+                "token": token,
+                "expires_at": expires,
+            }
+            return Response(EnrollmentLinkResponseSerializer(payload).data)
         EnrollmentLink.objects.filter(
             employee=emp,
             used_at__isnull=True,
@@ -176,7 +182,14 @@ class FaceEnrollmentViewSet(viewsets.ViewSet):
         ).update(expires_at=timezone.now())
         return Response(status=204)
 
-    @extend_schema(description="Revoke an employee's existing face enrollment.")
+    @extend_schema(
+        description="Revoke an employee's existing face enrollment.",
+        responses={
+            204: OpenApiResponse(description="Enrollment revoked"),
+            403: OpenApiResponse(description="Forbidden"),
+            404: OpenApiResponse(description="Employee not found"),
+        },
+    )
     @action(detail=True, methods=["delete"], url_path=r"employees/(?P<employee_id>\d+)/face")
     def revoke(self, request, company_id=None, pk=None, employee_id=None):
         emp = self._get_employee(company_id, employee_id)
@@ -214,6 +227,13 @@ class EnrollmentSubmitView(generics.GenericAPIView):
             )
         return TemplateResponse(request, "capture/enroll.html", {"token": token})
 
+    @extend_schema(
+        request=EnrollmentSubmitSerializer,
+        responses={
+            200: EnrollmentSubmitResponseSerializer,
+            403: OpenApiResponse(description="Link invalid or expired"),
+        },
+    )
     def post(self, request, token: str):
         link = get_object_or_404(EnrollmentLink, token=token)
         if not link.is_valid:
@@ -245,7 +265,8 @@ class EnrollmentSubmitView(generics.GenericAPIView):
                 },
             )
         link.mark_used()
-        return Response({"faces_indexed": len(face_ids)})
+        payload = {"faces_indexed": len(face_ids)}
+        return Response(EnrollmentSubmitResponseSerializer(payload).data)
 
 
 # --------- Punch Capture (device-auth only) ---------
@@ -274,6 +295,13 @@ class CapturePunchView(generics.GenericAPIView):
     serializer_class = PunchRequestSerializer
     parser_classes = [parsers.MultiPartParser, parsers.JSONParser, parsers.FormParser]
 
+    @extend_schema(
+        request=PunchRequestSerializer,
+        responses={
+            200: PunchResponseSerializer,
+            403: OpenApiResponse(PunchResponseSerializer, description="Punch rejected"),
+        },
+    )
     def post(self, request):
         device = request.device
         device.last_seen = timezone.now()
@@ -470,7 +498,7 @@ class CapturePunchView(generics.GenericAPIView):
             "event_id": ev.id,
         }
         status_code = 200 if accepted else 403
-        return Response(payload, status=status_code)
+        return Response(PunchResponseSerializer(payload).data, status=status_code)
 
 
 # --------- Punch event listing (RBAC & scope) ---------

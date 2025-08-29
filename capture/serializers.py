@@ -89,6 +89,40 @@ class PunchRequestSerializer(serializers.Serializer):
     )
     lat = serializers.FloatField(required=False, help_text="Latitude of device location")
     lon = serializers.FloatField(required=False, help_text="Longitude of device location")
+    image = serializers.ImageField(
+        required=False,
+        allow_empty_file=False,
+        use_url=False,
+        help_text="Captured image file",
+    )
+    image_b64 = serializers.CharField(
+        required=False,
+        help_text="Base64-encoded image if file upload isn't possible",
+    )
+
+
+class PunchResponseSerializer(serializers.Serializer):
+    accepted = serializers.BooleanField()
+    roster_date = serializers.DateField(required=False, allow_null=True)
+    matched_employee = serializers.IntegerField(required=False, allow_null=True)
+    face_confidence = serializers.FloatField(required=False, allow_null=True)
+    requires_face = serializers.BooleanField()
+    out_of_scope = serializers.BooleanField()
+    geofence_ok = serializers.BooleanField(required=False, allow_null=True)
+    geofence_rule_violation = serializers.BooleanField()
+    roster_fallback = serializers.BooleanField()
+    notes = serializers.CharField(required=False, allow_blank=True)
+    event_id = serializers.IntegerField()
+
+
+class EnrollmentLinkResponseSerializer(serializers.Serializer):
+    url = serializers.URLField()
+    token = serializers.CharField()
+    expires_at = serializers.DateTimeField()
+
+
+class EnrollmentSubmitResponseSerializer(serializers.Serializer):
+    faces_indexed = serializers.IntegerField()
 
 
 class PunchEventSerializer(serializers.ModelSerializer):
