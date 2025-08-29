@@ -552,13 +552,14 @@ class RosterEntryAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
             start = date.fromisoformat(request.GET.get("start"))
         except Exception:
             start = timezone.localdate()
+        raw_days = request.GET.get("days", "7")
         try:
-            days = int(request.GET.get("days", 7))
-        except Exception:
+            days = int(raw_days)
+        except (TypeError, ValueError):
             days = 7
         if days < 1:
             days = 7
-        days = min(31, days)
+        days = min(days, 31)
 
         end = start + timedelta(days=days - 1)
         qs = (
