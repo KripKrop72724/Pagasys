@@ -245,7 +245,7 @@ class EnrollmentSubmitView(generics.GenericAPIView):
         ensure_collection(collection_id)
         fe = FaceEnrollment.objects.filter(employee=emp).first()
         if fe:
-            delete_faces(fe.collection_id, fe.face_ids)
+            delete_faces(emp.company.id, fe.face_ids)
         face_ids = []
         for img in ser.validated_data["images"]:
             bytes_ = img.read()
