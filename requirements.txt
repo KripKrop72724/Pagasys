@@ -16,6 +16,12 @@ attrs==25.3.0
     #   referencing
 billiard==4.2.1
     # via celery
+boto3==1.40.21
+    # via -r requirements.in
+botocore==1.40.21
+    # via
+    #   boto3
+    #   s3transfer
 celery==5.5.3
     # via -r requirements.in
 click==8.2.1
@@ -66,12 +72,22 @@ gunicorn==23.0.0
     # via -r requirements.in
 inflection==0.5.1
     # via drf-spectacular
+jmespath==1.0.1
+    # via
+    #   boto3
+    #   botocore
 jsonschema==4.25.0
     # via drf-spectacular
 jsonschema-specifications==2025.4.1
     # via jsonschema
 kombu==5.5.4
     # via celery
+mccabe==0.7.0
+    # via flake8
+numpy==2.2.6
+    # via opencv-python-headless
+opencv-python-headless==4.12.0.88
+    # via -r requirements.in
 packaging==25.0
     # via
     #   gunicorn
@@ -82,10 +98,16 @@ prompt-toolkit==3.0.51
     # via click-repl
 psycopg2-binary==2.9.10
     # via -r requirements.in
+pycodestyle==2.14.0
+    # via flake8
+pyflakes==3.4.0
+    # via flake8
 pyjwt==2.10.1
     # via djangorestframework-simplejwt
 python-dateutil==2.9.0.post0
-    # via celery
+    # via
+    #   botocore
+    #   celery
 pyyaml==6.0.2
     # via drf-spectacular
 redis==6.4.0
@@ -98,6 +120,8 @@ rpds-py==0.26.0
     # via
     #   jsonschema
     #   referencing
+s3transfer==0.13.1
+    # via boto3
 six==1.17.0
     # via python-dateutil
 sqlparse==0.5.3
@@ -108,6 +132,8 @@ tzdata==2025.2
     # via kombu
 uritemplate==4.2.0
     # via drf-spectacular
+urllib3==2.5.0
+    # via botocore
 vine==5.1.0
     # via
     #   amqp
@@ -117,5 +143,3 @@ wcwidth==0.2.13
     # via prompt-toolkit
 whitenoise==6.9.0
     # via -r requirements.in
-opencv-python-headless==4.12.0.88
-    # via capture image validation
