@@ -44,6 +44,16 @@ ALLOWED_HOSTS = env.list(
 
 CORS_ALLOW_ALL_ORIGINS = True
 
+# Allow cross-site requests from trusted domains for CSRF protection
+CSRF_TRUSTED_ORIGINS = env.list(
+    "CSRF_TRUSTED_ORIGINS",
+    default=[
+        "http://localhost:3000",
+        "https://pagasyss.me-central-1.elasticbeanstalk.com",
+        "https://api.pagasys.pro",
+    ],
+)
+
 
 # Application definition
 
