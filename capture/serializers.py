@@ -106,6 +106,7 @@ class PunchResponseSerializer(serializers.Serializer):
     roster_date = serializers.DateField(required=False, allow_null=True)
     matched_employee = serializers.IntegerField(required=False, allow_null=True)
     face_confidence = serializers.FloatField(required=False, allow_null=True)
+    face_mismatch = serializers.BooleanField()
     requires_face = serializers.BooleanField()
     out_of_scope = serializers.BooleanField()
     geofence_ok = serializers.BooleanField(required=False, allow_null=True)
