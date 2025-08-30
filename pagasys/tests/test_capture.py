@@ -125,7 +125,7 @@ class CaptureAPITests(TestCase):
         admin = self.users[COMPANY_ADMIN]
         emp = self.users[EMPLOYEE_ROLE]
         self.client.force_authenticate(admin)
-        base = f"/api/companies/{self.company.id}/manage/0/employees/{emp.id}/face/enrollment-link/"
+        base = f"/api/companies/{self.company.id}/manage/employees/{emp.id}/face/enrollment-link/"
         res = self.client.post(base, {}, format="json")
         self.assertEqual(res.status_code, 200)
         token = res.data["token"]
@@ -136,7 +136,7 @@ class CaptureAPITests(TestCase):
         link.refresh_from_db()
         self.assertFalse(link.is_valid)
         res = self.client.post(
-            f"/api/companies/{self.company.id}/manage/0/employees/9999/face/enrollment-link/",
+            f"/api/companies/{self.company.id}/manage/employees/9999/face/enrollment-link/",
             {},
             format="json",
         )
@@ -144,11 +144,25 @@ class CaptureAPITests(TestCase):
         bm = self.users[BRANCH_MANAGER]
         self.client.force_authenticate(bm)
         res = self.client.post(
-            f"/api/companies/{self.company.id}/manage/0/employees/{self.other_employee.id}/face/enrollment-link/",
+            f"/api/companies/{self.company.id}/manage/employees/{self.other_employee.id}/face/enrollment-link/",
             {},
             format="json",
         )
         self.assertEqual(res.status_code, 403)
+
+    def test_enrollment_link_route_has_no_pk_segment(self):
+        admin = self.users[COMPANY_ADMIN]
+        emp = self.users[EMPLOYEE_ROLE]
+        self.client.force_authenticate(admin)
+        url = f"/api/companies/{self.company.id}/manage/employees/{emp.id}/face/enrollment-link/"
+        res = self.client.post(url, {}, format="json")
+        self.assertEqual(res.status_code, 200)
+        res = self.client.post(
+            f"/api/companies/{self.company.id}/manage/0/employees/{emp.id}/face/enrollment-link/",
+            {},
+            format="json",
+        )
+        self.assertEqual(res.status_code, 404)
 
     def test_punch_event_listing_scope(self):
         bm = self.users[BRANCH_MANAGER]

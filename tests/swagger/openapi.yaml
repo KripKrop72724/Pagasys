@@ -1447,7 +1447,7 @@ paths:
       responses:
         '204':
           description: No response body
-  /api/companies/{company_id}/manage/{id}/employees/{employee_id}/face/:
+  /api/companies/{company_id}/manage/employees/{employee_id}/face/:
     get:
       operationId: companies_manage_employees_face_retrieve
       description: Retrieve face enrollment status for an employee.
@@ -1463,11 +1463,6 @@ paths:
         schema:
           type: string
           pattern: ^\d+$
-        required: true
-      - in: path
-        name: id
-        schema:
-          type: string
         required: true
       tags:
       - Capture
@@ -1496,11 +1491,6 @@ paths:
           type: string
           pattern: ^\d+$
         required: true
-      - in: path
-        name: id
-        schema:
-          type: string
-        required: true
       tags:
       - Capture
       security:
@@ -1512,7 +1502,7 @@ paths:
           description: Forbidden
         '404':
           description: Employee not found
-  /api/companies/{company_id}/manage/{id}/employees/{employee_id}/face/enrollment-link/:
+  /api/companies/{company_id}/manage/employees/{employee_id}/face/enrollment-link/:
     post:
       operationId: companies_manage_employees_face_enrollment_link_create
       description: Create or revoke a face enrollment link for an employee.
@@ -1528,11 +1518,6 @@ paths:
         schema:
           type: string
           pattern: ^\d+$
-        required: true
-      - in: path
-        name: id
-        schema:
-          type: string
         required: true
       tags:
       - Capture
@@ -1573,11 +1558,6 @@ paths:
         schema:
           type: string
           pattern: ^\d+$
-        required: true
-      - in: path
-        name: id
-        schema:
-          type: string
         required: true
       tags:
       - Capture
