@@ -16,3 +16,6 @@ redis
 django-ratelimit
 Pillow
 flake8
+
+opencv-python-headless
+boto3
