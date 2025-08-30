@@ -9250,6 +9250,8 @@ components:
           type: number
           format: double
           nullable: true
+        face_mismatch:
+          type: boolean
         requires_face:
           type: boolean
         out_of_scope:
@@ -9268,6 +9270,7 @@ components:
       required:
       - accepted
       - event_id
+      - face_mismatch
       - geofence_rule_violation
       - out_of_scope
       - requires_face

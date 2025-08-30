@@ -399,6 +399,7 @@ def test_face_match_success(client, company, device, employee, roster, monkeypat
     data = resp.json()
     assert data["matched_employee"] == employee.id
     assert data["face_confidence"] == pytest.approx(0.947, rel=1e-3)
+    assert data["face_mismatch"] is False
 
 
 def _mismatch_setup(monkeypatch, employee_other):
@@ -432,6 +433,7 @@ def test_face_mismatch_rejected_when_required(
     assert resp.status_code == 403
     data = resp.json()
     assert data["accepted"] is False
+    assert data["face_mismatch"] is True
     ev = PunchEvent.objects.get(id=data["event_id"])
     assert ev.exception.kind == "face_required_no_match"
 
@@ -455,6 +457,8 @@ def test_face_mismatch_accepted_when_not_required(
     assert resp.status_code == 200
     data = resp.json()
     assert data["accepted"] is True
+    assert data["face_mismatch"] is True
+    assert data["notes"] == "face_mismatch"
     ev = PunchEvent.objects.get(id=data["event_id"])
     assert ev.exception.kind == "face_mismatch"
 

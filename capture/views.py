@@ -425,6 +425,9 @@ class CapturePunchView(generics.GenericAPIView):
             accepted = False
             reason = reason or "outside_scope"
 
+        if face_mismatch and reason is None:
+            reason = "face_mismatch"
+
         try:
             with transaction.atomic():
                 ev = PunchEvent.objects.create(
@@ -489,6 +492,7 @@ class CapturePunchView(generics.GenericAPIView):
             "roster_date": ev.roster_date.isoformat() if ev.roster_date else None,
             "matched_employee": ev.matched_employee_id,
             "face_confidence": float(ev.face_confidence) if ev.face_confidence is not None else None,
+            "face_mismatch": face_mismatch,
             "requires_face": ev.requires_face,
             "out_of_scope": ev.out_of_scope,
             "geofence_ok": ev.geofence_ok,
