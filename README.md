@@ -45,7 +45,8 @@ comprehensive automated test suite.
 ### Capture layer
 
 The capture app records raw attendance punches and manages employee face
-enrollments. Images are stored in S3 using the following prefixes:
+enrollments. Face enrollment and image storage require `boto3` and valid AWS
+credentials. Images are stored in S3 using the following prefixes:
 
 ```
 attendance-enroll/{company_id}/{employee_id}/{uuid}.jpg
@@ -104,21 +105,31 @@ enforcement.
 
 ## Local Development
 
+Face enrollment and image storage rely on `boto3` and valid AWS credentials.
+
 1. Create a virtual environment and install dependencies:
    ```bash
    pip install -r requirements.txt -r requirements-dev.txt
    ```
 2. Copy `.env.example` to `.env` and adjust database credentials.
-3. Initialise the database and create groups:
+3. Add AWS Rekognition and S3 settings to `.env`:
+   ```
+   AWS_ACCESS_KEY_ID=...
+   AWS_SECRET_ACCESS_KEY=...
+   AWS_REKOGNITION_REGION=ap-south-1
+   AWS_S3_BUCKET_ENROLL=your-enroll-bucket
+   AWS_S3_BUCKET_CAPTURE=your-capture-bucket
+   ```
+4. Initialise the database and create groups:
    ```bash
    python manage.py migrate
    python manage.py initgroups
    ```
-4. (Optional) Load demo data:
+5. (Optional) Load demo data:
    ```bash
    python manage.py seed
    ```
-5. Start the development server:
+6. Start the development server:
    ```bash
    python manage.py runserver
    ```
