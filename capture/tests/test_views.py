@@ -402,6 +402,37 @@ def test_face_match_success(client, company, device, employee, roster, monkeypat
     assert data["face_mismatch"] is False
 
 
+def test_face_match_multiple_results(client, company, device, employee, roster, monkeypatch):
+    """Ensure the highest-similarity match is chosen when multiple results are returned."""
+
+    def fake_put_capture_to_s3(company_id, device_id, bytes_):
+        return ("k", "h")
+
+    def fake_search(company_id, image_bytes, threshold):
+        return {
+            "FaceMatches": [
+                {"Similarity": 90.0, "Face": {"ExternalImageId": str(employee.id)}},
+                {"Similarity": 95.0, "Face": {"ExternalImageId": str(employee.id)}},
+            ]
+        }
+
+    monkeypatch.setattr("capture.views.put_capture_to_s3", fake_put_capture_to_s3)
+    monkeypatch.setattr("capture.views.search_face_by_image", fake_search)
+
+    img_b64 = base64.b64encode(b"img").decode()
+    ts = datetime(2024, 7, 1, 9, 0, tzinfo=dt_timezone.utc)
+    resp = client.post(
+        "/api/capture/punch",
+        {"action": "in", "timestamp": ts.isoformat(), "image_b64": img_b64},
+        **auth_headers(device),
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["matched_employee"] == employee.id
+    assert data["face_confidence"] == pytest.approx(0.95, rel=1e-3)
+    assert data["face_mismatch"] is False
+
+
 def _mismatch_setup(monkeypatch, employee_other):
     def fake_put_capture_to_s3(company_id, device_id, bytes_):
         return ("k", "h")
