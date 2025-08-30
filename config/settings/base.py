@@ -254,7 +254,7 @@ SPECTACULAR_SETTINGS = {
 AWS_REKOGNITION_REGION = env("AWS_REKOGNITION_REGION", default="ap-south-1")
 AWS_S3_BUCKET_ENROLL = env("AWS_S3_BUCKET_ENROLL", default="carhub-pagasys-enroll-ap-south-1")
 AWS_S3_BUCKET_CAPTURE = env("AWS_S3_BUCKET_CAPTURE", default="carhub-pagasys-capture-ap-south-1")
-PUBLIC_BASE_URL = env("PUBLIC_BASE_URL", default="http://pagasyss.me-central-1.elasticbeanstalk.com")
+PUBLIC_BASE_URL = env("PUBLIC_BASE_URL", default="https://api.pagasys.pro")
 
 FACE_MATCH_DEFAULT_MIN_CONF = env.float("FACE_MATCH_DEFAULT_MIN_CONF", default=0.90)
 CAPTURE_BLOCK_OUT_OF_SCOPE = env.bool("CAPTURE_BLOCK_OUT_OF_SCOPE", default=False)
