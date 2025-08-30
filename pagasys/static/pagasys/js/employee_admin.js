@@ -8,6 +8,13 @@ function initEmployeeAdmin() {
     : document.querySelector(
         '.form-row.field-trade_license, .grp-row.field-trade_license'
       );
+  const paymentStatusEl = document.getElementById('id_payment_status');
+  const wpsField = document.getElementById('id_wps_account_number');
+  const wpsRow = wpsField
+    ? wpsField.closest('.form-row, .grp-row')
+    : document.querySelector(
+        '.form-row.field-wps_account_number, .grp-row.field-wps_account_number'
+      );
 
   if (isSuperEl && groupsField) {
     const row = groupsField.closest('.form-row');
@@ -20,22 +27,43 @@ function initEmployeeAdmin() {
     toggleGroupField();
   }
 
-  function toggleLicenseField() {
-    if (!visaTypeEl) return;
-    const personal = visaTypeEl.value === 'personal';
-    if (licenseRow) licenseRow.style.display = personal ? 'none' : '';
-    if (licenseField) {
-      licenseField.disabled = personal;
-      if (personal) {
-        licenseField.value = '';
-      }
+  function togglePaymentFields() {
+    if (!paymentStatusEl) return;
+    const wps = paymentStatusEl.value === 'wps';
+    if (wpsRow) wpsRow.style.display = wps ? '' : 'none';
+    if (wpsField) {
+      wpsField.disabled = !wps;
+      if (!wps) wpsField.value = '';
     }
   }
 
-  if (visaTypeEl) {
-    visaTypeEl.addEventListener('change', toggleLicenseField);
+  function handleVisaType() {
+    if (!visaTypeEl) return;
+    const personal = visaTypeEl.value === 'personal';
+    const visit = visaTypeEl.value === 'visit';
+    if (licenseRow) licenseRow.style.display = personal || visit ? 'none' : '';
+    if (licenseField) {
+      licenseField.disabled = personal || visit;
+      if (personal || visit) {
+        licenseField.value = '';
+      }
+    }
+    if (paymentStatusEl) {
+      paymentStatusEl.disabled = visit;
+      if (visit) {
+        paymentStatusEl.value = 'cash';
+      }
+    }
+    togglePaymentFields();
   }
-  toggleLicenseField();
+
+  if (visaTypeEl) {
+    visaTypeEl.addEventListener('change', handleVisaType);
+  }
+  if (paymentStatusEl) {
+    paymentStatusEl.addEventListener('change', togglePaymentFields);
+  }
+  handleVisaType();
 }
 
 window.addEventListener('load', initEmployeeAdmin);

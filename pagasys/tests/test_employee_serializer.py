@@ -184,6 +184,66 @@ class EmployeeSerializerVisaTypeTests(TestCase):
         self.assertFalse(ser.is_valid())
         self.assertIn("trade_license", ser.errors)
 
+
+class EmployeeSerializerPaymentTests(TestCase):
+    def setUp(self):
+        self.company = Company.objects.create(name="Co")
+        self.branch = Branch.objects.create(company=self.company, name="B1")
+        self.department = Department.objects.create(branch=self.branch, name="D1")
+        self.license = TradeLicense.objects.create(
+            company=self.company,
+            license_no="L1",
+            issued_date="2024-01-01",
+            expiry_date="2099-01-01",
+            max_visas=5,
+        )
+        self.license.branches.set([self.branch])
+
+    def test_wps_requires_account(self):
+        data = {
+            "username": "wps1",
+            "password": "pass",
+            "visa_type": "company",
+            "trade_license": self.license.id,
+            "department": self.department.id,
+            "hire_date": "2024-01-02",
+            "employment_type": "permanent",
+            "payment_status": "wps",
+        }
+        ser = EmployeeSerializer(data=data)
+        self.assertFalse(ser.is_valid())
+        self.assertIn("wps_account_number", ser.errors)
+
+    def test_cash_disallows_wps_account(self):
+        data = {
+            "username": "cash1",
+            "password": "pass",
+            "visa_type": "company",
+            "trade_license": self.license.id,
+            "department": self.department.id,
+            "hire_date": "2024-01-02",
+            "employment_type": "permanent",
+            "payment_status": "cash",
+            "wps_account_number": "123",
+        }
+        ser = EmployeeSerializer(data=data)
+        self.assertFalse(ser.is_valid())
+        self.assertIn("wps_account_number", ser.errors)
+
+    def test_visit_forces_cash(self):
+        data = {
+            "username": "visit1",
+            "password": "pass",
+            "visa_type": "visit",
+            "department": self.department.id,
+            "hire_date": "2024-01-02",
+            "employment_type": "permanent",
+        }
+        ser = EmployeeSerializer(data=data)
+        self.assertTrue(ser.is_valid(), ser.errors)
+        emp = ser.save()
+        self.assertEqual(emp.payment_status, "cash")
+
     def test_personal_visa_forbids_license(self):
         data = {
             "username": "pvis",

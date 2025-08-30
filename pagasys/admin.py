@@ -282,9 +282,19 @@ class EmployeeAdminCreationForm(AdminUserCreationForm):
             "work_calendar",
             "trade_license",
             "visa_type",
+            "payment_status",
+            "wps_account_number",
             "department",
             "project",
             "designation",
+            "primary_contact",
+            "secondary_contact",
+            "nationality",
+            "current_address",
+            "permanent_address",
+            "gender",
+            "visa_file_number",
+            "unified_id",
             "hire_date",
             "employment_type",
         )
@@ -339,12 +349,29 @@ class EmployeeAdmin(CleanSaveModelMixin, ScopedAdminMixin, UserAdmin):
                 "fields": (
                     "trade_license",
                     "visa_type",
+                    "payment_status",
+                    "wps_account_number",
                     "department",
                     "project",
                     "work_calendar",
                     "designation",
+                    "visa_file_number",
+                    "unified_id",
                     "hire_date",
                     "employment_type",
+                )
+            },
+        ),
+        (
+            "Personal Info",
+            {
+                "fields": (
+                    "primary_contact",
+                    "secondary_contact",
+                    "nationality",
+                    "current_address",
+                    "permanent_address",
+                    "gender",
                 )
             },
         ),
@@ -372,12 +399,29 @@ class EmployeeAdmin(CleanSaveModelMixin, ScopedAdminMixin, UserAdmin):
                 "fields": (
                     "trade_license",
                     "visa_type",
+                    "payment_status",
+                    "wps_account_number",
                     "department",
                     "project",
                     "work_calendar",
                     "designation",
+                    "visa_file_number",
+                    "unified_id",
                     "hire_date",
                     "employment_type",
+                )
+            },
+        ),
+        (
+            "Personal Info",
+            {
+                "fields": (
+                    "primary_contact",
+                    "secondary_contact",
+                    "nationality",
+                    "current_address",
+                    "permanent_address",
+                    "gender",
                 )
             },
         ),

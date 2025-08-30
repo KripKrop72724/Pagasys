@@ -9,6 +9,7 @@ from django.contrib.auth.models import AbstractUser
 from django.db.models import F
 from django.db.models.functions import Lower
 from django.utils import timezone
+from django_countries.fields import CountryField
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 
@@ -283,6 +284,12 @@ class Employee(AbstractUser):
     VISA_TYPE_CHOICES = [
         ("company", "Company"),
         ("personal", "Personal"),
+        ("visit", "Visit"),
+    ]
+
+    PAYMENT_STATUS_CHOICES = [
+        ("wps", "WPS"),
+        ("cash", "Cash"),
     ]
 
     visa_type = models.CharField(
@@ -290,6 +297,47 @@ class Employee(AbstractUser):
         choices=VISA_TYPE_CHOICES,
         default="company",
         help_text="Whether the employee uses a company or personal visa",
+    )
+
+    primary_contact = models.CharField(
+        max_length=20,
+        blank=True,
+        help_text="Primary contact number",
+    )
+    secondary_contact = models.CharField(
+        max_length=20,
+        blank=True,
+        help_text="Secondary contact number",
+    )
+    nationality = CountryField(blank=True, help_text="Nationality")
+    payment_status = models.CharField(
+        max_length=10,
+        choices=PAYMENT_STATUS_CHOICES,
+        default="cash",
+        help_text="Payment method: WPS or Cash",
+    )
+    wps_account_number = models.CharField(
+        max_length=30,
+        blank=True,
+        help_text="WPS account number (required if payment status is WPS)",
+    )
+    current_address = models.TextField(blank=True, help_text="Current residential address")
+    permanent_address = models.TextField(blank=True, help_text="Permanent home country address")
+    gender = models.CharField(
+        max_length=10,
+        blank=True,
+        choices=[("male", "Male"), ("female", "Female")],
+        help_text="Gender",
+    )
+    visa_file_number = models.CharField(
+        max_length=50,
+        blank=True,
+        help_text="Government visa file number",
+    )
+    unified_id = models.CharField(
+        max_length=50,
+        blank=True,
+        help_text="Unified ID",
     )
 
     trade_license = models.ForeignKey(
@@ -332,7 +380,7 @@ class Employee(AbstractUser):
         related_name="employees",
         help_text="Job designation",
     )
-    hire_date = models.DateField(help_text="Date hired")
+    hire_date = models.DateField(help_text="Date of joining")
     employment_type = models.CharField(
         max_length=20,
         choices=[("permanent", "Permanent"), ("temporary", "Temporary")],
@@ -371,7 +419,7 @@ class Employee(AbstractUser):
             models.CheckConstraint(
                 condition=(
                     models.Q(visa_type="company", trade_license__isnull=False)
-                    | models.Q(visa_type="personal", trade_license__isnull=True)
+                    | models.Q(visa_type__in=["personal", "visit"], trade_license__isnull=True)
                 ),
                 name="employee_license_matches_visa_type",
             ),
@@ -431,10 +479,9 @@ class Employee(AbstractUser):
 
             if self.trade_license.company != branch.company:
                 raise ValidationError("License company must match branch company")
-
-        else:  # personal visa
+        else:  # personal or visit visa
             if self.trade_license:
-                raise ValidationError({"trade_license": ["Trade license must be empty for personal visa"]})
+                raise ValidationError({"trade_license": ["Trade license must be empty for personal or visit visa"]})
 
         # Personal visa with designation company mismatch:
         # ensure designation matches branch.company
@@ -443,6 +490,14 @@ class Employee(AbstractUser):
 
         if self.work_calendar and self.work_calendar.company_id != branch.company_id:
             raise ValidationError("Work calendar company must match employee company")
+
+        if self.visa_type == "visit" and self.payment_status != "cash":
+            raise ValidationError({"payment_status": ["Visit visa requires cash payment"]})
+
+        if self.payment_status == "wps" and not self.wps_account_number:
+            raise ValidationError({"wps_account_number": ["WPS account number required when payment status is WPS"]})
+        if self.payment_status != "wps" and self.wps_account_number:
+            raise ValidationError({"wps_account_number": ["WPS account number must be empty unless payment status is WPS"]})
 
     def __str__(self) -> str:
         parts = [f"{self.first_name} {self.last_name}"]
