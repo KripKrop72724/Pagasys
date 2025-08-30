@@ -1710,6 +1710,44 @@ def test_enrollment_submit_success(monkeypatch, client, employee):
     assert fe.face_ids == ["f1"]
 
 
+@override_settings(FACE_ENROLL_MIN_PHOTOS=1, FACE_ENROLL_MAX_PHOTOS=3)
+@pytest.mark.django_db
+def test_enrollment_submit_deletes_existing_faces_with_company_id(monkeypatch, client, employee):
+    link = EnrollmentLink.objects.create(
+        employee=employee,
+        token="tok",
+        expires_at=timezone.now() + timedelta(hours=1),
+        max_uses=1,
+    )
+    # Pre-existing enrollment
+    existing_collection = f"reko-company-{employee.company.id}"
+    FaceEnrollment.objects.create(
+        employee=employee,
+        collection_id=existing_collection,
+        face_ids=["old"],
+        status="active",
+    )
+    monkeypatch.setattr("capture.views.ensure_collection", lambda cid: None)
+    monkeypatch.setattr("capture.views.company_collection_id", lambda cid: existing_collection)
+    called = {}
+
+    def fake_delete_faces(company_id, face_ids):
+        called["company_id"] = company_id
+        called["face_ids"] = face_ids
+
+    monkeypatch.setattr("capture.views.delete_faces", fake_delete_faces)
+    monkeypatch.setattr("capture.views.put_enroll_to_s3", lambda *a, **k: ("k", "h"))
+    monkeypatch.setattr("capture.views.index_faces", lambda *a, **k: ["f1"])
+    resp = client.post(
+        f"/api/face/enroll/{link.token}",
+        {"images": [make_face_image()]},
+        format="multipart",
+    )
+    assert resp.status_code == 200
+    assert called["company_id"] == employee.company.id
+    assert called["face_ids"] == ["old"]
+
+
 @pytest.mark.django_db
 def test_enrollment_submit_expired(client, employee):
     link = EnrollmentLink.objects.create(

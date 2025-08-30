@@ -131,8 +131,8 @@ class FaceEnrollmentViewSet(viewsets.ViewSet):
         description="Retrieve face enrollment status for an employee.",
         responses=FaceEnrollmentStatusSerializer,
     )
-    @action(detail=True, methods=["get"], url_path=r"employees/(?P<employee_id>\d+)/face")
-    def status(self, request, company_id=None, pk=None, employee_id=None):
+    @action(detail=False, methods=["get"], url_path=r"employees/(?P<employee_id>\d+)/face")
+    def status(self, request, company_id=None, employee_id=None):
         emp = self._get_employee(company_id, employee_id)
         if isinstance(emp, Response):
             return emp
@@ -150,11 +150,11 @@ class FaceEnrollmentViewSet(viewsets.ViewSet):
         },
     )
     @action(
-        detail=True,
+        detail=False,
         methods=["post", "delete"],
         url_path=r"employees/(?P<employee_id>\d+)/face/enrollment-link",
     )
-    def create_link(self, request, company_id=None, pk=None, employee_id=None):
+    def create_link(self, request, company_id=None, employee_id=None):
         emp = self._get_employee(company_id, employee_id)
         if isinstance(emp, Response):
             return emp
@@ -190,8 +190,8 @@ class FaceEnrollmentViewSet(viewsets.ViewSet):
             404: OpenApiResponse(description="Employee not found"),
         },
     )
-    @action(detail=True, methods=["delete"], url_path=r"employees/(?P<employee_id>\d+)/face")
-    def revoke(self, request, company_id=None, pk=None, employee_id=None):
+    @action(detail=False, methods=["delete"], url_path=r"employees/(?P<employee_id>\d+)/face")
+    def revoke(self, request, company_id=None, employee_id=None):
         emp = self._get_employee(company_id, employee_id)
         if isinstance(emp, Response):
             return emp
@@ -245,7 +245,7 @@ class EnrollmentSubmitView(generics.GenericAPIView):
         ensure_collection(collection_id)
         fe = FaceEnrollment.objects.filter(employee=emp).first()
         if fe:
-            delete_faces(fe.collection_id, fe.face_ids)
+            delete_faces(emp.company.id, fe.face_ids)
         face_ids = []
         for img in ser.validated_data["images"]:
             bytes_ = img.read()
