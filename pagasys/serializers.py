@@ -352,7 +352,12 @@ class EmployeeSerializer(ScopedSerializerMixin, serializers.ModelSerializer):
     wps_account_number = serializers.CharField(required=False, allow_blank=True, help_text="WPS account number (required if payment status is WPS)")
     current_address = serializers.CharField(required=False, allow_blank=True, help_text="Current residential address")
     permanent_address = serializers.CharField(required=False, allow_blank=True, help_text="Permanent home country address")
-    gender = serializers.ChoiceField(choices=Employee._meta.get_field('gender').choices, required=False, allow_blank=True, help_text="Gender")
+    gender = serializers.ChoiceField(
+        choices=Employee._meta.get_field('gender').choices,
+        required=False,
+        allow_blank=True,
+        help_text="Gender",
+    )
     visa_file_number = serializers.CharField(required=False, allow_blank=True, help_text="Government visa file number")
     unified_id = serializers.CharField(required=False, allow_blank=True, help_text="Unified ID")
 
