@@ -32,6 +32,7 @@ class OpenAPISchemaTests(TestCase):
                         'type' in meta
                         or '$ref' in meta
                         or 'allOf' in meta
+                        or 'oneOf' in meta
                         or 'additionalProperties' in meta
                     )
 

@@ -275,6 +275,16 @@ class EmployeeAdminCreationForm(AdminUserCreationForm):
     work_calendar = forms.ModelChoiceField(
         queryset=WorkCalendar.objects.none(), required=False
     )
+    # ``payment_status`` has a model default ("cash") but the Django admin
+    # form generated from the model treats it as a required field because the
+    # model field has ``blank=False``.  The admin tests create employees
+    # without explicitly specifying a payment status and expect the default
+    # to be applied.  Mark the field as optional here so that the form can be
+    # submitted without providing a value and the model default will be used.
+    payment_status = forms.ChoiceField(
+        choices=Employee.PAYMENT_STATUS_CHOICES,
+        required=False,
+    )
 
     class Meta(AdminUserCreationForm.Meta):
         model = Employee
