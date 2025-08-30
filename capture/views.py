@@ -350,30 +350,24 @@ class CapturePunchView(generics.GenericAPIView):
                 geofence_rule = get_geofence_requirement(roster_entry.shift, roster_date)
             res = search_face_by_image(company.id, image_bytes, threshold)
             matches = res.get("FaceMatches", []) or []
-            if data.get("employee_id"):
-                if matches:
-                    top = max(matches, key=lambda m: m.get("Similarity", 0))
-                    sim = float(top.get("Similarity", 0))
-                    confidence = sim / 100.0 if sim > 1 else sim
-                    ext = top["Face"].get("ExternalImageId")
-                    if ext and ext.isdigit() and int(ext) == data["employee_id"]:
-                        matched_emp = Employee.objects.filter(pk=int(ext)).first()
-                        face_ok = bool(matched_emp)
+            if matches:
+                top = max(matches, key=lambda m: m.get("Similarity", 0))
+                sim = float(top.get("Similarity", 0))
+                confidence = sim / 100.0 if sim > 1 else sim
+                ext = top["Face"].get("ExternalImageId")
+                if ext and ext.isdigit():
+                    matched_emp = Employee.objects.filter(pk=int(ext)).first()
+                    if matched_emp:
+                        if data.get("employee_id") and matched_emp.id != data["employee_id"]:
+                            face_mismatch = True
+                        else:
+                            face_ok = True
                     else:
                         face_mismatch = True
                 else:
                     face_mismatch = True
             else:
-                if len(matches) == 1:
-                    top = matches[0]
-                    sim = float(top.get("Similarity", 0))
-                    confidence = sim / 100.0 if sim > 1 else sim
-                    ext = top["Face"].get("ExternalImageId")
-                    if ext and ext.isdigit():
-                        matched_emp = Employee.objects.filter(pk=int(ext)).first()
-                        face_ok = bool(matched_emp)
-                else:
-                    face_mismatch = True
+                face_mismatch = True
         elif roster_entry:
             geofence_rule = get_geofence_requirement(roster_entry.shift, roster_date)
 
