@@ -1,88 +1,163 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Face Enrollment</title>
   <style>
-    body { font-family: sans-serif; margin: 2em; }
-    video, canvas { max-width: 100%; }
+    body {
+      font-family: sans-serif;
+      margin: 0;
+      padding: 1rem;
+      background: #f5f5f5;
+    }
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+    }
+    h1 {
+      text-align: center;
+    }
+    #video {
+      width: 100%;
+      border-radius: 8px;
+      background: #000;
+    }
+    #controls {
+      display: flex;
+      gap: 1rem;
+      justify-content: center;
+      margin-top: 1rem;
+    }
+    button {
+      padding: 0.75rem 1rem;
+      border: none;
+      border-radius: 4px;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+    #capture { background: #007bff; color: #fff; }
+    #submit { background: #28a745; color: #fff; }
+    button:disabled { opacity: 0.6; cursor: not-allowed; }
+    #status { text-align: center; margin-top: 0.5rem; }
+    #gallery {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-top: 1rem;
+      justify-content: center;
+    }
+    #gallery img {
+      width: 30%;
+      border-radius: 4px;
+    }
+    #message { text-align: center; margin-top: 1rem; color: #d9534f; }
+    @media (max-width: 480px) {
+      #controls { flex-direction: column; }
+      button { width: 100%; }
+      #gallery img { width: 45%; }
+    }
   </style>
 </head>
 <body>
   {% if error %}
-  <h1>Enrollment Link Error</h1>
-  <p>{{ error }}</p>
+  <div class="container">
+    <h1>Enrollment Link Error</h1>
+    <p>{{ error }}</p>
+  </div>
   {% else %}
-  <h1>Face Enrollment</h1>
-  <video id="video" autoplay playsinline></video>
-  <canvas id="canvas" style="display:none;"></canvas>
-  <div>
-    <button id="capture">Capture Photo</button>
-    <button id="submit" disabled>Submit</button>
+  <div class="container">
+    <h1>Face Enrollment</h1>
+    <video id="video" autoplay playsinline></video>
+    <canvas id="canvas" style="display:none;"></canvas>
+    <div id="controls">
+      <button id="capture">Capture Photo</button>
+      <button id="submit" disabled>Submit</button>
+    </div>
+    <p id="status">0 photos captured</p>
+    <div id="gallery"></div>
+    <div id="message"></div>
   </div>
   <script>
     const video = document.getElementById('video');
     const canvas = document.getElementById('canvas');
     const captureBtn = document.getElementById('capture');
     const submitBtn = document.getElementById('submit');
+    const status = document.getElementById('status');
+    const gallery = document.getElementById('gallery');
+    const message = document.getElementById('message');
     const images = [];
-    async function start(){
+
+    function showMessage(text, isError = true) {
+      message.textContent = text;
+      message.style.color = isError ? '#d9534f' : 'green';
+    }
+
+    function updateStatus() {
+      const count = images.length;
+      status.textContent = `${count} photo${count !== 1 ? 's' : ''} captured`;
+      submitBtn.disabled = count === 0;
+    }
+
+    async function start() {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({video: true});
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
         video.srcObject = stream;
-      } catch(err){
-        alert('Unable to access camera');
+      } catch (err) {
+        showMessage('Unable to access camera');
       }
     }
-    async function validate(blob){
-      return new Promise(resolve => {
+
+    async function validate(blob) {
+      return new Promise((resolve) => {
         const img = new Image();
         img.onload = async () => {
           const c = document.createElement('canvas');
           c.width = img.width;
           c.height = img.height;
           const ctx = c.getContext('2d');
-          ctx.drawImage(img,0,0);
-          const d = ctx.getImageData(0,0,c.width,c.height);
+          ctx.drawImage(img, 0, 0);
+          const d = ctx.getImageData(0, 0, c.width, c.height);
           const data = d.data;
-          const len = data.length/4;
-          let sum=0;
+          const len = data.length / 4;
+          let sum = 0;
           const gray = new Float32Array(len);
-          for(let i=0;i<len;i++){
-            const r=data[i*4], g=data[i*4+1], b=data[i*4+2];
-            const v=0.299*r+0.587*g+0.114*b;
-            gray[i]=v; sum+=v;
+          for (let i = 0; i < len; i++) {
+            const r = data[i * 4], g = data[i * 4 + 1], b = data[i * 4 + 2];
+            const v = 0.299 * r + 0.587 * g + 0.114 * b;
+            gray[i] = v; sum += v;
           }
-          const mean=sum/len;
-          if(mean<60||mean>200){alert('Improper lighting'); resolve(false); return;}
-          // simple Laplacian variance for blur
-          let lap=[], idx=0;
-          const w=c.width, h=c.height;
-          for(let y=1;y<h-1;y++){
-            for(let x=1;x<w-1;x++){
-              const center=gray[y*w+x];
-              const lapv=-4*center+gray[y*w+x-1]+gray[y*w+x+1]+gray[(y-1)*w+x]+gray[(y+1)*w+x];
-              lap[idx++]=lapv;
+          const mean = sum / len;
+          if (mean < 60 || mean > 200) { showMessage('Improper lighting'); resolve(false); return; }
+          let lap = [], idx = 0;
+          const w = c.width, h = c.height;
+          for (let y = 1; y < h - 1; y++) {
+            for (let x = 1; x < w - 1; x++) {
+              const center = gray[y * w + x];
+              const lapv = -4 * center + gray[y * w + x - 1] + gray[y * w + x + 1] + gray[(y - 1) * w + x] + gray[(y + 1) * w + x];
+              lap[idx++] = lapv;
             }
           }
-          const lapMean=lap.reduce((a,b)=>a+b,0)/lap.length;
-          const lapVar=lap.reduce((a,b)=>a+(b-lapMean)**2,0)/lap.length;
-          if(lapVar<100){alert('Image is blurry'); resolve(false); return;}
-          if('FaceDetector' in window){
-            try{
-              const fd=new FaceDetector({fastMode:true});
-              const faces=await fd.detect(img);
-              if(faces.length!==1){alert('Face not detected properly'); resolve(false); return;}
-              const f=faces[0].boundingBox;
-              const areaRatio=(f.width*f.height)/(img.width*img.height);
-              if(areaRatio<0.05||areaRatio>0.5){alert('Face at incorrect distance'); resolve(false); return;}
-              const cx=f.x+f.width/2, cy=f.y+f.height/2;
-              if(Math.abs(cx-img.width/2)>img.width*0.15||Math.abs(cy-img.height/2)>img.height*0.15){alert('Face not centered'); resolve(false); return;}
-            }catch(err){/* ignore */}
+          const lapMean = lap.reduce((a, b) => a + b, 0) / lap.length;
+          const lapVar = lap.reduce((a, b) => a + (b - lapMean) ** 2, 0) / lap.length;
+          if (lapVar < 100) { showMessage('Image is blurry'); resolve(false); return; }
+          if ('FaceDetector' in window) {
+            try {
+              const fd = new FaceDetector({ fastMode: true });
+              const faces = await fd.detect(img);
+              if (faces.length !== 1) { showMessage('Face not detected properly'); resolve(false); return; }
+              const f = faces[0].boundingBox;
+              const areaRatio = (f.width * f.height) / (img.width * img.height);
+              if (areaRatio < 0.05 || areaRatio > 0.5) { showMessage('Face at incorrect distance'); resolve(false); return; }
+              const cx = f.x + f.width / 2, cy = f.y + f.height / 2;
+              if (Math.abs(cx - img.width / 2) > img.width * 0.15 || Math.abs(cy - img.height / 2) > img.height * 0.15) {
+                showMessage('Face not centered'); resolve(false); return;
+              }
+            } catch (err) { /* ignore */ }
           }
           resolve(true);
         };
-        img.src=URL.createObjectURL(blob);
+        img.src = URL.createObjectURL(blob);
       });
     }
 
@@ -90,20 +165,38 @@
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
       canvas.getContext('2d').drawImage(video, 0, 0);
-      canvas.toBlob(async blob => {
-        if(await validate(blob)){
+      canvas.toBlob(async (blob) => {
+        message.textContent = '';
+        if (await validate(blob)) {
           images.push(blob);
-          submitBtn.disabled = images.length === 0;
+          const imgEl = document.createElement('img');
+          imgEl.src = URL.createObjectURL(blob);
+          gallery.appendChild(imgEl);
+          updateStatus();
         }
       }, 'image/jpeg');
     });
+
     submitBtn.addEventListener('click', async () => {
+      submitBtn.disabled = true;
+      showMessage('Uploading...', false);
       const fd = new FormData();
       images.forEach((img, i) => fd.append('images', img, `img${i}.jpg`));
-      const resp = await fetch('', {method: 'POST', body: fd});
-      const data = await resp.json();
-      alert(data.detail || JSON.stringify(data));
+      try {
+        const resp = await fetch('', { method: 'POST', body: fd });
+        const data = await resp.json();
+        if (resp.ok) {
+          showMessage(data.detail || 'Enrollment complete', false);
+        } else {
+          showMessage(data.detail || 'Upload failed');
+          submitBtn.disabled = false;
+        }
+      } catch (err) {
+        showMessage('Network error');
+        submitBtn.disabled = false;
+      }
     });
+
     start();
   </script>
   {% endif %}
