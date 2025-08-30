@@ -8,6 +8,7 @@ drf-spectacular
 django-environ
 django-grappelli
 django-cors-headers
+django-countries
 psycopg2-binary
 dj-database-url
 

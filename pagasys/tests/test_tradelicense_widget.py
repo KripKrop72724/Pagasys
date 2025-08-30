@@ -66,7 +66,14 @@ class TradeLicenseWidgetTests(TestCase):
     def test_employee_script_toggles_license_field(self):
         with open("pagasys/static/pagasys/js/employee_admin.js") as fh:
             content = fh.read()
-        self.assertIn("licenseRow.style.display = personal ? 'none' : ''", content)
-        self.assertIn("licenseField.disabled = personal", content)
+        self.assertIn("licenseRow.style.display = personal || visit ? 'none' : ''", content)
+        self.assertIn("licenseField.disabled = personal || visit", content)
         self.assertIn("licenseField.value = ''", content)
         self.assertIn(".grp-row", content)
+
+    def test_employee_script_handles_payment(self):
+        with open("pagasys/static/pagasys/js/employee_admin.js") as fh:
+            content = fh.read()
+        self.assertIn("paymentStatusEl", content)
+        self.assertIn("wpsRow.style.display = wps ? '' : 'none'", content)
+        self.assertIn("paymentStatusEl.disabled = visit", content)

@@ -3,6 +3,7 @@ from rest_framework import serializers
 from rest_framework.exceptions import PermissionDenied
 from django.db import models
 from django.contrib.auth.models import Group
+from django_countries.serializer_fields import CountryField
 from drf_spectacular.utils import extend_schema_field
 
 from .utils import ensure_in_scope
@@ -344,6 +345,16 @@ class EmployeeSerializer(ScopedSerializerMixin, serializers.ModelSerializer):
     first_name = serializers.CharField(required=False, allow_blank=True, help_text="Given name")
     last_name = serializers.CharField(required=False, allow_blank=True, help_text="Family name")
     email = serializers.EmailField(required=False, allow_blank=True, help_text="Email address")
+    primary_contact = serializers.CharField(required=False, allow_blank=True, help_text="Primary contact number")
+    secondary_contact = serializers.CharField(required=False, allow_blank=True, help_text="Secondary contact number")
+    nationality = CountryField(required=False, allow_blank=True, help_text="Nationality")
+    payment_status = serializers.ChoiceField(choices=Employee.PAYMENT_STATUS_CHOICES, required=False, help_text="Payment method: WPS or Cash")
+    wps_account_number = serializers.CharField(required=False, allow_blank=True, help_text="WPS account number (required if payment status is WPS)")
+    current_address = serializers.CharField(required=False, allow_blank=True, help_text="Current residential address")
+    permanent_address = serializers.CharField(required=False, allow_blank=True, help_text="Permanent home country address")
+    gender = serializers.ChoiceField(choices=Employee._meta.get_field('gender').choices, required=False, allow_blank=True, help_text="Gender")
+    visa_file_number = serializers.CharField(required=False, allow_blank=True, help_text="Government visa file number")
+    unified_id = serializers.CharField(required=False, allow_blank=True, help_text="Unified ID")
 
     class Meta:
         model = Employee
@@ -363,6 +374,16 @@ class EmployeeSerializer(ScopedSerializerMixin, serializers.ModelSerializer):
             'designation',
             'hire_date',
             'employment_type',
+            'primary_contact',
+            'secondary_contact',
+            'nationality',
+            'payment_status',
+            'wps_account_number',
+            'current_address',
+            'permanent_address',
+            'gender',
+            'visa_file_number',
+            'unified_id',
             'groups',
         ]
         extra_kwargs = {
@@ -380,6 +401,13 @@ class EmployeeSerializer(ScopedSerializerMixin, serializers.ModelSerializer):
         is_super = attrs.get('is_superuser', getattr(self.instance, 'is_superuser', False))
         if is_super and groups:
             raise serializers.ValidationError({'groups': ['Superuser cannot belong to groups.']})
+
+        if attrs.get('visa_type') == 'visit' or (
+            self.instance and self.instance.visa_type == 'visit'
+        ):
+            attrs['payment_status'] = 'cash'
+            attrs['wps_account_number'] = ''
+
         attrs = super().validate(attrs)
         if self.instance is not None:
             data = {f.name: getattr(self.instance, f.name) for f in Employee._meta.fields}
