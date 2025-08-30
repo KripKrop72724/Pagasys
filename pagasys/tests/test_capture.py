@@ -180,6 +180,35 @@ class CaptureAPITests(TestCase):
         self.assertEqual(res.status_code, 200)
         self.assertEqual(res.data["results"], [])
 
+    def test_punch_event_list_filters(self):
+        bm = self.users[BRANCH_MANAGER]
+        self.client.force_authenticate(bm)
+        ev_gf = PunchEvent.objects.create(
+            device=self.device1,
+            company=self.company,
+            employee=self.users[EMPLOYEE_ROLE],
+            device_ts=timezone.now(),
+            geofence_rule_violation=True,
+        )
+        ev_scope = PunchEvent.objects.create(
+            device=self.device1,
+            company=self.company,
+            employee=self.users[EMPLOYEE_ROLE],
+            device_ts=timezone.now(),
+            out_of_scope=True,
+        )
+        url = f"/api/companies/{self.company.id}/punch-events/"
+        res = self.client.get(url + "?geofence_rule_violation=true")
+        self.assertEqual(res.status_code, 200)
+        ids = [item["id"] for item in res.data["results"]]
+        self.assertIn(ev_gf.id, ids)
+        self.assertNotIn(ev_scope.id, ids)
+        res = self.client.get(url + "?out_of_scope=true")
+        self.assertEqual(res.status_code, 200)
+        ids = [item["id"] for item in res.data["results"]]
+        self.assertIn(ev_scope.id, ids)
+        self.assertNotIn(ev_gf.id, ids)
+
     def test_rotate_key_permissions(self):
         url = f"/api/companies/{self.company.id}/devices/{self.device1.id}/rotate-key/"
         for role, expected in [
