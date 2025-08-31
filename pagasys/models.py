@@ -25,6 +25,27 @@ class Company(models.Model):
         default="Asia/Dubai",
         help_text="IANA time zone for scheduling/attendance",
     )
+    address = models.TextField(
+        blank=True,
+        help_text="Physical address of the company",
+    )
+    logo = models.URLField(
+        blank=True,
+        help_text="URL to the company's logo image",
+    )
+    email = models.EmailField(
+        blank=True,
+        help_text="General contact email address",
+    )
+    phone = models.CharField(
+        max_length=32,
+        blank=True,
+        help_text="Primary contact phone number",
+    )
+    website = models.URLField(
+        blank=True,
+        help_text="Official company website",
+    )
 
     class Meta:
         verbose_name_plural = "companies"

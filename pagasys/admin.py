@@ -176,9 +176,23 @@ class BranchForm(forms.ModelForm):
 
 @admin.register(Company)
 class CompanyAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
-    """Admin configuration for companies with comprehensive filters."""
+    """Admin configuration for companies with comprehensive filters.
+
+    Includes address, logo, email, phone and website fields to capture
+    detailed company contact information.
+    """
 
     list_filter = ["name"]
+    fieldsets = (
+        (None, {"fields": ("name", "timezone")}),
+        (
+            "Contact details",
+            {
+                "fields": ("address", "logo", "email", "phone", "website"),
+                "description": "Optional fields describing how to reach the company.",
+            },
+        ),
+    )
 
 
 @admin.register(Branch)
