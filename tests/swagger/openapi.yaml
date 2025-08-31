@@ -598,6 +598,30 @@ paths:
       description: 'Compound filtering is supported. Example: ?name=<value>&timezone=<value>'
       parameters:
       - in: query
+        name: address
+        schema:
+          type: string
+        description: Filter by address. Combine multiple parameters for compound filtering.
+        examples:
+          Example:
+            value: <value>
+      - in: query
+        name: email
+        schema:
+          type: string
+        description: Filter by email. Combine multiple parameters for compound filtering.
+        examples:
+          Example:
+            value: <value>
+      - in: query
+        name: logo
+        schema:
+          type: string
+        description: Filter by logo. Combine multiple parameters for compound filtering.
+        examples:
+          Example:
+            value: <value>
+      - in: query
         name: name
         schema:
           type: string
@@ -617,11 +641,27 @@ paths:
         schema:
           type: integer
       - in: query
+        name: phone
+        schema:
+          type: string
+        description: Filter by phone. Combine multiple parameters for compound filtering.
+        examples:
+          Example:
+            value: <value>
+      - in: query
         name: timezone
         schema:
           type: string
         description: Filter by timezone. Combine multiple parameters for compound
           filtering.
+        examples:
+          Example:
+            value: <value>
+      - in: query
+        name: website
+        schema:
+          type: string
+        description: Filter by website. Combine multiple parameters for compound filtering.
         examples:
           Example:
             value: <value>
@@ -7304,7 +7344,11 @@ components:
       - errors
     Company:
       type: object
-      description: Serializer for Company
+      description: |-
+        Serializer for Company.
+
+        Exposes contact fields such as address, logo, email, phone and
+        website in addition to the basic metadata.
       properties:
         id:
           type: integer
@@ -7317,6 +7361,28 @@ components:
           type: string
           description: IANA time zone for scheduling/attendance
           maxLength: 64
+        address:
+          type: string
+          description: Physical address of the company
+        logo:
+          type: string
+          format: uri
+          description: URL to the company's logo image
+          maxLength: 200
+        email:
+          type: string
+          format: email
+          description: General contact email address
+          maxLength: 254
+        phone:
+          type: string
+          description: Primary contact phone number
+          maxLength: 32
+        website:
+          type: string
+          format: uri
+          description: Official company website
+          maxLength: 200
       required:
       - id
       - name
@@ -9251,7 +9317,11 @@ components:
           description: Specific work calendar for this branch
     PatchedCompany:
       type: object
-      description: Serializer for Company
+      description: |-
+        Serializer for Company.
+
+        Exposes contact fields such as address, logo, email, phone and
+        website in addition to the basic metadata.
       properties:
         id:
           type: integer
@@ -9264,6 +9334,28 @@ components:
           type: string
           description: IANA time zone for scheduling/attendance
           maxLength: 64
+        address:
+          type: string
+          description: Physical address of the company
+        logo:
+          type: string
+          format: uri
+          description: URL to the company's logo image
+          maxLength: 200
+        email:
+          type: string
+          format: email
+          description: General contact email address
+          maxLength: 254
+        phone:
+          type: string
+          description: Primary contact phone number
+          maxLength: 32
+        website:
+          type: string
+          format: uri
+          description: Official company website
+          maxLength: 200
     PatchedDepartment:
       type: object
       description: Serializer for Department

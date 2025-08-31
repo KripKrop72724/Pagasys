@@ -56,15 +56,42 @@ class AdminCRUDTests(ModelFactoryMixin, TestCase):
 
     def test_company_crud(self):
         add_url = reverse("admin:pagasys_company_add")
-        res = self.client.post(add_url, {"name": "NewCo", "timezone": "Asia/Dubai"})
+        res = self.client.post(
+            add_url,
+            {
+                "name": "NewCo",
+                "timezone": "Asia/Dubai",
+                "address": "123 Main",
+                "logo": "http://logo.com/logo.png",
+                "email": "info@co.com",
+                "phone": "+1",
+                "website": "http://co.com",
+            },
+        )
         self.assertEqual(res.status_code, 302)
         comp = Company.objects.get(name="NewCo")
 
         change_url = reverse("admin:pagasys_company_change", args=[comp.id])
-        res = self.client.post(change_url, {"name": "NewCo2", "timezone": "Asia/Dubai"})
+        res = self.client.post(
+            change_url,
+            {
+                "name": "NewCo2",
+                "timezone": "Asia/Dubai",
+                "address": "456 Ave",
+                "logo": "http://logo2.com/logo.png",
+                "email": "contact@co.com",
+                "phone": "+2",
+                "website": "http://co2.com",
+            },
+        )
         self.assertEqual(res.status_code, 302)
         comp.refresh_from_db()
         self.assertEqual(comp.name, "NewCo2")
+        self.assertEqual(comp.address, "456 Ave")
+        self.assertEqual(comp.logo, "http://logo2.com/logo.png")
+        self.assertEqual(comp.email, "contact@co.com")
+        self.assertEqual(comp.phone, "+2")
+        self.assertEqual(comp.website, "http://co2.com")
 
         delete_url = reverse("admin:pagasys_company_delete", args=[comp.id])
         res = self.client.post(delete_url, {"post": "yes"})

@@ -106,7 +106,11 @@ from .models import (
 
 
 class CompanySerializer(ScopedSerializerMixin, serializers.ModelSerializer):
-    """Serializer for Company"""
+    """Serializer for Company.
+
+    Exposes contact fields such as address, logo, email, phone and
+    website in addition to the basic metadata.
+    """
 
     class Meta:
         model = Company
