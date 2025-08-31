@@ -10,7 +10,7 @@ on:
       promote_to_prod:
         description: "Promote the latest commit to production?"
         type: boolean
-        default: true
+        default: false
 
 concurrency:
   group: pagasys-deploy-${{ github.ref }}
