@@ -1,4 +1,3 @@
----
 # yamllint disable rule:line-length
 name: CI/CD
 
@@ -175,7 +174,6 @@ jobs:
         run: |
           # same body as your migrate job,
           # but change the SSM target to pagasys-prod
-          # (only that single line differs)
           : "${DB_HOST:?}"; : "${DB_PORT:?}"; : "${DB_NAME:?}"; : "${DB_USER:?}"; : "${DB_PASSWORD:?}"
 
           cat >/tmp/remote-migrate.sh <<'BASH'
@@ -255,7 +253,6 @@ jobs:
           PREV_VERSION=$(aws elasticbeanstalk describe-environments --environment-names pagasys-dev --query 'Environments[0].VersionLabel' --output text)
           echo "version=$PREV_VERSION" >> $GITHUB_OUTPUT
 
-
       - name: Use EB compose file
         run: mv docker-compose.eb.yml docker-compose.yml
 
@@ -290,24 +287,21 @@ jobs:
         id: smoke
         continue-on-error: true
         run: |
-          # 1) App HTTP health check from outside (runner)
+          set -euo pipefail
+
+          # 1) App HTTP health check from outside (runner) — REQUIRE 200
           URL=$(aws elasticbeanstalk describe-environments \
             --environment-names pagasys-dev \
             --query "Environments[0].CNAME" --output text)
 
-          for i in {1..15}; do
-            if curl -fsS "http://$URL/healthz" > /dev/null; then
-              echo "HTTP health OK"
-              break
-            fi
-            echo "Waiting for app... ($i/15)"
+          CODE=""
+          for i in {1..18}; do
+            CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-redirs 0 "http://$URL/healthz" || true)
+            echo "HTTP /healthz -> $CODE ($i/18)"
+            [ "$CODE" = "200" ] && break
             sleep 10
           done
-
-          if ! curl -fsS "http://$URL/healthz" > /dev/null; then
-            echo "HTTP health check failed"
-            exit 1
-          fi
+          [ "$CODE" = "200" ] || { echo "HTTP health check failed with code=$CODE"; exit 1; }
 
           # 2) DB check INSIDE the VPC (on the EB instance, in the web container)
           cat >/tmp/db-check.sh <<'BASH'
@@ -347,7 +341,7 @@ jobs:
           for i in {1..60}; do
             INV=$(aws ssm get-command-invocation --command-id "$CMD_ID" --instance-id "$INSTANCE_ID")
             STATUS=$(echo "$INV" | jq -r .Status)
-            if [ "$STATUS" = "InProgress" ] || [ "$STATUS" = "Pending" ] || [ "$STATUS" = "Delayed" ]; then
+            if [[ "$STATUS" =~ ^(InProgress|Pending|Delayed)$ ]]; then
               echo "DB check status: $STATUS. Waiting... ($i/60)"
               sleep 5
               continue
@@ -429,14 +423,21 @@ jobs:
         id: smoke
         continue-on-error: true
         run: |
+          set -euo pipefail
           ENV=pagasys-prod
           URL=$(aws elasticbeanstalk describe-environments --environment-names "$ENV" --query "Environments[0].CNAME" --output text)
-          for i in {1..15}; do
-            if curl -fsS "http://$URL/healthz" >/dev/null; then echo "HTTP health OK"; break; fi
-            echo "Waiting for app... ($i/15)"; sleep 10
-          done
-          curl -fsS "http://$URL/healthz" >/dev/null
 
+          # REQUIRE 200 on /healthz (no redirects)
+          CODE=""
+          for i in {1..18}; do
+            CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-redirs 0 "http://$URL/healthz" || true)
+            echo "HTTP /healthz -> $CODE ($i/18)"
+            [ "$CODE" = "200" ] && break
+            sleep 10
+          done
+          [ "$CODE" = "200" ] || { echo "HTTP health check failed with code=$CODE"; exit 1; }
+
+          # DB check from inside the VPC / app container
           cat >/tmp/db-check.sh <<'BASH'
           #!/usr/bin/env bash
           set -e
