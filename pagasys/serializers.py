@@ -351,7 +351,11 @@ class EmployeeSerializer(ScopedSerializerMixin, serializers.ModelSerializer):
     email = serializers.EmailField(required=False, allow_blank=True, help_text="Email address")
     primary_contact = serializers.CharField(required=False, allow_blank=True, help_text="Primary contact number")
     secondary_contact = serializers.CharField(required=False, allow_blank=True, help_text="Secondary contact number")
-    nationality = CountryField(required=False, allow_blank=True, help_text="Nationality")
+    nationality = CountryField(
+        required=False,
+        allow_blank=True,
+        help_text="Nationality as ISO 3166-1 alpha-2 country code (e.g. 'US' for United States). Uses django-countries.",
+    )
     payment_status = serializers.ChoiceField(choices=Employee.PAYMENT_STATUS_CHOICES, required=False, help_text="Payment method: WPS or Cash")
     wps_account_number = serializers.CharField(required=False, allow_blank=True, help_text="WPS account number (required if payment status is WPS)")
     current_address = serializers.CharField(required=False, allow_blank=True, help_text="Current residential address")

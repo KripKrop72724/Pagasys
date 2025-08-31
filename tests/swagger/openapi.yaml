@@ -4093,8 +4093,8 @@ paths:
           - ZA
           - ZM
           - ZW
-        description: Filter by nationality. Combine multiple parameters for compound
-          filtering.
+        description: Filter by nationality using ISO 3166-1 alpha-2 country codes.
+          Combine multiple parameters for compound filtering.
         examples:
           Example:
             value: AF
@@ -7593,7 +7593,7 @@ components:
           description: Secondary contact number
         nationality:
           description: |-
-            Nationality
+            Nationality as ISO 3166-1 alpha-2 country code (e.g. 'US' for United States). Uses django-countries.
 
             * `AF` - Afghanistan
             * `AX` - Åland Islands
@@ -9471,7 +9471,7 @@ components:
           description: Secondary contact number
         nationality:
           description: |-
-            Nationality
+            Nationality as ISO 3166-1 alpha-2 country code (e.g. 'US' for United States). Uses django-countries.
 
             * `AF` - Afghanistan
             * `AX` - Åland Islands
