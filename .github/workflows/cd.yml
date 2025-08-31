@@ -10,7 +10,7 @@ on:
       promote_to_prod:
         description: "Promote the latest commit to production?"
         type: boolean
-        default: true
+        default: false
 
 concurrency:
   group: pagasys-deploy-${{ github.ref }}
@@ -153,76 +153,76 @@ jobs:
           echo "command_id=$COMMAND_ID" >> $GITHUB_OUTPUT
 
   migrate-prod:
-    if: github.event_name == 'workflow_dispatch' && inputs.promote_to_prod == true
-    needs: lint-and-test
-    runs-on: ubuntu-latest
-    environment: pagasys-prod
-    env:
-      DB_HOST: ${{ secrets.DB_HOST }}
-      DB_PORT: ${{ secrets.DB_PORT }}
-      DB_NAME: ${{ secrets.DB_NAME }}
-      DB_USER: ${{ secrets.DB_USER }}
-      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
-    steps:
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v2
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: me-central-1
+  if: github.event_name == 'workflow_dispatch' && inputs.promote_to_prod == true
+  needs: lint-and-test
+  runs-on: ubuntu-latest
+  environment: pagasys-prod
+  env:
+    DB_HOST: ${{ secrets.DB_HOST }}
+    DB_PORT: ${{ secrets.DB_PORT }}
+    DB_NAME: ${{ secrets.DB_NAME }}
+    DB_USER: ${{ secrets.DB_USER }}
+    DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+  steps:
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: me-central-1
 
-      - name: Run migrations in VPC (production)
-        run: |
-          # same body as your migrate job,
-          # but change the SSM target to pagasys-prod
-          # (only that single line differs)
-          : "${DB_HOST:?}"; : "${DB_PORT:?}"; : "${DB_NAME:?}"; : "${DB_USER:?}"; : "${DB_PASSWORD:?}"
+    - name: Run migrations in VPC (production)
+      run: |
+        # same body as your migrate job,
+        # but change the SSM target to pagasys-prod
+        # (only that single line differs)
+        : "${DB_HOST:?}"; : "${DB_PORT:?}"; : "${DB_NAME:?}"; : "${DB_USER:?}"; : "${DB_PASSWORD:?}"
 
-          cat >/tmp/remote-migrate.sh <<'BASH'
-          #!/usr/bin/env bash
-          set -Eeuo pipefail
-          CONTAINER_NAME=$(docker ps --format '{{.Names}}' | grep -E 'web|django' | head -n1)
-          if ! docker ps -q -f "name=${CONTAINER_NAME}" | grep -q .; then
-            echo "Container ${CONTAINER_NAME} not running"; exit 1
-          fi
-          docker exec -i \
-            -e DB_HOST="${DB_HOST}" -e DB_PORT="${DB_PORT}" -e DB_NAME="${DB_NAME}" \
-            -e DB_USER="${DB_USER}" -e DB_PASSWORD="${DB_PASSWORD}" \
-            "${CONTAINER_NAME}" sh -s <<'INNER'
-          set -e
-          cd /app || exit 1
-          python - <<'PY'
-          import os, socket, sys, time
-          host = os.environ["DB_HOST"]; port = int(os.environ.get("DB_PORT","5432"))
-          for _ in range(30):
-              try: socket.create_connection((host, port), timeout=5).close(); break
-              except OSError as e: print(f"Waiting for database: {e}"); time.sleep(2)
-          else: sys.exit("Database not reachable")
-          PY
-          python manage.py migrate --noinput --verbosity 2
-          INNER
-          BASH
-          chmod +x /tmp/remote-migrate.sh
+        cat >/tmp/remote-migrate.sh <<'BASH'
+        #!/usr/bin/env bash
+        set -Eeuo pipefail
+        CONTAINER_NAME=$(docker ps --format '{{.Names}}' | grep -E 'web|django' | head -n1)
+        if ! docker ps -q -f "name=${CONTAINER_NAME}" | grep -q .; then
+          echo "Container ${CONTAINER_NAME} not running"; exit 1
+        fi
+        docker exec -i \
+          -e DB_HOST="${DB_HOST}" -e DB_PORT="${DB_PORT}" -e DB_NAME="${DB_NAME}" \
+          -e DB_USER="${DB_USER}" -e DB_PASSWORD="${DB_PASSWORD}" \
+          "${CONTAINER_NAME}" sh -s <<'INNER'
+        set -e
+        cd /app || exit 1
+        python - <<'PY'
+        import os, socket, sys, time
+        host = os.environ["DB_HOST"]; port = int(os.environ.get("DB_PORT","5432"))
+        for _ in range(30):
+            try: socket.create_connection((host, port), timeout=5).close(); break
+            except OSError as e: print(f"Waiting for database: {e}"); time.sleep(2)
+        else: sys.exit("Database not reachable")
+        PY
+        python manage.py migrate --noinput --verbosity 2
+        INNER
+        BASH
+        chmod +x /tmp/remote-migrate.sh
 
-          REMOTE_B64=$(base64 -w0 /tmp/remote-migrate.sh || base64 /tmp/remote-migrate.sh)
+        REMOTE_B64=$(base64 -w0 /tmp/remote-migrate.sh || base64 /tmp/remote-migrate.sh)
 
-          jq -n --arg b "$REMOTE_B64" --arg host "$DB_HOST" --arg port "$DB_PORT" --arg name "$DB_NAME" --arg user "$DB_USER" --arg pass "$DB_PASSWORD" '{
-            commands: [
-              "set -e",
-              "echo \"$b\" | base64 -d > /tmp/remote-migrate.sh",
-              "chmod +x /tmp/remote-migrate.sh",
-              "DB_HOST=\"\($host)\" DB_PORT=\"\($port)\" DB_NAME=\"\($name)\" DB_USER=\"\($user)\" DB_PASSWORD=\"\($pass)\" /tmp/remote-migrate.sh"
-            ]
-          }' >/tmp/ssm-params.json
+        jq -n --arg b "$REMOTE_B64" --arg host "$DB_HOST" --arg port "$DB_PORT" --arg name "$DB_NAME" --arg user "$DB_USER" --arg pass "$DB_PASSWORD" '{
+          commands: [
+            "set -e",
+            "echo \"$b\" | base64 -d > /tmp/remote-migrate.sh",
+            "chmod +x /tmp/remote-migrate.sh",
+            "DB_HOST=\"\($host)\" DB_PORT=\"\($port)\" DB_NAME=\"\($name)\" DB_USER=\"\($user)\" DB_PASSWORD=\"\($pass)\" /tmp/remote-migrate.sh"
+          ]
+        }' >/tmp/ssm-params.json
 
-          COMMAND_ID=$(aws ssm send-command \
-            --targets "Key=tag:elasticbeanstalk:environment-name,Values=pagasys-prod" \
-            --document-name "AWS-RunShellScript" \
-            --comment "Run Django migrations (prod)" \
-            --parameters file:///tmp/ssm-params.json \
-            --query "Command.CommandId" --output text)
+        COMMAND_ID=$(aws ssm send-command \
+          --targets "Key=tag:elasticbeanstalk:environment-name,Values=pagasys-prod" \
+          --document-name "AWS-RunShellScript" \
+          --comment "Run Django migrations (prod)" \
+          --parameters file:///tmp/ssm-params.json \
+          --query "Command.CommandId" --output text)
 
-          echo "command_id=$COMMAND_ID"
+        echo "command_id=$COMMAND_ID"
 
   deploy-to-eb:
     name: Deploy to Elastic Beanstalk
