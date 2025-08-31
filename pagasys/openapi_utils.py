@@ -53,12 +53,18 @@ def _generate_parameters(viewset) -> List[OpenApiParameter]:
             enum = choices if choices else None
             if choices:
                 example = choices[0]
+        desc = f"Filter by {name}. Combine multiple parameters for compound filtering."
+        if name == "nationality":
+            desc = (
+                "Filter by nationality using ISO 3166-1 alpha-2 country codes. "
+                "Combine multiple parameters for compound filtering."
+            )
         params.append(
             OpenApiParameter(
                 name,
                 OpenApiTypes.BOOL if is_bool else OpenApiTypes.STR,
                 OpenApiParameter.QUERY,
-                description=f"Filter by {name}. Combine multiple parameters for compound filtering.",
+                description=desc,
                 examples=[OpenApiExample("Example", value=example)],
                 enum=enum,
             )
