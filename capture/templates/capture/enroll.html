@@ -8,26 +8,52 @@
     body {
       font-family: sans-serif;
       margin: 0;
-      padding: 1rem;
       background: #f5f5f5;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      min-height: 100vh;
+      padding: 1rem;
     }
     .container {
+      width: 100%;
       max-width: 600px;
-      margin: 0 auto;
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      overflow: hidden;
     }
-    h1 {
-      text-align: center;
-    }
+    h1 { text-align: center; margin-top: 0.5rem; }
+    #camera { position: relative; }
     #video {
       width: 100%;
-      border-radius: 8px;
+      border-radius: 0;
       background: #000;
+      aspect-ratio: 4 / 3;
+      object-fit: cover;
+    }
+    #guide {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 80%;
+      height: 80%;
+      transform: translate(-50%, -50%);
+      border: 2px dashed rgba(255,255,255,0.8);
+      border-radius: 50%;
+      pointer-events: none;
+      animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%,100% { border-color: rgba(255,255,255,0.8); }
+      50% { border-color: rgba(255,255,255,0.2); }
     }
     #controls {
       display: flex;
       gap: 1rem;
       justify-content: center;
-      margin-top: 1rem;
+      margin: 1rem;
+      flex-wrap: wrap;
     }
     button {
       padding: 0.75rem 1rem;
@@ -35,27 +61,101 @@
       border-radius: 4px;
       font-size: 1rem;
       cursor: pointer;
+      transition: background 0.3s, transform 0.1s;
+      touch-action: manipulation;
     }
+    button:active { transform: scale(0.96); }
     #capture { background: #007bff; color: #fff; }
+    #capture:hover { background: #0069d9; }
     #submit { background: #28a745; color: #fff; }
+    #submit:hover { background: #218838; }
     button:disabled { opacity: 0.6; cursor: not-allowed; }
     #status { text-align: center; margin-top: 0.5rem; }
     #gallery {
       display: flex;
       flex-wrap: wrap;
       gap: 0.5rem;
-      margin-top: 1rem;
+      margin: 1rem;
       justify-content: center;
     }
-    #gallery img {
+    .thumb {
+      position: relative;
       width: 30%;
+      animation: fadeIn 0.3s ease;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: scale(0.95); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    .fade-out {
+      animation: fadeOut 0.3s ease forwards;
+    }
+    @keyframes fadeOut {
+      from { opacity: 1; transform: scale(1); }
+      to { opacity: 0; transform: scale(0.95); }
+    }
+    .thumb img {
+      width: 100%;
       border-radius: 4px;
     }
-    #message { text-align: center; margin-top: 1rem; color: #d9534f; }
+    .remove {
+      position: absolute;
+      top: 2px;
+      right: 2px;
+      background: rgba(0,0,0,0.6);
+      color: #fff;
+      border: none;
+      border-radius: 50%;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+    .remove:hover { background: rgba(0,0,0,0.8); }
+    #message {
+      text-align: center;
+      margin: 1rem;
+      color: #d9534f;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    #loader {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(255,255,255,0.8);
+      z-index: 1000;
+      justify-content: center;
+      align-items: center;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    #loader.visible {
+      display: flex;
+      opacity: 1;
+    }
+    .spinner {
+      border: 8px solid #f3f3f3;
+      border-top: 8px solid #3498db;
+      border-radius: 50%;
+      width: 60px;
+      height: 60px;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
     @media (max-width: 480px) {
       #controls { flex-direction: column; }
       button { width: 100%; }
-      #gallery img { width: 45%; }
+      .thumb { width: 45%; }
     }
   </style>
 </head>
@@ -68,7 +168,10 @@
   {% else %}
   <div class="container">
     <h1>Face Enrollment</h1>
-    <video id="video" autoplay playsinline></video>
+    <div id="camera">
+      <video id="video" autoplay playsinline></video>
+      <div id="guide"></div>
+    </div>
     <canvas id="canvas" style="display:none;"></canvas>
     <div id="controls">
       <button id="capture">Capture Photo</button>
@@ -78,6 +181,7 @@
     <div id="gallery"></div>
     <div id="message"></div>
   </div>
+  <div id="loader"><div class="spinner"></div></div>
   <script>
     const video = document.getElementById('video');
     const canvas = document.getElementById('canvas');
@@ -86,17 +190,30 @@
     const status = document.getElementById('status');
     const gallery = document.getElementById('gallery');
     const message = document.getElementById('message');
+    const loader = document.getElementById('loader');
     const images = [];
 
     function showMessage(text, isError = true) {
       message.textContent = text;
       message.style.color = isError ? '#d9534f' : 'green';
+      message.style.opacity = 1;
+      clearTimeout(message._timer);
+      message._timer = setTimeout(() => { message.style.opacity = 0; }, 3000);
+    }
+
+    function showLoader() {
+      loader.classList.add('visible');
+    }
+
+    function hideLoader() {
+      loader.classList.remove('visible');
     }
 
     function updateStatus() {
       const count = images.length;
       status.textContent = `${count} photo${count !== 1 ? 's' : ''} captured`;
       submitBtn.disabled = count === 0;
+      captureBtn.disabled = count >= 4;
     }
 
     async function start() {
@@ -128,7 +245,7 @@
             gray[i] = v; sum += v;
           }
           const mean = sum / len;
-          if (mean < 60 || mean > 200) { showMessage('Improper lighting'); resolve(false); return; }
+          if (mean < 60 || mean > 200) { showMessage('Image rejected: Improper lighting'); resolve(false); return; }
           let lap = [], idx = 0;
           const w = c.width, h = c.height;
           for (let y = 1; y < h - 1; y++) {
@@ -140,18 +257,18 @@
           }
           const lapMean = lap.reduce((a, b) => a + b, 0) / lap.length;
           const lapVar = lap.reduce((a, b) => a + (b - lapMean) ** 2, 0) / lap.length;
-          if (lapVar < 100) { showMessage('Image is blurry'); resolve(false); return; }
+          if (lapVar < 100) { showMessage('Image rejected: Image is blurry'); resolve(false); return; }
           if ('FaceDetector' in window) {
             try {
               const fd = new FaceDetector({ fastMode: true });
               const faces = await fd.detect(img);
-              if (faces.length !== 1) { showMessage('Face not detected properly'); resolve(false); return; }
+              if (faces.length !== 1) { showMessage('Image rejected: Face not detected properly'); resolve(false); return; }
               const f = faces[0].boundingBox;
               const areaRatio = (f.width * f.height) / (img.width * img.height);
-              if (areaRatio < 0.05 || areaRatio > 0.5) { showMessage('Face at incorrect distance'); resolve(false); return; }
+              if (areaRatio < 0.05 || areaRatio > 0.5) { showMessage('Image rejected: Face at incorrect distance'); resolve(false); return; }
               const cx = f.x + f.width / 2, cy = f.y + f.height / 2;
               if (Math.abs(cx - img.width / 2) > img.width * 0.15 || Math.abs(cy - img.height / 2) > img.height * 0.15) {
-                showMessage('Face not centered'); resolve(false); return;
+                showMessage('Image rejected: Face not centered'); resolve(false); return;
               }
             } catch (err) { /* ignore */ }
           }
@@ -162,16 +279,37 @@
     }
 
     captureBtn.addEventListener('click', async () => {
+      if (images.length >= 4) {
+        showMessage('Maximum of 4 images allowed');
+        return;
+      }
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
       canvas.getContext('2d').drawImage(video, 0, 0);
       canvas.toBlob(async (blob) => {
         message.textContent = '';
         if (await validate(blob)) {
-          images.push(blob);
+          const blobRef = blob;
+          images.push(blobRef);
+          const wrapper = document.createElement('div');
+          wrapper.className = 'thumb';
           const imgEl = document.createElement('img');
-          imgEl.src = URL.createObjectURL(blob);
-          gallery.appendChild(imgEl);
+          imgEl.src = URL.createObjectURL(blobRef);
+          const removeBtn = document.createElement('button');
+          removeBtn.className = 'remove';
+          removeBtn.textContent = '\u00d7';
+          removeBtn.onclick = () => {
+            wrapper.classList.add('fade-out');
+            setTimeout(() => {
+              const idx = images.indexOf(blobRef);
+              if (idx > -1) images.splice(idx,1);
+              gallery.removeChild(wrapper);
+              updateStatus();
+            }, 300);
+          };
+          wrapper.appendChild(imgEl);
+          wrapper.appendChild(removeBtn);
+          gallery.appendChild(wrapper);
           updateStatus();
         }
       }, 'image/jpeg');
@@ -179,6 +317,7 @@
 
     submitBtn.addEventListener('click', async () => {
       submitBtn.disabled = true;
+      showLoader();
       showMessage('Uploading...', false);
       const fd = new FormData();
       images.forEach((img, i) => fd.append('images', img, `img${i}.jpg`));
@@ -194,6 +333,8 @@
       } catch (err) {
         showMessage('Network error');
         submitBtn.disabled = false;
+      } finally {
+        hideLoader();
       }
     });
 
