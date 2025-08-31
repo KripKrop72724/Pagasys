@@ -28,6 +28,7 @@ class AdminFilterConfigTests(TestCase):
                 "company",
                 "branches",
                 "license_no",
+                "trade_license_account_number",
                 "issued_date",
                 "expiry_date",
                 "max_visas",

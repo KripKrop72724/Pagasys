@@ -100,15 +100,22 @@ class AdminCRUDTests(ModelFactoryMixin, TestCase):
 
     def test_branch_crud(self):
         add_url = reverse("admin:pagasys_branch_add")
-        res = self.client.post(add_url, {"company": self.company.id, "name": "B2"})
+        res = self.client.post(
+            add_url,
+            {"company": self.company.id, "name": "B2", "address": "Addr1"},
+        )
         self.assertEqual(res.status_code, 302)
         obj = Branch.objects.get(name="B2")
 
         change_url = reverse("admin:pagasys_branch_change", args=[obj.id])
-        res = self.client.post(change_url, {"company": self.company.id, "name": "B3"})
+        res = self.client.post(
+            change_url,
+            {"company": self.company.id, "name": "B3", "address": "Addr2"},
+        )
         self.assertEqual(res.status_code, 302)
         obj.refresh_from_db()
         self.assertEqual(obj.name, "B3")
+        self.assertEqual(obj.address, "Addr2")
 
         delete_url = reverse("admin:pagasys_branch_delete", args=[obj.id])
         res = self.client.post(delete_url, {"post": "yes"})
@@ -142,6 +149,7 @@ class AdminCRUDTests(ModelFactoryMixin, TestCase):
         data = {
             "company": self.company.id,
             "license_no": "LNEW",
+            "trade_license_account_number": "ACC1",
             "issued_date": "2024-01-01",
             "expiry_date": "2099-01-01",
             "max_visas": 1,
@@ -153,10 +161,12 @@ class AdminCRUDTests(ModelFactoryMixin, TestCase):
 
         change_url = reverse("admin:pagasys_tradelicense_change", args=[obj.id])
         data["license_no"] = "LNEW2"
+        data["trade_license_account_number"] = "ACC2"
         res = self.client.post(change_url, data)
         self.assertEqual(res.status_code, 302)
         obj.refresh_from_db()
         self.assertEqual(obj.license_no, "LNEW2")
+        self.assertEqual(obj.trade_license_account_number, "ACC2")
 
         delete_url = reverse("admin:pagasys_tradelicense_delete", args=[obj.id])
         res = self.client.post(delete_url, {"post": "yes"})

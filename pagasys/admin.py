@@ -200,6 +200,15 @@ class BranchAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
     """Admin configuration for branches with comprehensive filters."""
     form = BranchForm
     list_filter = ["company", "work_calendar", "name"]
+    fieldsets = (
+        (
+            None,
+            {
+                "fields": ("company", "name", "address", "work_calendar"),
+                "description": "Branch details including address and calendar.",
+            },
+        ),
+    )
 
 
 
@@ -219,6 +228,7 @@ class TradeLicenseAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin)
         "company",
         "branches",
         "license_no",
+        "trade_license_account_number",
         "issued_date",
         "expiry_date",
         "max_visas",
@@ -316,6 +326,8 @@ class EmployeeAdminCreationForm(AdminUserCreationForm):
             "nationality",
             "current_address",
             "permanent_address",
+            "hometown",
+            "profile_picture",
             "gender",
             "visa_file_number",
             "unified_id",
@@ -395,6 +407,8 @@ class EmployeeAdmin(CleanSaveModelMixin, ScopedAdminMixin, UserAdmin):
                     "nationality",
                     "current_address",
                     "permanent_address",
+                    "hometown",
+                    "profile_picture",
                     "gender",
                 )
             },
@@ -445,6 +459,8 @@ class EmployeeAdmin(CleanSaveModelMixin, ScopedAdminMixin, UserAdmin):
                     "nationality",
                     "current_address",
                     "permanent_address",
+                    "hometown",
+                    "profile_picture",
                     "gender",
                 )
             },
