@@ -194,7 +194,7 @@ class EmployeeFilter(filters.FilterSet):
             for f in Employee._meta.get_fields()
             if (getattr(f, "concrete", False) or f.many_to_many)
             and not f.auto_created
-            and f.name != "password"
+            and f.name not in ["password", "profile_picture"]
         ] + ["branch", "groups"]
 
     def filter_branch(self, queryset, name, value):

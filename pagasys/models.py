@@ -84,6 +84,10 @@ class Branch(models.Model):
         max_length=255,
         help_text="Branch office name",
     )
+    address = models.TextField(
+        blank=True,
+        help_text="Physical address of the branch",
+    )
     work_calendar = models.ForeignKey(
         "WorkCalendar",
         null=True,
@@ -166,6 +170,11 @@ class TradeLicense(models.Model):
         max_length=100,
         unique=True,
         help_text="Official license number",
+    )
+    trade_license_account_number = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Trade license account number",
     )
     issued_date = models.DateField(help_text="Date license was issued")
     expiry_date = models.DateField(help_text="Date license expires")
@@ -344,6 +353,11 @@ class Employee(AbstractUser):
     )
     current_address = models.TextField(blank=True, help_text="Current residential address")
     permanent_address = models.TextField(blank=True, help_text="Permanent home country address")
+    hometown = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Hometown",
+    )
     gender = models.CharField(
         max_length=10,
         blank=True,
@@ -359,6 +373,12 @@ class Employee(AbstractUser):
         max_length=50,
         blank=True,
         help_text="Unified ID",
+    )
+    profile_picture = models.ImageField(
+        upload_to="profile_pictures/",
+        blank=True,
+        null=True,
+        help_text="Profile picture",
     )
 
     trade_license = models.ForeignKey(

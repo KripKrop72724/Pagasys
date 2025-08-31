@@ -1,4 +1,15 @@
-from django.test import TestCase
+from django.test import TestCase, override_settings
+from django.core.files.uploadedfile import SimpleUploadedFile
+from io import BytesIO
+from PIL import Image
+import tempfile
+
+
+def _create_test_image():
+    buf = BytesIO()
+    Image.new("RGB", (1, 1)).save(buf, format="PNG")
+    buf.seek(0)
+    return SimpleUploadedFile("pic.png", buf.read(), content_type="image/png")
 
 from pagasys.models import Company, Branch, Department, TradeLicense, Employee
 from pagasys.serializers import EmployeeSerializer
@@ -48,6 +59,27 @@ class EmployeeSerializerPasswordTests(TestCase):
         self.assertTrue(ser.is_valid(), ser.errors)
         emp = ser.save()
         self.assertTrue(emp.check_password("new"))
+
+    def test_profile_picture_and_hometown_serialization(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with override_settings(MEDIA_ROOT=tmpdir):
+                image = _create_test_image()
+                data = {
+                    "username": "uimg",
+                    "password": "secret",
+                    "trade_license": self.license.id,
+                    "department": self.department.id,
+                    "hire_date": "2024-01-02",
+                    "employment_type": "permanent",
+                    "visa_type": "company",
+                    "hometown": "Springfield",
+                    "profile_picture": image,
+                }
+                ser = EmployeeSerializer(data=data)
+                self.assertTrue(ser.is_valid(), ser.errors)
+                emp = ser.save()
+                self.assertEqual(emp.hometown, "Springfield")
+                self.assertTrue(emp.profile_picture.name.endswith("pic.png"))
 
 
 class EmployeeSerializerGroupTests(TestCase):
