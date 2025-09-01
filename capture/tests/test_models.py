@@ -1,10 +1,12 @@
 import pytest
+import secrets
 from decimal import Decimal
 from datetime import timedelta
 
 from django.db import IntegrityError
 from django.core.exceptions import ValidationError
 from django.utils import timezone
+from django.conf import settings
 
 from pagasys.models import Company, Branch, Department, Project, Employee
 from capture.models import AttendanceDevice, EnrollmentLink, PunchEvent, FaceEnrollment
@@ -97,12 +99,49 @@ def test_enrollment_link_invalid_cases(employee):
     assert not expired.is_valid
     used_up = EnrollmentLink.objects.create(
         employee=employee,
-        token="used",
         expires_at=timezone.now() + timedelta(days=1),
         max_uses=1,
         uses=1,
     )
     assert not used_up.is_valid
+
+
+def test_enrollment_link_token_generation_and_immutability(monkeypatch, employee):
+    """Tokens are auto-generated, unique and cannot be changed."""
+    tokens = iter(["dup", "dup", "unique"])
+    monkeypatch.setattr(secrets, "token_urlsafe", lambda n: next(tokens))
+
+    link1 = EnrollmentLink.objects.create(
+        employee=employee,
+        token="ignored",
+        expires_at=timezone.now() + timedelta(hours=1),
+        max_uses=1,
+    )
+    assert link1.token == "dup"
+
+    original = link1.token
+    link1.token = "changed"
+    link1.save()
+    link1.refresh_from_db()
+    assert link1.token == original
+
+    link2 = EnrollmentLink.objects.create(
+        employee=employee,
+        expires_at=timezone.now() + timedelta(hours=1),
+        max_uses=1,
+    )
+    assert link2.token == "unique"
+    assert link1.token != link2.token
+
+
+def test_enrollment_link_url_property(employee):
+    link = EnrollmentLink.objects.create(
+        employee=employee,
+        expires_at=timezone.now() + timedelta(hours=1),
+        max_uses=1,
+    )
+    expected = f"{settings.PUBLIC_BASE_URL}/api/face/enroll/{link.token}"
+    assert link.url == expected
 
 def test_attendance_device_valid_geofence(company, branch):
     device = AttendanceDevice(
