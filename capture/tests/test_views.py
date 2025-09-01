@@ -5,6 +5,7 @@ from decimal import Decimal
 
 import pytest
 from rest_framework.test import APIClient
+from botocore.exceptions import ClientError
 
 from capture.models import AttendanceDevice, FaceEnrollment, PunchEvent, PunchException
 from pagasys.models import (
@@ -472,6 +473,51 @@ def test_face_low_confidence_rejected(client, company, device, employee, face_ro
     data = resp.json()
     assert data["accepted"] is False
     assert data["notes"] == "face_required_no_match"
+    ev = PunchEvent.objects.get(id=data["event_id"])
+    assert ev.exception.kind == "face_required_no_match"
+
+
+def test_face_invalid_parameter_exception_treated_as_no_match(
+    client, company, device, employee, face_roster, monkeypatch
+):
+    """Handle Rekognition errors when no faces are present."""
+
+    FaceEnrollment.objects.create(
+        employee=employee, collection_id="c1", face_ids=["f1"], status="active"
+    )
+
+    def fake_put_capture_to_s3(company_id, device_id, bytes_):
+        return ("k", "h")
+
+    def fake_search(company_id, image_bytes, threshold):
+        error_response = {
+            "Error": {
+                "Code": "InvalidParameterException",
+                "Message": "There are no faces in the image",
+            }
+        }
+        raise ClientError(error_response, "SearchFacesByImage")
+
+    monkeypatch.setattr("capture.views.put_capture_to_s3", fake_put_capture_to_s3)
+    monkeypatch.setattr("capture.views.search_face_by_image", fake_search)
+
+    img_b64 = base64.b64encode(b"img").decode()
+    ts = datetime(2024, 7, 1, 9, 0, tzinfo=dt_timezone.utc)
+    resp = client.post(
+        "/api/capture/punch",
+        {
+            "employee_id": employee.id,
+            "action": "in",
+            "timestamp": ts.isoformat(),
+            "image_b64": img_b64,
+        },
+        **auth_headers(device),
+    )
+    assert resp.status_code == 403
+    data = resp.json()
+    assert data["accepted"] is False
+    assert data["notes"] == "face_required_no_match"
+    assert data["face_mismatch"] is True
     ev = PunchEvent.objects.get(id=data["event_id"])
     assert ev.exception.kind == "face_required_no_match"
 
