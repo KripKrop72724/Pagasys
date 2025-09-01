@@ -10314,6 +10314,10 @@ components:
           type: string
           description: Official license number
           maxLength: 100
+        name:
+          type: string
+          description: Trade license name
+          maxLength: 100
         establishment_card_number:
           type: string
           description: Establishment card number
@@ -11229,6 +11233,10 @@ components:
         license_no:
           type: string
           description: Official license number
+          maxLength: 100
+        name:
+          type: string
+          description: Trade license name
           maxLength: 100
         establishment_card_number:
           type: string

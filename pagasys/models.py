@@ -174,6 +174,12 @@ class TradeLicense(models.Model):
         unique=True,
         help_text="Official license number",
     )
+    name = models.CharField(
+        max_length=100,
+        blank=True,
+        default="",
+        help_text="Trade license name",
+    )
     establishment_card_number = models.CharField(
         max_length=100,
         blank=True,

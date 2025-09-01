@@ -161,6 +161,7 @@ class AdminCRUDTests(ModelFactoryMixin, TestCase):
             add_url = reverse("admin:pagasys_tradelicense_add")
             data = {
                 "company": self.company.id,
+                "name": "License 1",
                 "license_no": "LNEW",
                 "establishment_card_number": "EC1",
                 "license_document": SimpleUploadedFile(
@@ -176,6 +177,7 @@ class AdminCRUDTests(ModelFactoryMixin, TestCase):
             obj = TradeLicense.objects.get(license_no="LNEW")
 
             change_url = reverse("admin:pagasys_tradelicense_change", args=[obj.id])
+            data["name"] = "License 2"
             data["license_no"] = "LNEW2"
             data["establishment_card_number"] = "EC2"
             data["license_document"] = SimpleUploadedFile(
@@ -184,6 +186,7 @@ class AdminCRUDTests(ModelFactoryMixin, TestCase):
             res = self.client.post(change_url, data)
             self.assertEqual(res.status_code, 302)
             obj.refresh_from_db()
+            self.assertEqual(obj.name, "License 2")
             self.assertEqual(obj.license_no, "LNEW2")
             self.assertEqual(obj.establishment_card_number, "EC2")
             self.assertTrue(obj.license_document.name.endswith("lic2.pdf"))

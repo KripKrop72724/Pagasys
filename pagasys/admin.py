@@ -227,6 +227,7 @@ class TradeLicenseAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin)
     list_filter = [
         "company",
         "branches",
+        "name",
         "license_no",
         "establishment_card_number",
         "issued_date",
