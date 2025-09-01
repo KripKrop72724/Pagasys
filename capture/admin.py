@@ -36,9 +36,19 @@ class FaceEnrollmentAdmin(ScopedAdminMixin, admin.ModelAdmin):
 
 @admin.register(EnrollmentLink)
 class EnrollmentLinkAdmin(ScopedAdminMixin, admin.ModelAdmin):
-    """Inspect enrollment links issued to employees."""
-    list_display = ["employee", "token", "expires_at", "used_at", "uses", "max_uses"]
-    readonly_fields = ["uses", "used_at"]
+    """Inspect enrollment links issued to employees.
+
+    Tokens are generated automatically and are immutable. The full enrollment
+    URL is displayed so it can be copied directly from the admin.
+    """
+
+    list_display = ["employee", "token", "url", "expires_at", "used_at", "uses", "max_uses"]
+    readonly_fields = ["token", "url", "uses", "used_at"]
+    fields = ["employee", "token", "url", "expires_at", "max_uses", "uses", "used_at"]
+
+    @admin.display(description="Enrollment URL")
+    def url(self, obj):
+        return obj.url
 
 
 @admin.register(PunchEvent)

@@ -1,3 +1,6 @@
+import secrets
+
+from django.conf import settings
 from django.db import models
 from django.core.exceptions import ValidationError
 from django.utils import timezone
@@ -123,7 +126,12 @@ class FaceEnrollment(models.Model):
 
 
 class EnrollmentLink(models.Model):
-    """One-time link for employees to submit enrollment photos."""
+    """One-time link for employees to submit enrollment photos.
+
+    Tokens are generated automatically, guaranteed to be unique and are
+    immutable once created. A property exposes the complete public URL that
+    may be sent to the employee.
+    """
 
     employee = models.ForeignKey(
         Employee,
@@ -134,6 +142,7 @@ class EnrollmentLink(models.Model):
     token = models.CharField(
         max_length=64,
         unique=True,
+        editable=False,
         help_text="Unique token embedded in the enrollment URL",
     )
     expires_at = models.DateTimeField(help_text="Timestamp when the link expires")
@@ -149,6 +158,33 @@ class EnrollmentLink(models.Model):
 
     class Meta:
         indexes = [models.Index(fields=["token", "expires_at"])]
+
+    @staticmethod
+    def _generate_token() -> str:
+        """Generate a unique enrollment token."""
+        while True:
+            tok = secrets.token_urlsafe(32)
+            if not EnrollmentLink.objects.filter(token=tok).exists():
+                return tok
+
+    def save(self, *args, **kwargs):
+        """Persist the link ensuring a unique, immutable token."""
+        if self.pk:
+            original = (
+                EnrollmentLink.objects.filter(pk=self.pk)
+                .values_list("token", flat=True)
+                .first()
+            )
+            if original and self.token != original:
+                self.token = original
+        else:
+            self.token = self._generate_token()
+        super().save(*args, **kwargs)
+
+    @property
+    def url(self) -> str:
+        """Return the full public enrollment URL."""
+        return f"{settings.PUBLIC_BASE_URL}/api/face/enroll/{self.token}"
 
     @property
     def is_valid(self):
