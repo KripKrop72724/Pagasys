@@ -64,7 +64,7 @@ CSRF_TRUSTED_ORIGINS = env.list(
         "https://pagasyss.me-central-1.elasticbeanstalk.com",
         "https://api.pagasys.pro",
         "https://ats.pagasys.pro",
-        "https://prodapi.pagasys.pro/",
+        "https://prodapi.pagasys.pro",
     ],
 )
 
