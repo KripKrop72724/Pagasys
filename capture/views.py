@@ -1,7 +1,9 @@
+import logging
 import secrets
 from datetime import timedelta
 
 from django.conf import settings
+from botocore.exceptions import ClientError
 from django.db import transaction, IntegrityError
 from django.db.models import Q
 from django.utils import timezone
@@ -59,6 +61,7 @@ from .utils import (
 )
 from .image_validators import validate_image, ImageValidationError
 
+logger = logging.getLogger(__name__)
 
 # --------- Device management ---------
 
@@ -348,8 +351,16 @@ class CapturePunchView(generics.GenericAPIView):
                 threshold = get_face_threshold(roster_entry.shift, roster_date)
                 requires_face = roster_entry.shift.requires_face
                 geofence_rule = get_geofence_requirement(roster_entry.shift, roster_date)
-            res = search_face_by_image(company.id, image_bytes, threshold)
-            matches = res.get("FaceMatches", []) or []
+            try:
+                res = search_face_by_image(company.id, image_bytes, threshold)
+                matches = res.get("FaceMatches", []) or []
+            except ClientError as e:
+                if e.response.get("Error", {}).get("Code") == "InvalidParameterException":
+                    logger.exception("search_face_by_image invalid parameter")
+                    face_mismatch = True
+                    matches = []
+                else:
+                    raise
             if matches:
                 top = max(matches, key=lambda m: m.get("Similarity", 0))
                 sim = float(top.get("Similarity", 0))
