@@ -622,14 +622,6 @@ paths:
           Example:
             value: <value>
       - in: query
-        name: logo
-        schema:
-          type: string
-        description: Filter by logo. Combine multiple parameters for compound filtering.
-        examples:
-          Example:
-            value: <value>
-      - in: query
         name: name
         schema:
           type: string
@@ -1525,7 +1517,8 @@ paths:
           description: ''
     delete:
       operationId: companies_manage_employees_face_destroy
-      description: Revoke an employee's existing face enrollment, removing all stored face templates and enrollment data.
+      description: Revoke an employee's existing face enrollment, removing all stored
+        face templates and enrollment data.
       parameters:
       - in: path
         name: company_id
@@ -3710,6 +3703,14 @@ paths:
           Example:
             value: <value>
       - in: query
+        name: c3_id
+        schema:
+          type: string
+        description: Filter by c3_id. Combine multiple parameters for compound filtering.
+        examples:
+          Example:
+            value: <value>
+      - in: query
         name: current_address
         schema:
           type: string
@@ -4183,15 +4184,6 @@ paths:
           Example:
             value: <value>
       - in: query
-        name: unified_id
-        schema:
-          type: string
-        description: Filter by unified_id. Combine multiple parameters for compound
-          filtering.
-        examples:
-          Example:
-            value: <value>
-      - in: query
         name: user_permissions
         schema:
           type: string
@@ -4246,6 +4238,14 @@ paths:
           type: string
         description: Filter by wps_account_number. Combine multiple parameters for
           compound filtering.
+        examples:
+          Example:
+            value: <value>
+      - in: query
+        name: wps_id
+        schema:
+          type: string
+        description: Filter by wps_id. Combine multiple parameters for compound filtering.
         examples:
           Example:
             value: <value>
@@ -5271,7 +5271,7 @@ paths:
   /api/licenses/:
     get:
       operationId: licenses_list
-      description: 'Compound filtering is supported. Example: ?company=<value>&license_no=<value>'
+      description: 'Compound filtering is supported. Example: ?company=<value>&branches=<value>'
       parameters:
       - in: query
         name: branches
@@ -5287,6 +5287,15 @@ paths:
         schema:
           type: string
         description: Filter by company. Combine multiple parameters for compound filtering.
+        examples:
+          Example:
+            value: <value>
+      - in: query
+        name: establishment_card_number
+        schema:
+          type: string
+        description: Filter by establishment_card_number. Combine multiple parameters
+          for compound filtering.
         examples:
           Example:
             value: <value>
@@ -5337,15 +5346,6 @@ paths:
         description: A page number within the paginated result set.
         schema:
           type: integer
-      - in: query
-        name: trade_license_account_number
-        schema:
-          type: string
-        description: Filter by trade_license_account_number. Combine multiple parameters
-          for compound filtering.
-        examples:
-          Example:
-            value: <value>
       tags:
       - licenses
       security:
@@ -7396,8 +7396,8 @@ components:
         logo:
           type: string
           format: uri
-          description: URL to the company's logo image
-          maxLength: 200
+          nullable: true
+          description: Company logo image
         email:
           type: string
           format: email
@@ -7913,9 +7913,12 @@ components:
         visa_file_number:
           type: string
           description: Government visa file number
-        unified_id:
+        wps_id:
           type: string
-          description: Unified ID
+          description: WPS ID
+        c3_id:
+          type: string
+          description: C3 ID
         groups:
           type: array
           items:
@@ -9380,8 +9383,8 @@ components:
         logo:
           type: string
           format: uri
-          description: URL to the company's logo image
-          maxLength: 200
+          nullable: true
+          description: Company logo image
         email:
           type: string
           format: email
@@ -9802,9 +9805,12 @@ components:
         visa_file_number:
           type: string
           description: Government visa file number
-        unified_id:
+        wps_id:
           type: string
-          description: Unified ID
+          description: WPS ID
+        c3_id:
+          type: string
+          description: C3 ID
         groups:
           type: array
           items:
@@ -10308,10 +10314,16 @@ components:
           type: string
           description: Official license number
           maxLength: 100
-        trade_license_account_number:
+        establishment_card_number:
           type: string
-          description: Trade license account number
+          description: Establishment card number
           maxLength: 100
+        license_document:
+          type: string
+          format: uri
+          nullable: true
+          description: Scanned copy of the trade license
+          pattern: (?:pdf|jpg|jpeg|png)$
         issued_date:
           type: string
           format: date
@@ -11218,10 +11230,16 @@ components:
           type: string
           description: Official license number
           maxLength: 100
-        trade_license_account_number:
+        establishment_card_number:
           type: string
-          description: Trade license account number
+          description: Establishment card number
           maxLength: 100
+        license_document:
+          type: string
+          format: uri
+          nullable: true
+          description: Scanned copy of the trade license
+          pattern: (?:pdf|jpg|jpeg|png)$
         issued_date:
           type: string
           format: date

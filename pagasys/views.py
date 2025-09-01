@@ -228,7 +228,7 @@ class CompanyViewSet(BulkCreateMixin, BulkUpdateMixin, BulkDeleteMixin, viewsets
     permission_classes = [IsAuthenticated, DjangoModelPermissions, GroupRequiredPermission, CustomObjectPermission]
     required_groups = []
     filter_backends = [DjangoFilterBackend, OrderingFilter]
-    filterset_fields = "__all__"
+    filterset_fields = ["name", "timezone", "address", "email", "phone", "website"]
     ordering_fields = ["name"]
 
     def get_queryset(self):
@@ -329,7 +329,15 @@ class TradeLicenseViewSet(BulkCreateMixin, BulkUpdateMixin, BulkDeleteMixin, vie
     permission_classes = [IsAuthenticated, DjangoModelPermissions, GroupRequiredPermission, CustomObjectPermission]
     required_groups = ["Company Admin"]
     filter_backends = [DjangoFilterBackend, OrderingFilter]
-    filterset_fields = "__all__"
+    filterset_fields = [
+        "company",
+        "branches",
+        "license_no",
+        "establishment_card_number",
+        "issued_date",
+        "expiry_date",
+        "max_visas",
+    ]
     ordering_fields = ["license_no", "issued_date", "expiry_date"]
 
     def get_queryset(self):

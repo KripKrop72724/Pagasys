@@ -368,7 +368,8 @@ class EmployeeSerializer(ScopedSerializerMixin, serializers.ModelSerializer):
         help_text="Gender",
     )
     visa_file_number = serializers.CharField(required=False, allow_blank=True, help_text="Government visa file number")
-    unified_id = serializers.CharField(required=False, allow_blank=True, help_text="Unified ID")
+    wps_id = serializers.CharField(required=False, allow_blank=True, help_text="WPS ID")
+    c3_id = serializers.CharField(required=False, allow_blank=True, help_text="C3 ID")
     profile_picture = serializers.ImageField(required=False, allow_null=True, help_text="Profile picture")
 
     class Meta:
@@ -400,7 +401,8 @@ class EmployeeSerializer(ScopedSerializerMixin, serializers.ModelSerializer):
             'profile_picture',
             'gender',
             'visa_file_number',
-            'unified_id',
+            'wps_id',
+            'c3_id',
             'groups',
         ]
         extra_kwargs = {

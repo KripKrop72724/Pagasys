@@ -81,6 +81,24 @@ class EmployeeSerializerPasswordTests(TestCase):
                 self.assertEqual(emp.hometown, "Springfield")
                 self.assertTrue(emp.profile_picture.name.endswith("pic.png"))
 
+    def test_wps_and_c3_ids_serialization(self):
+        data = {
+            "username": "u_ids",
+            "password": "secret",
+            "trade_license": self.license.id,
+            "department": self.department.id,
+            "hire_date": "2024-01-02",
+            "employment_type": "permanent",
+            "visa_type": "company",
+            "wps_id": "W123",
+            "c3_id": "C456",
+        }
+        ser = EmployeeSerializer(data=data)
+        self.assertTrue(ser.is_valid(), ser.errors)
+        emp = ser.save()
+        self.assertEqual(emp.wps_id, "W123")
+        self.assertEqual(emp.c3_id, "C456")
+
 
 class EmployeeSerializerGroupTests(TestCase):
     def setUp(self):

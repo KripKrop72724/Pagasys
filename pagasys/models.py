@@ -5,6 +5,7 @@ from decimal import Decimal
 
 from django.db import models
 from django.core.exceptions import ValidationError
+from django.core.validators import FileExtensionValidator
 from django.contrib.auth.models import AbstractUser
 from django.db.models import F
 from django.db.models.functions import Lower
@@ -29,9 +30,11 @@ class Company(models.Model):
         blank=True,
         help_text="Physical address of the company",
     )
-    logo = models.URLField(
+    logo = models.ImageField(
+        upload_to="company_logos/",
         blank=True,
-        help_text="URL to the company's logo image",
+        null=True,
+        help_text="Company logo image",
     )
     email = models.EmailField(
         blank=True,
@@ -171,10 +174,17 @@ class TradeLicense(models.Model):
         unique=True,
         help_text="Official license number",
     )
-    trade_license_account_number = models.CharField(
+    establishment_card_number = models.CharField(
         max_length=100,
         blank=True,
-        help_text="Trade license account number",
+        help_text="Establishment card number",
+    )
+    license_document = models.FileField(
+        upload_to="trade_licenses/",
+        blank=True,
+        null=True,
+        validators=[FileExtensionValidator(["pdf", "jpg", "jpeg", "png"])],
+        help_text="Scanned copy of the trade license",
     )
     issued_date = models.DateField(help_text="Date license was issued")
     expiry_date = models.DateField(help_text="Date license expires")
@@ -207,7 +217,7 @@ class TradeLicense(models.Model):
             issued = date.fromisoformat(issued)
         if isinstance(expiry, str):
             expiry = date.fromisoformat(expiry)
-        if expiry < issued:
+        if issued and expiry and expiry < issued:
             raise ValidationError("Expiry date must be after issued date")
         if self.max_visas <= 0:
             raise ValidationError({"max_visas": "Must be greater than 0"})
@@ -369,10 +379,15 @@ class Employee(AbstractUser):
         blank=True,
         help_text="Government visa file number",
     )
-    unified_id = models.CharField(
+    wps_id = models.CharField(
         max_length=50,
         blank=True,
-        help_text="Unified ID",
+        help_text="WPS ID",
+    )
+    c3_id = models.CharField(
+        max_length=50,
+        blank=True,
+        help_text="C3 ID",
     )
     profile_picture = models.ImageField(
         upload_to="profile_pictures/",

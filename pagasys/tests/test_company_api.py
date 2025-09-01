@@ -1,9 +1,19 @@
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from rest_framework.test import APIClient
+from django.core.files.uploadedfile import SimpleUploadedFile
+from io import BytesIO
+from PIL import Image
+import tempfile
 
 from pagasys.models import Company, Branch, Department, TradeLicense
 
+
+def _create_image(name="logo.png"):
+    buf = BytesIO()
+    Image.new("RGB", (1, 1)).save(buf, format="PNG")
+    buf.seek(0)
+    return SimpleUploadedFile(name, buf.read(), content_type="image/png")
 
 class CompanyAPITests(TestCase):
     """Ensure company endpoints expose contact fields."""
@@ -30,26 +40,30 @@ class CompanyAPITests(TestCase):
         self.client.force_authenticate(self.user)
 
     def test_contact_fields_crud(self):
-        payload = {
-            "name": "CompA",
-            "timezone": "Asia/Dubai",
-            "address": "123 Main",
-            "logo": "http://example.com/logo.png",
-            "email": "a@b.com",
-            "phone": "+1",
-            "website": "http://example.com",
-        }
-        res = self.client.post("/api/companies/", payload, format="json")
-        self.assertEqual(res.status_code, 201)
-        comp_id = res.data["id"]
+        with tempfile.TemporaryDirectory() as tmpdir, override_settings(MEDIA_ROOT=tmpdir):
+            payload = {
+                "name": "CompA",
+                "timezone": "Asia/Dubai",
+                "address": "123 Main",
+                "logo": _create_image(),
+                "email": "a@b.com",
+                "phone": "+1",
+                "website": "http://example.com",
+            }
+            res = self.client.post("/api/companies/", payload, format="multipart")
+            self.assertEqual(res.status_code, 201)
+            comp_id = res.data["id"]
 
-        res = self.client.get(f"/api/companies/{comp_id}/")
-        self.assertEqual(res.status_code, 200)
-        for field in ["address", "logo", "email", "phone", "website"]:
-            self.assertEqual(res.data[field], payload[field])
+            res = self.client.get(f"/api/companies/{comp_id}/")
+            self.assertEqual(res.status_code, 200)
+            self.assertEqual(res.data["address"], payload["address"])
+            self.assertTrue(res.data["logo"].endswith("logo.png"))
+            self.assertEqual(res.data["email"], payload["email"])
+            self.assertEqual(res.data["phone"], payload["phone"])
+            self.assertEqual(res.data["website"], payload["website"])
 
-        res = self.client.patch(
-            f"/api/companies/{comp_id}/", {"address": "456 Ave"}, format="json"
-        )
-        self.assertEqual(res.status_code, 200)
-        self.assertEqual(res.data["address"], "456 Ave")
+            res = self.client.patch(
+                f"/api/companies/{comp_id}/", {"address": "456 Ave"}, format="json"
+            )
+            self.assertEqual(res.status_code, 200)
+            self.assertEqual(res.data["address"], "456 Ave")

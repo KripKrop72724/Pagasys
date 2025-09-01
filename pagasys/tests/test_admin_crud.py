@@ -1,8 +1,12 @@
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.urls import reverse
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.core.exceptions import ValidationError
+from django.core.files.uploadedfile import SimpleUploadedFile
+from io import BytesIO
+from PIL import Image
+import tempfile
 
 from pagasys.models import (
     Company,
@@ -21,6 +25,13 @@ from pagasys.models import (
 )
 
 from .test_models import ModelFactoryMixin
+
+
+def _create_image(name="img.png"):
+    buf = BytesIO()
+    Image.new("RGB", (1, 1)).save(buf, format="PNG")
+    buf.seek(0)
+    return SimpleUploadedFile(name, buf.read(), content_type="image/png")
 
 
 class AdminCRUDTests(ModelFactoryMixin, TestCase):
@@ -55,48 +66,49 @@ class AdminCRUDTests(ModelFactoryMixin, TestCase):
         self.assertFalse(model.objects.filter(id=obj_id).exists())
 
     def test_company_crud(self):
-        add_url = reverse("admin:pagasys_company_add")
-        res = self.client.post(
-            add_url,
-            {
-                "name": "NewCo",
-                "timezone": "Asia/Dubai",
-                "address": "123 Main",
-                "logo": "http://logo.com/logo.png",
-                "email": "info@co.com",
-                "phone": "+1",
-                "website": "http://co.com",
-            },
-        )
-        self.assertEqual(res.status_code, 302)
-        comp = Company.objects.get(name="NewCo")
+        with tempfile.TemporaryDirectory() as tmpdir, override_settings(MEDIA_ROOT=tmpdir):
+            add_url = reverse("admin:pagasys_company_add")
+            res = self.client.post(
+                add_url,
+                {
+                    "name": "NewCo",
+                    "timezone": "Asia/Dubai",
+                    "address": "123 Main",
+                    "logo": _create_image("logo.png"),
+                    "email": "info@co.com",
+                    "phone": "+1",
+                    "website": "http://co.com",
+                },
+            )
+            self.assertEqual(res.status_code, 302)
+            comp = Company.objects.get(name="NewCo")
 
-        change_url = reverse("admin:pagasys_company_change", args=[comp.id])
-        res = self.client.post(
-            change_url,
-            {
-                "name": "NewCo2",
-                "timezone": "Asia/Dubai",
-                "address": "456 Ave",
-                "logo": "http://logo2.com/logo.png",
-                "email": "contact@co.com",
-                "phone": "+2",
-                "website": "http://co2.com",
-            },
-        )
-        self.assertEqual(res.status_code, 302)
-        comp.refresh_from_db()
-        self.assertEqual(comp.name, "NewCo2")
-        self.assertEqual(comp.address, "456 Ave")
-        self.assertEqual(comp.logo, "http://logo2.com/logo.png")
-        self.assertEqual(comp.email, "contact@co.com")
-        self.assertEqual(comp.phone, "+2")
-        self.assertEqual(comp.website, "http://co2.com")
+            change_url = reverse("admin:pagasys_company_change", args=[comp.id])
+            res = self.client.post(
+                change_url,
+                {
+                    "name": "NewCo2",
+                    "timezone": "Asia/Dubai",
+                    "address": "456 Ave",
+                    "logo": _create_image("logo2.png"),
+                    "email": "contact@co.com",
+                    "phone": "+2",
+                    "website": "http://co2.com",
+                },
+            )
+            self.assertEqual(res.status_code, 302)
+            comp.refresh_from_db()
+            self.assertEqual(comp.name, "NewCo2")
+            self.assertEqual(comp.address, "456 Ave")
+            self.assertTrue(comp.logo.name.endswith("logo2.png"))
+            self.assertEqual(comp.email, "contact@co.com")
+            self.assertEqual(comp.phone, "+2")
+            self.assertEqual(comp.website, "http://co2.com")
 
-        delete_url = reverse("admin:pagasys_company_delete", args=[comp.id])
-        res = self.client.post(delete_url, {"post": "yes"})
-        self.assertEqual(res.status_code, 302)
-        self._assert_deleted(Company, comp.id)
+            delete_url = reverse("admin:pagasys_company_delete", args=[comp.id])
+            res = self.client.post(delete_url, {"post": "yes"})
+            self.assertEqual(res.status_code, 302)
+            self._assert_deleted(Company, comp.id)
 
     def test_branch_crud(self):
         add_url = reverse("admin:pagasys_branch_add")
@@ -145,33 +157,41 @@ class AdminCRUDTests(ModelFactoryMixin, TestCase):
         self._assert_deleted(Designation, obj.id)
 
     def test_tradelicense_crud(self):
-        add_url = reverse("admin:pagasys_tradelicense_add")
-        data = {
-            "company": self.company.id,
-            "license_no": "LNEW",
-            "trade_license_account_number": "ACC1",
-            "issued_date": "2024-01-01",
-            "expiry_date": "2099-01-01",
-            "max_visas": 1,
-            "branches": [self.branch.id],
-        }
-        res = self.client.post(add_url, data)
-        self.assertEqual(res.status_code, 302)
-        obj = TradeLicense.objects.get(license_no="LNEW")
+        with tempfile.TemporaryDirectory() as tmpdir, override_settings(MEDIA_ROOT=tmpdir):
+            add_url = reverse("admin:pagasys_tradelicense_add")
+            data = {
+                "company": self.company.id,
+                "license_no": "LNEW",
+                "establishment_card_number": "EC1",
+                "license_document": SimpleUploadedFile(
+                    "lic.pdf", b"%PDF-1.4", content_type="application/pdf"
+                ),
+                "issued_date": "2024-01-01",
+                "expiry_date": "2099-01-01",
+                "max_visas": 1,
+                "branches": [self.branch.id],
+            }
+            res = self.client.post(add_url, data)
+            self.assertEqual(res.status_code, 302)
+            obj = TradeLicense.objects.get(license_no="LNEW")
 
-        change_url = reverse("admin:pagasys_tradelicense_change", args=[obj.id])
-        data["license_no"] = "LNEW2"
-        data["trade_license_account_number"] = "ACC2"
-        res = self.client.post(change_url, data)
-        self.assertEqual(res.status_code, 302)
-        obj.refresh_from_db()
-        self.assertEqual(obj.license_no, "LNEW2")
-        self.assertEqual(obj.trade_license_account_number, "ACC2")
+            change_url = reverse("admin:pagasys_tradelicense_change", args=[obj.id])
+            data["license_no"] = "LNEW2"
+            data["establishment_card_number"] = "EC2"
+            data["license_document"] = SimpleUploadedFile(
+                "lic2.pdf", b"%PDF-1.4", content_type="application/pdf"
+            )
+            res = self.client.post(change_url, data)
+            self.assertEqual(res.status_code, 302)
+            obj.refresh_from_db()
+            self.assertEqual(obj.license_no, "LNEW2")
+            self.assertEqual(obj.establishment_card_number, "EC2")
+            self.assertTrue(obj.license_document.name.endswith("lic2.pdf"))
 
-        delete_url = reverse("admin:pagasys_tradelicense_delete", args=[obj.id])
-        res = self.client.post(delete_url, {"post": "yes"})
-        self.assertEqual(res.status_code, 302)
-        self._assert_deleted(TradeLicense, obj.id)
+            delete_url = reverse("admin:pagasys_tradelicense_delete", args=[obj.id])
+            res = self.client.post(delete_url, {"post": "yes"})
+            self.assertEqual(res.status_code, 302)
+            self._assert_deleted(TradeLicense, obj.id)
 
     def test_department_crud(self):
         add_url = reverse("admin:pagasys_department_add")
