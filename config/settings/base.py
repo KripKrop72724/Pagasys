@@ -42,7 +42,17 @@ ALLOWED_HOSTS = env.list(
     "ALLOWED_HOSTS", default=["localhost", ".elasticbeanstalk.com", "127.0.0.1", "0.0.0.0", "api.pagasys.pro", "pagasysv1.vercel.app", "prodapi.pagasys.pro", "ats.pagasys.pro"]
 )
 
-CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_ALL_ORIGINS = False
+CORS_ALLOWED_ORIGINS = env.list(
+    "CORS_ALLOWED_ORIGINS",
+    default=[
+        "https://ats.pagasys.pro",
+        "https://api.pagasys.pro",
+        "https://pagasys.pro",
+        "https://prodapi.pagasys.pro",
+    ],
+)
+CORS_ALLOW_CREDENTIALS = True
 
 # Allow cross-site requests from trusted domains for CSRF protection
 CSRF_TRUSTED_ORIGINS = env.list(
