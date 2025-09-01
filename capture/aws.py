@@ -57,6 +57,69 @@ def delete_faces(company_id: int, face_ids: list[str]) -> None:
     rk.delete_faces(CollectionId=company_collection_id(company_id), FaceIds=face_ids)
 
 
+def delete_all_employee_faces(company_id: int, employee_id: int) -> None:
+    """Delete **all** faces for an employee from the company's collection.
+
+    This scans the collection for any Face records matching the employee's
+    ``ExternalImageId``. It ensures stale or previously untracked faces are
+    also removed so they can no longer be recognized.
+    """
+    if boto3 is None:  # pragma: no cover
+        raise RuntimeError("boto3 is required for Rekognition operations")
+    rk = boto3.client("rekognition", region_name=settings.AWS_REKOGNITION_REGION)
+    collection = company_collection_id(company_id)
+    face_ids: list[str] = []
+    try:
+        paginator = rk.get_paginator("list_faces")
+        for page in paginator.paginate(CollectionId=collection):
+            for face in page.get("Faces", []):
+                if face.get("ExternalImageId") == str(employee_id):
+                    face_ids.append(face["FaceId"])
+    except rk.exceptions.ResourceNotFoundException:
+        return
+    if face_ids:
+        rk.delete_faces(CollectionId=collection, FaceIds=face_ids)
+
+
+def _company_collections(rk) -> list[str]:
+    """Yield all Rekognition collections managed by this app."""
+    collections: list[str] = []
+    paginator = rk.get_paginator("list_collections")
+    for page in paginator.paginate():
+        for coll in page.get("CollectionIds", []):
+            if coll.startswith("reko-company-"):
+                collections.append(coll)
+    return collections
+
+
+def count_all_faces() -> int:
+    """Return the total number of faces across all company collections."""
+    if boto3 is None:  # pragma: no cover
+        raise RuntimeError("boto3 is required for Rekognition operations")
+    rk = boto3.client("rekognition", region_name=settings.AWS_REKOGNITION_REGION)
+    total = 0
+    paginator = rk.get_paginator("list_faces")
+    for coll in _company_collections(rk):
+        for page in paginator.paginate(CollectionId=coll):
+            total += len(page.get("Faces", []))
+    return total
+
+
+def delete_all_faces() -> None:
+    """Delete all faces from every company collection."""
+    if boto3 is None:  # pragma: no cover
+        raise RuntimeError("boto3 is required for Rekognition operations")
+    rk = boto3.client("rekognition", region_name=settings.AWS_REKOGNITION_REGION)
+    paginator = rk.get_paginator("list_faces")
+    for coll in _company_collections(rk):
+        face_ids: list[str] = []
+        for page in paginator.paginate(CollectionId=coll):
+            for face in page.get("Faces", []):
+                face_ids.append(face.get("FaceId"))
+        if face_ids:
+            rk.delete_faces(CollectionId=coll, FaceIds=face_ids)
+
+
 def search_face_by_image(company_id: int, image_bytes: bytes, threshold: float):
     """Search for faces in the company's collection."""
     if boto3 is None:  # pragma: no cover

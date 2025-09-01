@@ -1693,7 +1693,7 @@ def test_enrollment_submit_success(monkeypatch, client, employee):
     )
     monkeypatch.setattr("capture.views.ensure_collection", lambda cid: None)
     monkeypatch.setattr("capture.views.company_collection_id", lambda cid: "col")
-    monkeypatch.setattr("capture.views.delete_faces", lambda *a, **k: None)
+    monkeypatch.setattr("capture.views.delete_all_employee_faces", lambda *a, **k: None)
     monkeypatch.setattr("capture.views.put_enroll_to_s3", lambda *a, **k: ("k", "h"))
     monkeypatch.setattr("capture.views.index_faces", lambda *a, **k: ["f1"])
     resp = client.post(
@@ -1731,11 +1731,11 @@ def test_enrollment_submit_deletes_existing_faces_with_company_id(monkeypatch, c
     monkeypatch.setattr("capture.views.company_collection_id", lambda cid: existing_collection)
     called = {}
 
-    def fake_delete_faces(company_id, face_ids):
+    def fake_delete_all(company_id, employee_id):
         called["company_id"] = company_id
-        called["face_ids"] = face_ids
+        called["employee_id"] = employee_id
 
-    monkeypatch.setattr("capture.views.delete_faces", fake_delete_faces)
+    monkeypatch.setattr("capture.views.delete_all_employee_faces", fake_delete_all)
     monkeypatch.setattr("capture.views.put_enroll_to_s3", lambda *a, **k: ("k", "h"))
     monkeypatch.setattr("capture.views.index_faces", lambda *a, **k: ["f1"])
     resp = client.post(
@@ -1745,7 +1745,7 @@ def test_enrollment_submit_deletes_existing_faces_with_company_id(monkeypatch, c
     )
     assert resp.status_code == 200
     assert called["company_id"] == employee.company.id
-    assert called["face_ids"] == ["old"]
+    assert called["employee_id"] == employee.id
 
 
 @pytest.mark.django_db
@@ -1789,7 +1789,7 @@ def test_enrollment_submit_reuse(monkeypatch, client, employee):
     )
     monkeypatch.setattr("capture.views.ensure_collection", lambda cid: None)
     monkeypatch.setattr("capture.views.company_collection_id", lambda cid: "col")
-    monkeypatch.setattr("capture.views.delete_faces", lambda *a, **k: None)
+    monkeypatch.setattr("capture.views.delete_all_employee_faces", lambda *a, **k: None)
     monkeypatch.setattr("capture.views.put_enroll_to_s3", lambda *a, **k: ("k", "h"))
     monkeypatch.setattr("capture.views.index_faces", lambda *a, **k: ["f1"])
     resp1 = client.post(
@@ -1815,7 +1815,7 @@ def _setup_link(monkeypatch, employee):
     )
     monkeypatch.setattr("capture.views.ensure_collection", lambda cid: None)
     monkeypatch.setattr("capture.views.company_collection_id", lambda cid: "col")
-    monkeypatch.setattr("capture.views.delete_faces", lambda *a, **k: None)
+    monkeypatch.setattr("capture.views.delete_all_employee_faces", lambda *a, **k: None)
     monkeypatch.setattr("capture.views.put_enroll_to_s3", lambda *a, **k: ("k", "h"))
     monkeypatch.setattr("capture.views.index_faces", lambda *a, **k: ["f1"])
     return link
