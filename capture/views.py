@@ -161,18 +161,18 @@ class FaceEnrollmentViewSet(viewsets.ViewSet):
         if request.method == "POST":
             ser = EnrollmentLinkCreateSerializer(data=request.data or {})
             ser.is_valid(raise_exception=True)
-            token = secrets.token_urlsafe(32)
-            expires = timezone.now() + timedelta(hours=ser.validated_data["expires_in_hours"])
-            EnrollmentLink.objects.create(
+            expires = timezone.now() + timedelta(
+                hours=ser.validated_data["expires_in_hours"]
+            )
+            link = EnrollmentLink.objects.create(
                 employee=emp,
-                token=token,
                 expires_at=expires,
                 max_uses=ser.validated_data["max_uses"],
             )
             payload = {
-                "url": f"{settings.PUBLIC_BASE_URL}/api/face/enroll/{token}",
-                "token": token,
-                "expires_at": expires,
+                "url": link.url,
+                "token": link.token,
+                "expires_at": link.expires_at,
             }
             return Response(EnrollmentLinkResponseSerializer(payload).data)
         EnrollmentLink.objects.filter(
