@@ -27,8 +27,9 @@ class AdminFilterConfigTests(TestCase):
             TradeLicenseAdmin: [
                 "company",
                 "branches",
+                "name",
                 "license_no",
-                "trade_license_account_number",
+                "establishment_card_number",
                 "issued_date",
                 "expiry_date",
                 "max_visas",

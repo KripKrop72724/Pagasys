@@ -80,6 +80,10 @@ class TradeLicenseSerializerFieldTests(TestCase):
         fields = TradeLicenseSerializer().get_fields()
         assert 'branches' in fields
 
+    def test_name_field_present(self):
+        fields = TradeLicenseSerializer().get_fields()
+        assert 'name' in fields
+
 
 class TradeLicenseSerializerBranchTests(TestCase):
     def setUp(self):
@@ -92,6 +96,7 @@ class TradeLicenseSerializerBranchTests(TestCase):
         return {
             "company": self.company.id,
             "license_no": "L1",
+            "name": "Test License",
             "issued_date": "2024-01-01",
             "expiry_date": "2099-01-01",
             "max_visas": 1,
@@ -130,3 +135,35 @@ class TradeLicenseSerializerBranchTests(TestCase):
         ser = TradeLicenseSerializer(lic, data=data, partial=True)
         self.assertFalse(ser.is_valid())
         self.assertIn("non_field_errors", ser.errors)
+
+
+class TradeLicenseNameTests(TestCase):
+    def setUp(self):
+        self.company = Company.objects.create(name="C")
+        self.branch = Branch.objects.create(company=self.company, name="B1")
+
+    def _base(self):
+        return {
+            "company": self.company.id,
+            "license_no": "L2",
+            "issued_date": "2024-01-01",
+            "expiry_date": "2099-01-01",
+            "max_visas": 1,
+            "branches": [self.branch.id],
+        }
+
+    def test_name_optional(self):
+        data = self._base()
+        ser = TradeLicenseSerializer(data=data)
+        self.assertTrue(ser.is_valid(), ser.errors)
+
+        lic = ser.save()
+        lic.branches.set([self.branch])
+        self.assertEqual(lic.name, "")
+
+    def test_name_too_long_rejected(self):
+        data = self._base()
+        data["name"] = "X" * 101
+        ser = TradeLicenseSerializer(data=data)
+        self.assertFalse(ser.is_valid())
+        self.assertIn("name", ser.errors)

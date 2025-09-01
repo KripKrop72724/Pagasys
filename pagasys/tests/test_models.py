@@ -116,6 +116,15 @@ class ModelValidationTests(ModelFactoryMixin, TestCase):
         with self.assertRaises(ValidationError):
             lic.full_clean()
 
+    def test_trade_license_clean_handles_missing_dates(self):
+        lic = TradeLicense(
+            company=self.company,
+            license_no="LICM",
+            max_visas=1,
+        )
+        # Should not raise TypeError when dates are missing
+        lic.clean()
+
     def test_trade_license_branches_must_match_company(self):
         other_company = self.create_company("Other")
         other_branch = self.create_branch(other_company, "OB")

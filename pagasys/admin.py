@@ -227,8 +227,9 @@ class TradeLicenseAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin)
     list_filter = [
         "company",
         "branches",
+        "name",
         "license_no",
-        "trade_license_account_number",
+        "establishment_card_number",
         "issued_date",
         "expiry_date",
         "max_visas",
@@ -330,7 +331,8 @@ class EmployeeAdminCreationForm(AdminUserCreationForm):
             "profile_picture",
             "gender",
             "visa_file_number",
-            "unified_id",
+            "wps_id",
+            "c3_id",
             "hire_date",
             "employment_type",
         )
@@ -392,7 +394,8 @@ class EmployeeAdmin(CleanSaveModelMixin, ScopedAdminMixin, UserAdmin):
                     "work_calendar",
                     "designation",
                     "visa_file_number",
-                    "unified_id",
+                    "wps_id",
+                    "c3_id",
                     "hire_date",
                     "employment_type",
                 )
@@ -444,7 +447,8 @@ class EmployeeAdmin(CleanSaveModelMixin, ScopedAdminMixin, UserAdmin):
                     "work_calendar",
                     "designation",
                     "visa_file_number",
-                    "unified_id",
+                    "wps_id",
+                    "c3_id",
                     "hire_date",
                     "employment_type",
                 )
