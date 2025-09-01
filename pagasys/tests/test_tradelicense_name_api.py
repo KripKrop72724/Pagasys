@@ -52,4 +52,4 @@ class TradeLicenseNameAPITests(TestCase):
         payload["name"] = "X" * 101
         res = self.client.post("/api/licenses/", payload, format="json")
         self.assertEqual(res.status_code, 400)
-        self.assertIn("name", res.data)
+        self.assertIn("name", res.data["errors"])
