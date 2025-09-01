@@ -7,6 +7,7 @@ from django.utils import timezone
 from pagasys.models import Employee
 
 from capture.aws import count_all_faces, delete_all_faces
+from capture.models import FaceEnrollment
 from .test_views import company, branch, department, client  # reuse fixtures
 
 
@@ -94,7 +95,7 @@ def test_admin_changelist_shows_total_and_button(monkeypatch, client, department
     content = resp.content.decode()
     assert "Total AWS face enrollments:" in content
     assert ">7<" in content.replace(" ", "")
-    assert "Clear All AWS Faces" in content
+    assert "Clear All Face Enrollments" in content
 
 
 @pytest.mark.django_db
@@ -104,6 +105,7 @@ def test_admin_clear_all_faces_view(monkeypatch, client, department):
         "capture.admin.delete_all_faces", lambda: called.setdefault("called", True)
     )
     monkeypatch.setattr("capture.admin.count_all_faces", lambda: 0)
+    monkeypatch.setattr("capture.models.delete_all_employee_faces", lambda *a, **k: None)
     admin = Employee.objects.create_superuser(
         username="admin2",
         password="pw",
@@ -113,9 +115,11 @@ def test_admin_clear_all_faces_view(monkeypatch, client, department):
         visa_type="personal",
     )
     client.force_login(admin)
+    fe = FaceEnrollment.objects.create(employee=admin, collection_id="c", face_ids=["f1"], status="active")
     resp = client.post(
         reverse("admin:capture_faceenrollment_clear_all_aws_faces"), follow=True
     )
     assert called.get("called") is True
     assert resp.status_code == 200
+    assert FaceEnrollment.objects.count() == 0
 

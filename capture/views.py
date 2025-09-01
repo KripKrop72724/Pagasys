@@ -186,7 +186,7 @@ class FaceEnrollmentViewSet(viewsets.ViewSet):
         return Response(status=204)
 
     @extend_schema(
-        description="Revoke an employee's existing face enrollment.",
+        description="Revoke an employee's existing face enrollment, removing all stored face templates and enrollment data.",
         responses={
             204: OpenApiResponse(description="Enrollment revoked"),
             403: OpenApiResponse(description="Forbidden"),
@@ -200,10 +200,7 @@ class FaceEnrollmentViewSet(viewsets.ViewSet):
             return emp
         fe = getattr(emp, "face_enrollment", None)
         if fe:
-            delete_all_employee_faces(emp.company.id, emp.id)
-            fe.status = "revoked"
-            fe.face_ids = []
-            fe.save(update_fields=["status", "face_ids", "updated_at"])
+            fe.delete()
         return Response(status=204)
 
 

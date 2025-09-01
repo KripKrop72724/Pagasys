@@ -4,7 +4,7 @@ from django.urls import path
 
 from pagasys.utils import scope_queryset
 from .models import AttendanceDevice, FaceEnrollment, EnrollmentLink, PunchEvent, PunchException
-from .aws import delete_all_employee_faces, count_all_faces, delete_all_faces
+from .aws import count_all_faces, delete_all_faces
 
 
 class ScopedAdminMixin:
@@ -58,20 +58,18 @@ class FaceEnrollmentAdmin(ScopedAdminMixin, admin.ModelAdmin):
             extra_context["aws_face_total"] = 0
         return super().changelist_view(request, extra_context=extra_context)
 
-    @admin.action(description="Clear AWS faces for selected enrollments")
+    @admin.action(description="Clear selected face enrollments")
     def clear_aws_faces(self, request, queryset):
         count = 0
         for fe in queryset:
-            delete_all_employee_faces(fe.employee.company_id, fe.employee_id)
-            fe.face_ids = []
-            fe.status = "revoked"
-            fe.save(update_fields=["status", "face_ids", "updated_at"])
+            fe.delete()
             count += 1
-        self.message_user(request, f"Cleared AWS faces for {count} enrollment(s)")
+        self.message_user(request, f"Cleared {count} enrollment(s)")
 
     def clear_all_aws_faces(self, request):
         delete_all_faces()
-        self.message_user(request, "Cleared all faces from AWS")
+        FaceEnrollment.objects.all().delete()
+        self.message_user(request, "Cleared all face enrollments")
         return redirect("..")
 
 

@@ -101,7 +101,7 @@ def test_revoke_endpoint_purges_faces(monkeypatch, client, company, employee):
     def fake_delete(company_id, employee_id):
         called["args"] = (company_id, employee_id)
 
-    monkeypatch.setattr("capture.views.delete_all_employee_faces", fake_delete)
+    monkeypatch.setattr("capture.models.delete_all_employee_faces", fake_delete)
     monkeypatch.setattr("capture.views.scope_queryset", lambda qs, user: qs)
     monkeypatch.setattr("capture.views.ActionRolePermission.has_permission", lambda *a, **k: True)
     url = f"/api/companies/{company.id}/manage/employees/{employee.id}/face/"
@@ -111,9 +111,7 @@ def test_revoke_endpoint_purges_faces(monkeypatch, client, company, employee):
     client.force_authenticate(user=admin)
     resp = client.delete(url)
     assert resp.status_code == 204
-    fe = FaceEnrollment.objects.get(employee=employee)
-    assert fe.status == "revoked"
-    assert fe.face_ids == []
+    assert not FaceEnrollment.objects.filter(employee=employee).exists()
     assert called["args"] == (company.id, employee.id)
 
 
@@ -124,7 +122,7 @@ def test_revoke_endpoint_no_enrollment(monkeypatch, client, company, employee):
     def fake_delete(company_id, employee_id):
         called["called"] = True
 
-    monkeypatch.setattr("capture.views.delete_all_employee_faces", fake_delete)
+    monkeypatch.setattr("capture.models.delete_all_employee_faces", fake_delete)
     monkeypatch.setattr("capture.views.scope_queryset", lambda qs, user: qs)
     monkeypatch.setattr("capture.views.ActionRolePermission.has_permission", lambda *a, **k: True)
     url = f"/api/companies/{company.id}/manage/employees/{employee.id}/face/"
