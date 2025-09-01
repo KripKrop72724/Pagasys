@@ -16,6 +16,7 @@ import os
 import environ
 import dj_database_url
 from django.core.exceptions import ImproperlyConfigured
+from corsheaders.defaults import default_headers
 
 # Load environment variables
 env = environ.Env(
@@ -53,6 +54,7 @@ CORS_ALLOWED_ORIGINS = env.list(
     ],
 )
 CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_HEADERS = list(default_headers) + ["x-device-key"]
 
 # Allow cross-site requests from trusted domains for CSRF protection
 CSRF_TRUSTED_ORIGINS = env.list(
