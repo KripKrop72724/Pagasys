@@ -1525,7 +1525,7 @@ paths:
           description: ''
     delete:
       operationId: companies_manage_employees_face_destroy
-      description: Revoke an employee's existing face enrollment.
+      description: Revoke an employee's existing face enrollment, removing all stored face templates and enrollment data.
       parameters:
       - in: path
         name: company_id

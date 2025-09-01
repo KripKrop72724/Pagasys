@@ -4,7 +4,7 @@
 <li>
     <form action="{% url 'admin:capture_faceenrollment_clear_all_aws_faces' %}" method="post" style="display:inline">
         {% csrf_token %}
-        <button type="submit" class="button">Clear All AWS Faces</button>
+        <button type="submit" class="button">Clear All Face Enrollments</button>
     </form>
 </li>
 {{ block.super }}
