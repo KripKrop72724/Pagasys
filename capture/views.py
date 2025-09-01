@@ -46,7 +46,7 @@ from .aws import (
     company_collection_id,
     ensure_collection,
     index_faces,
-    delete_faces,
+    delete_all_employee_faces,
     put_enroll_to_s3,
     put_capture_to_s3,
     search_face_by_image,
@@ -200,7 +200,7 @@ class FaceEnrollmentViewSet(viewsets.ViewSet):
             return emp
         fe = getattr(emp, "face_enrollment", None)
         if fe:
-            delete_faces(emp.company.id, fe.face_ids)
+            delete_all_employee_faces(emp.company.id, emp.id)
             fe.status = "revoked"
             fe.face_ids = []
             fe.save(update_fields=["status", "face_ids", "updated_at"])
@@ -248,7 +248,7 @@ class EnrollmentSubmitView(generics.GenericAPIView):
         ensure_collection(collection_id)
         fe = FaceEnrollment.objects.filter(employee=emp).first()
         if fe:
-            delete_faces(emp.company.id, fe.face_ids)
+            delete_all_employee_faces(emp.company.id, emp.id)
         face_ids = []
         for img in ser.validated_data["images"]:
             bytes_ = img.read()

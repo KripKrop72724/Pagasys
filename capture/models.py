@@ -5,6 +5,7 @@ from django.db import models
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 from pagasys.models import Company, Branch, Department, Project, Employee
+from .aws import delete_all_employee_faces
 
 
 class AttendanceDevice(models.Model):
@@ -123,6 +124,16 @@ class FaceEnrollment(models.Model):
 
     def __str__(self):
         return f"{self.employee_id}:{self.status} ({len(self.face_ids)} faces)"
+
+    def delete(self, *args, **kwargs):
+        """Ensure all faces for this employee are removed from Rekognition.
+
+        Deleting the model via the admin previously left residual face data in
+        AWS which allowed recognition to continue. Purging the collection here
+        guarantees complete removal regardless of how the record is deleted.
+        """
+        delete_all_employee_faces(self.employee.company.id, self.employee_id)
+        super().delete(*args, **kwargs)
 
 
 class EnrollmentLink(models.Model):
