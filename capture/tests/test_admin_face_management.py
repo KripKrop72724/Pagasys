@@ -6,7 +6,7 @@ from django.utils import timezone
 
 from pagasys.models import Employee
 
-from capture.aws import count_all_faces, delete_all_faces
+from capture.aws import count_all_faces, delete_all_faces, company_collection_id
 from capture.models import FaceEnrollment
 from .test_views import company, branch, department, client  # reuse fixtures
 
@@ -42,14 +42,16 @@ class FakeRekognitionClient:
 
 
 @pytest.mark.django_db
-def test_count_all_faces(monkeypatch):
+def test_count_all_faces(monkeypatch, settings):
+    c1 = company_collection_id(1)
+    c2 = company_collection_id(2)
     collections = [
-        {"CollectionIds": ["reko-company-1"]},
-        {"CollectionIds": ["reko-company-2", "other"]},
+        {"CollectionIds": [c1]},
+        {"CollectionIds": [c2, "other"]},
     ]
     faces = {
-        "reko-company-1": [{"Faces": [{"FaceId": "a"}]}, {"Faces": [{"FaceId": "b"}]}],
-        "reko-company-2": [{"Faces": [{"FaceId": "c"}, {"FaceId": "d"}]}],
+        c1: [{"Faces": [{"FaceId": "a"}]}, {"Faces": [{"FaceId": "b"}]}],
+        c2: [{"Faces": [{"FaceId": "c"}, {"FaceId": "d"}]}],
         "other": [{"Faces": [{"FaceId": "ignored"}]}],
     }
     client = FakeRekognitionClient(collections, faces)
@@ -61,12 +63,15 @@ def test_count_all_faces(monkeypatch):
 
 
 @pytest.mark.django_db
-def test_delete_all_faces(monkeypatch):
-    collections = [{"CollectionIds": ["reko-company-1", "reko-company-2", "reko-company-3"]}]
+def test_delete_all_faces(monkeypatch, settings):
+    c1 = company_collection_id(1)
+    c2 = company_collection_id(2)
+    c3 = company_collection_id(3)
+    collections = [{"CollectionIds": [c1, c2, c3]}]
     faces = {
-        "reko-company-1": [{"Faces": [{"FaceId": "a"}, {"FaceId": "b"}]}],
-        "reko-company-2": [{"Faces": []}, {"Faces": [{"FaceId": "c"}]}],
-        "reko-company-3": [{"Faces": []}],
+        c1: [{"Faces": [{"FaceId": "a"}, {"FaceId": "b"}]}],
+        c2: [{"Faces": []}, {"Faces": [{"FaceId": "c"}]}],
+        c3: [{"Faces": []}],
     }
     client = FakeRekognitionClient(collections, faces)
     monkeypatch.setattr(
@@ -74,9 +79,9 @@ def test_delete_all_faces(monkeypatch):
         types.SimpleNamespace(client=lambda service, region_name=None: client),
     )
     delete_all_faces()
-    assert ("reko-company-1", ["a", "b"]) in client.deleted
-    assert ("reko-company-2", ["c"]) in client.deleted
-    assert all(coll != "reko-company-3" for coll, _ in client.deleted)
+    assert (c1, ["a", "b"]) in client.deleted
+    assert (c2, ["c"]) in client.deleted
+    assert all(coll != c3 for coll, _ in client.deleted)
 
 
 @pytest.mark.django_db

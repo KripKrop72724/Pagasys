@@ -67,3 +67,76 @@ def test_put_to_s3_requires_boto3(monkeypatch):
     monkeypatch.setattr(aws, "boto3", None)
     with pytest.raises(RuntimeError):
         aws._put_to_s3("bucket", "key", b"data")
+
+
+def test_company_collection_id_respects_prefix(settings):
+    settings.AWS_REKOGNITION_COLLECTION_PREFIX = "custom"
+    assert aws.company_collection_id(7) == "custom-7"
+
+
+def test_search_face_by_image_retries_missing_collection(monkeypatch, settings):
+    settings.AWS_REKOGNITION_COLLECTION_PREFIX = "pref"
+
+    class FakeClient:
+        class exceptions:
+            class ResourceNotFoundException(Exception):
+                pass
+
+        def __init__(self):
+            self.calls = 0
+
+        def search_faces_by_image(self, **kwargs):
+            self.calls += 1
+            if self.calls == 1:
+                raise self.exceptions.ResourceNotFoundException()
+            return {"args": kwargs}
+
+    client = FakeClient()
+    monkeypatch.setattr(
+        aws,
+        "boto3",
+        types.SimpleNamespace(client=lambda name, region_name=None: client),
+    )
+    called = {}
+
+    def fake_ensure(cid):
+        called["cid"] = cid
+
+    monkeypatch.setattr(aws, "ensure_collection", fake_ensure)
+    resp = aws.search_face_by_image(3, b"img", 0.5)
+    assert client.calls == 2
+    assert called["cid"] == "pref-3"
+    assert resp["args"]["CollectionId"] == "pref-3"
+
+
+def test_search_face_by_image_no_retry_when_collection_exists(monkeypatch, settings):
+    settings.AWS_REKOGNITION_COLLECTION_PREFIX = "pref"
+
+    class FakeClient:
+        class exceptions:
+            class ResourceNotFoundException(Exception):
+                pass
+
+        def __init__(self):
+            self.calls = 0
+
+        def search_faces_by_image(self, **kwargs):
+            self.calls += 1
+            return {"args": kwargs}
+
+    client = FakeClient()
+    monkeypatch.setattr(
+        aws,
+        "boto3",
+        types.SimpleNamespace(client=lambda name, region_name=None: client),
+    )
+    called = {}
+
+    def fake_ensure(cid):
+        called["cid"] = cid
+
+    monkeypatch.setattr(aws, "ensure_collection", fake_ensure)
+    resp = aws.search_face_by_image(3, b"img", 0.5)
+    assert client.calls == 1
+    assert "cid" not in called
+    assert resp["args"]["CollectionId"] == "pref-3"

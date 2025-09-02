@@ -2,7 +2,7 @@ import types
 
 import pytest
 
-from capture.aws import delete_all_employee_faces
+from capture.aws import delete_all_employee_faces, company_collection_id
 from capture.models import FaceEnrollment
 from pagasys.models import Employee
 from .test_views import company, branch, department, employee, client  # reuse fixtures
@@ -37,7 +37,7 @@ class FakeRekognitionClient:
 
 
 @pytest.mark.django_db
-def test_delete_all_employee_faces_deletes_all(monkeypatch):
+def test_delete_all_employee_faces_deletes_all(monkeypatch, settings):
     pages = [
         {"Faces": [{"FaceId": "f1", "ExternalImageId": "1"}]},
         {"Faces": [
@@ -53,7 +53,7 @@ def test_delete_all_employee_faces_deletes_all(monkeypatch):
 
     monkeypatch.setattr("capture.aws.boto3", types.SimpleNamespace(client=fake_client))
     delete_all_employee_faces(5, 1)
-    assert called["CollectionId"] == "reko-company-5"
+    assert called["CollectionId"] == company_collection_id(5)
     assert called["FaceIds"] == ["f1", "f2"]
 
 

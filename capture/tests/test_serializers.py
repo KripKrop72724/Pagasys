@@ -4,7 +4,12 @@ from django.test import override_settings
 from PIL import Image
 import io
 
-from capture.serializers import EnrollmentSubmitSerializer
+from capture.serializers import (
+    EnrollmentSubmitSerializer,
+    FaceEnrollmentStatusSerializer,
+)
+from capture.models import FaceEnrollment
+from .test_views import company, branch, department, employee  # reuse fixtures
 
 
 def make_image(name: str = "f.jpg"):
@@ -30,3 +35,13 @@ def test_enrollment_photo_count_invalid():
     assert not ser.is_valid()
     ser = EnrollmentSubmitSerializer(data={"images": [make_image() for _ in range(6)]})
     assert not ser.is_valid()
+
+
+@pytest.mark.django_db
+def test_face_enrollment_status_serializer_outputs_collection_id(employee):
+    fe = FaceEnrollment.objects.create(
+        employee=employee, collection_id="cid", face_ids=["f1", "f2"], status="active"
+    )
+    data = FaceEnrollmentStatusSerializer(fe).data
+    assert data["faces"] == 2
+    assert data["collection_id"] == "cid"

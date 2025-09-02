@@ -31,10 +31,11 @@ class RotateKeyResponseSerializer(serializers.Serializer):
 
 class FaceEnrollmentStatusSerializer(serializers.ModelSerializer):
     faces = serializers.SerializerMethodField()
+    collection_id = serializers.CharField(read_only=True)
 
     class Meta:
         model = FaceEnrollment
-        fields = ["status", "faces", "updated_at", "created_at"]
+        fields = ["status", "faces", "collection_id", "updated_at", "created_at"]
 
     def get_faces(self, obj):
         return len(obj.face_ids)

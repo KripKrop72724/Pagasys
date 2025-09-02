@@ -162,6 +162,7 @@ class FaceEnrollmentViewSet(viewsets.ViewSet):
         if isinstance(emp, Response):
             return emp
         if request.method == "POST":
+            ensure_collection(company_collection_id(company_id))
             ser = EnrollmentLinkCreateSerializer(data=request.data or {})
             ser.is_valid(raise_exception=True)
             expires = timezone.now() + timedelta(

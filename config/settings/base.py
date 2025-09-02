@@ -266,6 +266,9 @@ SPECTACULAR_SETTINGS = {
 
 # --- CAPTURE LAYER CONFIG ---
 AWS_REKOGNITION_REGION = env("AWS_REKOGNITION_REGION", default="ap-south-1")
+AWS_REKOGNITION_COLLECTION_PREFIX = env(
+    "AWS_REKOGNITION_COLLECTION_PREFIX", default="reko-company"
+)
 AWS_S3_BUCKET_ENROLL = env("AWS_S3_BUCKET_ENROLL", default="carhub-pagasys-enroll-ap-south-1")
 AWS_S3_BUCKET_CAPTURE = env("AWS_S3_BUCKET_CAPTURE", default="carhub-pagasys-capture-ap-south-1")
 PUBLIC_BASE_URL = env("PUBLIC_BASE_URL", default="https://api.pagasys.pro")

@@ -8,6 +8,7 @@ from rest_framework.test import APIClient
 from botocore.exceptions import ClientError
 
 from capture.models import AttendanceDevice, FaceEnrollment, PunchEvent, PunchException
+from capture.aws import company_collection_id
 from pagasys.models import (
     Company,
     Branch,
@@ -809,3 +810,25 @@ def test_device_last_seen_updated(client, company, device, employee, roster):
     device.refresh_from_db()
     assert device.last_seen is not None
     assert device.last_seen > old
+
+
+@pytest.mark.django_db
+def test_create_enrollment_link_ensures_collection(
+    monkeypatch, client, company, employee
+):
+    called = {}
+
+    def fake_ensure(cid):
+        called["cid"] = cid
+
+    monkeypatch.setattr("capture.views.ensure_collection", fake_ensure)
+    monkeypatch.setattr(
+        "capture.views.ActionRolePermission.has_permission", lambda *a, **k: True
+    )
+    monkeypatch.setattr("capture.views.IsCompanyMember.has_permission", lambda *a, **k: True)
+    monkeypatch.setattr("capture.views.scope_queryset", lambda qs, user: qs)
+    client.force_authenticate(user=employee)
+    url = f"/api/companies/{company.id}/manage/employees/{employee.id}/face/enrollment-link/"
+    resp = client.post(url, {"expires_in_hours": 1})
+    assert resp.status_code == 200
+    assert called["cid"] == company_collection_id(company.id)
