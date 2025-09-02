@@ -334,6 +334,10 @@ class EmployeeAdminCreationForm(AdminUserCreationForm):
     class Meta(AdminUserCreationForm.Meta):
         model = Employee
         fields = AdminUserCreationForm.Meta.fields + (
+            "first_name",
+            "middle_name",
+            "last_name",
+            "email",
             "work_calendar",
             "trade_license",
             "visa_type",
@@ -396,6 +400,9 @@ class EmployeeAdmin(CleanSaveModelMixin, ScopedAdminMixin, UserAdmin):
     )
 
     base_fieldsets = list(UserAdmin.fieldsets)
+    personal = list(base_fieldsets[1][1]["fields"])
+    personal.insert(1, "middle_name")
+    base_fieldsets[1][1]["fields"] = tuple(personal)
     perms = list(base_fieldsets[2][1]["fields"])
     if "user_permissions" in perms:
         perms.remove("user_permissions")
@@ -449,6 +456,10 @@ class EmployeeAdmin(CleanSaveModelMixin, ScopedAdminMixin, UserAdmin):
                     "username",
                     "password1",
                     "password2",
+                    "first_name",
+                    "middle_name",
+                    "last_name",
+                    "email",
                     "is_active",
                     "is_staff",
                     "is_superuser",

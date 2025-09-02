@@ -347,8 +347,15 @@ class EmployeeSerializer(ScopedSerializerMixin, serializers.ModelSerializer):
         default=False,
         help_text="Give the user all permissions. Defaults to false when omitted",
     )
-    first_name = serializers.CharField(required=False, allow_blank=True, help_text="Given name")
-    last_name = serializers.CharField(required=False, allow_blank=True, help_text="Family name")
+    first_name = serializers.CharField(
+        required=False, allow_blank=True, help_text="Given name"
+    )
+    middle_name = serializers.CharField(
+        required=False, allow_blank=True, help_text="Middle name"
+    )
+    last_name = serializers.CharField(
+        required=False, allow_blank=True, help_text="Family name"
+    )
     email = serializers.EmailField(required=False, allow_blank=True, help_text="Email address")
     primary_contact = serializers.CharField(required=False, allow_blank=True, help_text="Primary contact number")
     secondary_contact = serializers.CharField(required=False, allow_blank=True, help_text="Secondary contact number")
@@ -397,6 +404,7 @@ class EmployeeSerializer(ScopedSerializerMixin, serializers.ModelSerializer):
             'is_superuser',
             'visa_type',
             'first_name',
+            'middle_name',
             'last_name',
             'email',
             'trade_license',

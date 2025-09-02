@@ -31,12 +31,17 @@ class ProfileEndpointTests(TestCase):
         self.assertEqual(response.status_code, 401)
 
     def test_returns_profile_for_authenticated_user(self):
-        user = self._create_employee()
+        user = self._create_employee(
+            first_name="Alice", middle_name="B", last_name="Carroll"
+        )
         self.client.force_authenticate(user)
         response = self.client.get("/api/me/")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["id"], user.id)
         self.assertNotIn("password", response.data)
+        self.assertEqual(response.data["first_name"], "Alice")
+        self.assertEqual(response.data["middle_name"], "B")
+        self.assertEqual(response.data["last_name"], "Carroll")
 
     def test_superuser_response_excludes_groups(self):
         user = self._create_employee(username="admin", is_superuser=True)

@@ -418,8 +418,15 @@ class RosterViewSet(BasePolicyViewSet):
         qs = self.filter_queryset(self.get_queryset())
         if group_by == "employee":
             data = (
-                qs.values("employee", "employee__first_name", "employee__last_name")
-                .annotate(days=Count("id"), rest_days=Count("id", filter=Q(is_rest_day=True)))
+                qs.values(
+                    "employee",
+                    "employee__first_name",
+                    "employee__middle_name",
+                    "employee__last_name",
+                )
+                .annotate(
+                    days=Count("id"), rest_days=Count("id", filter=Q(is_rest_day=True))
+                )
             )
         elif group_by == "shift":
             data = (

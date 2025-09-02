@@ -247,6 +247,9 @@ class AdminCRUDTests(ModelFactoryMixin, TestCase):
             "usable_password": "true",
             "password1": "strongpass",
             "password2": "strongpass",
+            "first_name": "John",
+            "middle_name": "Q",
+            "last_name": "Public",
             "trade_license": self.license.id,
             "department": self.department.id,
             "hire_date": "2024-02-01",
@@ -258,6 +261,7 @@ class AdminCRUDTests(ModelFactoryMixin, TestCase):
         self.assertEqual(res.status_code, 302)
         emp = Employee.objects.get(username="empadd")
         self.assertEqual(emp.special_notes, "VIP")
+        self.assertEqual(emp.middle_name, "Q")
 
         change_url = reverse("admin:pagasys_employee_change", args=[emp.id])
         res = self.client.get(change_url)
