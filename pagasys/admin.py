@@ -11,7 +11,7 @@ from django.urls import path
 from datetime import timedelta
 from copy import deepcopy
 
-from .excel_import import import_employee_workbook
+from .excel_import import import_employee_workbook, import_company_visa_workbook
 
 from .utils import scope_queryset
 
@@ -522,6 +522,11 @@ class EmployeeAdmin(CleanSaveModelMixin, ScopedAdminMixin, UserAdmin):
                 self.admin_site.admin_view(self.own_visa_upload),
                 name="pagasys_employee_own_visa_upload",
             ),
+            path(
+                "company-visa-upload/",
+                self.admin_site.admin_view(self.company_visa_upload),
+                name="pagasys_employee_company_visa_upload",
+            ),
         ]
         return custom + urls
 
@@ -547,6 +552,30 @@ class EmployeeAdmin(CleanSaveModelMixin, ScopedAdminMixin, UserAdmin):
         )
         return TemplateResponse(
             request, "admin/pagasys/employee/own_visa_upload.html", context
+        )
+
+    def company_visa_upload(self, request):
+        if request.method == "POST":
+            form = self.VisaUploadForm(request.POST, request.FILES)
+            if form.is_valid():
+                results = import_company_visa_workbook(form.cleaned_data["file"])
+                if results["created"]:
+                    messages.success(
+                        request, f"Created {results['created']} employees."
+                    )
+                for err in results["errors"]:
+                    messages.error(request, err)
+                return redirect("..")
+        else:
+            form = self.VisaUploadForm()
+        context = dict(
+            self.admin_site.each_context(request),
+            title="Company Visa Upload",
+            form=form,
+            opts=self.model._meta,
+        )
+        return TemplateResponse(
+            request, "admin/pagasys/employee/company_visa_upload.html", context
         )
 
     class Media:
