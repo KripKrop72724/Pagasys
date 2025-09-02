@@ -1,12 +1,17 @@
-from django.contrib import admin
+from django.contrib import admin, messages
 from django.contrib.auth.admin import UserAdmin
 from django.contrib.auth.forms import AdminUserCreationForm, UserChangeForm
 from django.core.exceptions import ValidationError
 from django import forms
 from django.contrib.admin.widgets import FilteredSelectMultiple
 from django.db import transaction
+from django.shortcuts import redirect
+from django.template.response import TemplateResponse
+from django.urls import path
 from datetime import timedelta
 from copy import deepcopy
+
+from .excel_import import import_employee_workbook
 
 from .utils import scope_queryset
 
@@ -388,6 +393,10 @@ class EmployeeAdmin(CleanSaveModelMixin, ScopedAdminMixin, UserAdmin):
     add_form = EmployeeAdminCreationForm
     form = EmployeeAdminForm
     model = Employee
+    change_list_template = "admin/pagasys/employee/change_list.html"
+
+    class VisaUploadForm(forms.Form):
+        file = forms.FileField()
 
     list_filter = UserAdmin.list_filter + (
         "visa_type",
@@ -504,6 +513,41 @@ class EmployeeAdmin(CleanSaveModelMixin, ScopedAdminMixin, UserAdmin):
             },
         ),
     )
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom = [
+            path(
+                "own-visa-upload/",
+                self.admin_site.admin_view(self.own_visa_upload),
+                name="pagasys_employee_own_visa_upload",
+            ),
+        ]
+        return custom + urls
+
+    def own_visa_upload(self, request):
+        if request.method == "POST":
+            form = self.VisaUploadForm(request.POST, request.FILES)
+            if form.is_valid():
+                results = import_employee_workbook(form.cleaned_data["file"])
+                if results["created"]:
+                    messages.success(
+                        request, f"Created {results['created']} employees."
+                    )
+                for err in results["errors"]:
+                    messages.error(request, err)
+                return redirect("..")
+        else:
+            form = self.VisaUploadForm()
+        context = dict(
+            self.admin_site.each_context(request),
+            title="Own Visa Upload",
+            form=form,
+            opts=self.model._meta,
+        )
+        return TemplateResponse(
+            request, "admin/pagasys/employee/own_visa_upload.html", context
+        )
 
     class Media:
         js = ["pagasys/js/employee_admin.js"]
