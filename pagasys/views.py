@@ -228,7 +228,15 @@ class CompanyViewSet(BulkCreateMixin, BulkUpdateMixin, BulkDeleteMixin, viewsets
     permission_classes = [IsAuthenticated, DjangoModelPermissions, GroupRequiredPermission, CustomObjectPermission]
     required_groups = []
     filter_backends = [DjangoFilterBackend, OrderingFilter]
-    filterset_fields = ["name", "timezone", "address", "email", "phone", "website"]
+    filterset_fields = [
+        "name",
+        "timezone",
+        "address",
+        "email",
+        "phone",
+        "website",
+        "bank_account_number",
+    ]
     ordering_fields = ["name"]
 
     def get_queryset(self):

@@ -52,7 +52,9 @@ class ModelFactoryMixin:
             expiry_date=expiry,
             max_visas=max_visas,
         )
-        lic.branches.set(branches or [self.branch])
+        if branches is None:
+            branches = [self.branch]
+        lic.branches.set(branches)
         lic.refresh_from_db()
         return lic
 
@@ -349,7 +351,7 @@ class ModelValidationTests(ModelFactoryMixin, TestCase):
         with self.assertRaisesMessage(ValidationError, "License company must match branch company"):
             emp.full_clean()
 
-    def test_employee_license_other_branch_same_company_ok(self):
+    def test_branch_scoped_license_rejects_other_branch(self):
         other_branch = self.create_branch(self.company, name="B2")
         lic = self.create_license(branches=[self.branch], license_no="LIC2")
         dept = self.create_department(other_branch, name="Dept2")
@@ -363,8 +365,24 @@ class ModelValidationTests(ModelFactoryMixin, TestCase):
             hire_date="2024-01-02",
             employment_type="permanent",
         )
-        # should not raise
-        emp.full_clean()
+        with self.assertRaises(ValidationError):
+            emp.full_clean()
+
+    def test_unscoped_license_allows_any_branch(self):
+        other_branch = self.create_branch(self.company, name="B2")
+        lic = self.create_license(branches=[], license_no="LIC3")
+        dept = self.create_department(other_branch, name="Dept2")
+        emp = Employee(
+            username="emp8",
+            password="pass",
+            trade_license=lic,
+            department=dept,
+            first_name="I",
+            last_name="J",
+            hire_date="2024-01-02",
+            employment_type="permanent",
+        )
+        emp.full_clean()  # should not raise
 
     def test_unique_constraints(self):
         with self.assertRaises(IntegrityError):

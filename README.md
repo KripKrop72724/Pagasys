@@ -28,6 +28,15 @@ comprehensive automated test suite.
   license branches must always belong to the license's company. Employee shift
   rules normalise weekday strings and an `effective_calendar_for()` helper
   resolves the correct work calendar for scheduling.
+* **Flexible trade licenses** – Issued and expiry dates are optional. Licenses
+  may be either branch‑scoped or global: leave `branches` empty to serve all
+  employees in the company or specify branches to limit usage to those
+  locations.
+* **Company bank accounts** – Each company can record a bank account number for
+  payroll deposits. The field is exposed through the API and a dedicated
+  "Financial details" section in the admin.
+* **Employee notes** – Special notes about employees can be stored and
+  managed via the API and Django admin.
 * **Company time zone** – Each company records its IANA time zone (default
   `Asia/Dubai`) so shifts and attendance localise correctly.
 * **Leave types** – `paid_pct` uses `Decimal` precision and must be between
