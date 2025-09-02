@@ -7589,7 +7589,7 @@ components:
           allOf:
           - $ref: '#/components/schemas/VisaTypeEnum'
           description: |-
-            Whether the employee uses a company or personal visa
+            Whether the employee uses a company, personal, or visit visa
 
             * `company` - Company
             * `personal` - Personal
@@ -7902,13 +7902,14 @@ components:
           allOf:
           - $ref: '#/components/schemas/PaymentStatusEnum'
           description: |-
-            Payment method: WPS or Cash
+            Payment method: WPS or Cash. Automatically cash for personal or visit visas
 
             * `wps` - WPS
             * `cash` - Cash
         wps_account_number:
           type: string
-          description: WPS account number (required if payment status is WPS)
+          description: WPS account number (required if payment status is WPS; not
+            allowed for personal or visit visas)
         current_address:
           type: string
           description: Current residential address
@@ -7937,10 +7938,10 @@ components:
           description: Government visa file number
         wps_id:
           type: string
-          description: WPS ID
+          description: WPS ID (not allowed for personal or visit visas)
         c3_id:
           type: string
-          description: C3 ID
+          description: C3 ID (not allowed for personal or visit visas)
         special_notes:
           type: string
           description: Special notes about the employee
@@ -9488,7 +9489,7 @@ components:
           allOf:
           - $ref: '#/components/schemas/VisaTypeEnum'
           description: |-
-            Whether the employee uses a company or personal visa
+            Whether the employee uses a company, personal, or visit visa
 
             * `company` - Company
             * `personal` - Personal
@@ -9801,13 +9802,14 @@ components:
           allOf:
           - $ref: '#/components/schemas/PaymentStatusEnum'
           description: |-
-            Payment method: WPS or Cash
+            Payment method: WPS or Cash. Automatically cash for personal or visit visas
 
             * `wps` - WPS
             * `cash` - Cash
         wps_account_number:
           type: string
-          description: WPS account number (required if payment status is WPS)
+          description: WPS account number (required if payment status is WPS; not
+            allowed for personal or visit visas)
         current_address:
           type: string
           description: Current residential address
@@ -9836,10 +9838,10 @@ components:
           description: Government visa file number
         wps_id:
           type: string
-          description: WPS ID
+          description: WPS ID (not allowed for personal or visit visas)
         c3_id:
           type: string
-          description: C3 ID
+          description: C3 ID (not allowed for personal or visit visas)
         special_notes:
           type: string
           description: Special notes about the employee

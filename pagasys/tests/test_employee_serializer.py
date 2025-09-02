@@ -344,7 +344,7 @@ class EmployeeSerializerPaymentTests(TestCase):
         self.assertFalse(ser.is_valid())
         self.assertIn("wps_account_number", ser.errors)
 
-    def test_visit_forces_cash(self):
+    def test_visit_forces_cash_and_clears_ids(self):
         data = {
             "username": "visit1",
             "password": "pass",
@@ -352,11 +352,39 @@ class EmployeeSerializerPaymentTests(TestCase):
             "department": self.department.id,
             "hire_date": "2024-01-02",
             "employment_type": "permanent",
+            "payment_status": "wps",
+            "wps_account_number": "123",
+            "wps_id": "W1",
+            "c3_id": "C1",
         }
         ser = EmployeeSerializer(data=data)
         self.assertTrue(ser.is_valid(), ser.errors)
         emp = ser.save()
         self.assertEqual(emp.payment_status, "cash")
+        self.assertEqual(emp.wps_account_number, "")
+        self.assertEqual(emp.wps_id, "")
+        self.assertEqual(emp.c3_id, "")
+
+    def test_personal_forces_cash_and_clears_ids(self):
+        data = {
+            "username": "pers1",
+            "password": "pass",
+            "visa_type": "personal",
+            "department": self.department.id,
+            "hire_date": "2024-01-02",
+            "employment_type": "permanent",
+            "payment_status": "wps",
+            "wps_account_number": "123",
+            "wps_id": "W1",
+            "c3_id": "C1",
+        }
+        ser = EmployeeSerializer(data=data)
+        self.assertTrue(ser.is_valid(), ser.errors)
+        emp = ser.save()
+        self.assertEqual(emp.payment_status, "cash")
+        self.assertEqual(emp.wps_account_number, "")
+        self.assertEqual(emp.wps_id, "")
+        self.assertEqual(emp.c3_id, "")
 
     def test_personal_visa_forbids_license(self):
         data = {
@@ -371,3 +399,27 @@ class EmployeeSerializerPaymentTests(TestCase):
         ser = EmployeeSerializer(data=data)
         self.assertFalse(ser.is_valid())
         self.assertIn("trade_license", ser.errors)
+
+    def test_update_to_personal_clears_wps_fields(self):
+        emp = Employee.objects.create(
+            username="uupd",
+            password="pass",
+            visa_type="company",
+            trade_license=self.license,
+            department=self.department,
+            hire_date="2024-01-02",
+            employment_type="permanent",
+            payment_status="wps",
+            wps_account_number="123",
+            wps_id="W1",
+            c3_id="C1",
+        )
+        ser = EmployeeSerializer(
+            emp, data={"visa_type": "personal", "trade_license": None}, partial=True
+        )
+        self.assertTrue(ser.is_valid(), ser.errors)
+        emp = ser.save()
+        self.assertEqual(emp.payment_status, "cash")
+        self.assertEqual(emp.wps_account_number, "")
+        self.assertEqual(emp.wps_id, "")
+        self.assertEqual(emp.c3_id, "")

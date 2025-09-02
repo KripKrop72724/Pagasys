@@ -357,8 +357,16 @@ class EmployeeSerializer(ScopedSerializerMixin, serializers.ModelSerializer):
         allow_blank=True,
         help_text="Nationality as ISO 3166-1 alpha-2 country code (e.g. 'US' for United States). Uses django-countries.",
     )
-    payment_status = serializers.ChoiceField(choices=Employee.PAYMENT_STATUS_CHOICES, required=False, help_text="Payment method: WPS or Cash")
-    wps_account_number = serializers.CharField(required=False, allow_blank=True, help_text="WPS account number (required if payment status is WPS)")
+    payment_status = serializers.ChoiceField(
+        choices=Employee.PAYMENT_STATUS_CHOICES,
+        required=False,
+        help_text="Payment method: WPS or Cash. Automatically cash for personal or visit visas",
+    )
+    wps_account_number = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        help_text="WPS account number (required if payment status is WPS; not allowed for personal or visit visas)",
+    )
     current_address = serializers.CharField(required=False, allow_blank=True, help_text="Current residential address")
     permanent_address = serializers.CharField(required=False, allow_blank=True, help_text="Permanent home country address")
     hometown = serializers.CharField(required=False, allow_blank=True, help_text="Hometown")
@@ -369,8 +377,12 @@ class EmployeeSerializer(ScopedSerializerMixin, serializers.ModelSerializer):
         help_text="Gender",
     )
     visa_file_number = serializers.CharField(required=False, allow_blank=True, help_text="Government visa file number")
-    wps_id = serializers.CharField(required=False, allow_blank=True, help_text="WPS ID")
-    c3_id = serializers.CharField(required=False, allow_blank=True, help_text="C3 ID")
+    wps_id = serializers.CharField(
+        required=False, allow_blank=True, help_text="WPS ID (not allowed for personal or visit visas)"
+    )
+    c3_id = serializers.CharField(
+        required=False, allow_blank=True, help_text="C3 ID (not allowed for personal or visit visas)"
+    )
     special_notes = serializers.CharField(
         required=False, allow_blank=True, help_text="Special notes about the employee"
     )
@@ -426,11 +438,14 @@ class EmployeeSerializer(ScopedSerializerMixin, serializers.ModelSerializer):
         if is_super and groups:
             raise serializers.ValidationError({'groups': ['Superuser cannot belong to groups.']})
 
-        if attrs.get('visa_type') == 'visit' or (
-            self.instance and self.instance.visa_type == 'visit'
-        ):
+        visa = attrs.get('visa_type') or (
+            self.instance.visa_type if self.instance else None
+        )
+        if visa in ('personal', 'visit'):
             attrs['payment_status'] = 'cash'
             attrs['wps_account_number'] = ''
+            attrs['wps_id'] = ''
+            attrs['c3_id'] = ''
 
         attrs = super().validate(attrs)
         if self.instance is not None:
