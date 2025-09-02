@@ -10,6 +10,7 @@ from PIL import Image, ImageEnhance, ImageFilter
 import numpy as np
 
 from capture.models import EnrollmentLink, FaceEnrollment
+from capture.aws import company_collection_id
 from pagasys.models import Company, Branch, Department, Employee
 from rest_framework.test import APIClient
 
@@ -1720,7 +1721,7 @@ def test_enrollment_submit_deletes_existing_faces_with_company_id(monkeypatch, c
         max_uses=1,
     )
     # Pre-existing enrollment
-    existing_collection = f"reko-company-{employee.company.id}"
+    existing_collection = company_collection_id(employee.company.id)
     FaceEnrollment.objects.create(
         employee=employee,
         collection_id=existing_collection,

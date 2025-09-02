@@ -16,7 +16,7 @@ except ModuleNotFoundError:  # pragma: no cover
 
 def company_collection_id(company_id: int) -> str:
     """Return the Rekognition collection name for a company."""
-    return f"reko-company-{company_id}"
+    return f"{settings.AWS_REKOGNITION_COLLECTION_PREFIX}-{company_id}"
 
 
 def ensure_collection(collection_id: str) -> None:
@@ -87,7 +87,7 @@ def _company_collections(rk) -> list[str]:
     paginator = rk.get_paginator("list_collections")
     for page in paginator.paginate():
         for coll in page.get("CollectionIds", []):
-            if coll.startswith("reko-company-"):
+            if coll.startswith(f"{settings.AWS_REKOGNITION_COLLECTION_PREFIX}-"):
                 collections.append(coll)
     return collections
 
@@ -125,12 +125,22 @@ def search_face_by_image(company_id: int, image_bytes: bytes, threshold: float):
     if boto3 is None:  # pragma: no cover
         raise RuntimeError("boto3 is required for Rekognition operations")
     rk = boto3.client("rekognition", region_name=settings.AWS_REKOGNITION_REGION)
-    return rk.search_faces_by_image(
-        CollectionId=company_collection_id(company_id),
-        Image={"Bytes": image_bytes},
-        FaceMatchThreshold=int(threshold * 100) if threshold <= 1 else threshold,
-        MaxFaces=3,
-    )
+    collection = company_collection_id(company_id)
+    try:
+        return rk.search_faces_by_image(
+            CollectionId=collection,
+            Image={"Bytes": image_bytes},
+            FaceMatchThreshold=int(threshold * 100) if threshold <= 1 else threshold,
+            MaxFaces=3,
+        )
+    except rk.exceptions.ResourceNotFoundException:
+        ensure_collection(collection)
+        return rk.search_faces_by_image(
+            CollectionId=collection,
+            Image={"Bytes": image_bytes},
+            FaceMatchThreshold=int(threshold * 100) if threshold <= 1 else threshold,
+            MaxFaces=3,
+        )
 
 
 def put_capture_to_s3(company_id: int, device_id: int, image_bytes: bytes) -> tuple[str, str]:
