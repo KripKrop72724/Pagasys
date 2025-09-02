@@ -452,7 +452,7 @@ class EmployeeViewSet(BulkCreateMixin, BulkUpdateMixin, BulkDeleteMixin, viewset
     ]
     filter_backends = [DjangoFilterBackend, OrderingFilter]
     filterset_class = EmployeeFilter
-    ordering_fields = ["first_name", "last_name", "hire_date"]
+    ordering_fields = ["first_name", "middle_name", "last_name", "hire_date"]
 
     def get_queryset(self):
         qs = super().get_queryset()

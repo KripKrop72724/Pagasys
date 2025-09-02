@@ -355,6 +355,12 @@ class Employee(AbstractUser):
         help_text="Whether the employee uses a company, personal, or visit visa",
     )
 
+    middle_name = models.CharField(
+        max_length=150,
+        blank=True,
+        help_text="Middle name",
+    )
+
     primary_contact = models.CharField(
         max_length=20,
         blank=True,
@@ -523,7 +529,10 @@ class Employee(AbstractUser):
                 fields=["project", "designation", "employment_type"],
                 name="emp_proj_desig_type_idx",
             ),
-            models.Index(fields=["first_name", "last_name"], name="emp_name_idx"),
+            models.Index(
+                fields=["first_name", "middle_name", "last_name"],
+                name="emp_name_idx",
+            ),
             models.Index(
                 fields=["designation", "employment_type"],
                 name="emp_desig_type_idx",
@@ -592,7 +601,10 @@ class Employee(AbstractUser):
             raise ValidationError({"wps_account_number": ["WPS account number must be empty unless payment status is WPS"]})
 
     def __str__(self) -> str:
-        parts = [f"{self.first_name} {self.last_name}"]
+        name = " ".join(
+            part for part in [self.first_name, self.middle_name, self.last_name] if part
+        )
+        parts = [name]
         if self.trade_license:
             parts.append(self.trade_license.company.name)
         elif self.branch:

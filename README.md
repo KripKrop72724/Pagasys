@@ -39,6 +39,8 @@ comprehensive automated test suite.
   "Financial details" section in the admin.
 * **Employee notes** – Special notes about employees can be stored and
   managed via the API and Django admin.
+* **Employee full names** – Employee records now support separate first,
+  middle, and last name fields.
 * **Company time zone** – Each company records its IANA time zone (default
   `Asia/Dubai`) so shifts and attendance localise correctly.
 * **Leave types** – `paid_pct` uses `Decimal` precision and must be between

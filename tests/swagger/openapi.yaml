@@ -3867,6 +3867,15 @@ paths:
           Example:
             value: <value>
       - in: query
+        name: middle_name
+        schema:
+          type: string
+        description: Filter by middle_name. Combine multiple parameters for compound
+          filtering.
+        examples:
+          Example:
+            value: <value>
+      - in: query
         name: nationality
         schema:
           type: string
@@ -7597,6 +7606,9 @@ components:
         first_name:
           type: string
           description: Given name
+        middle_name:
+          type: string
+          description: Middle name
         last_name:
           type: string
           description: Family name
@@ -9497,6 +9509,9 @@ components:
         first_name:
           type: string
           description: Given name
+        middle_name:
+          type: string
+          description: Middle name
         last_name:
           type: string
           description: Family name

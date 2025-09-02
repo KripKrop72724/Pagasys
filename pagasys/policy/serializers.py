@@ -236,6 +236,9 @@ class RosterBulkUpsertResponseSerializer(serializers.Serializer):
 class RosterSummarySerializer(serializers.Serializer):
     employee = serializers.IntegerField(required=False)
     first_name = serializers.CharField(required=False, source="employee__first_name")
+    middle_name = serializers.CharField(
+        required=False, source="employee__middle_name"
+    )
     last_name = serializers.CharField(required=False, source="employee__last_name")
     shift = serializers.IntegerField(required=False)
     shift_name = serializers.CharField(required=False, source="shift__name")
