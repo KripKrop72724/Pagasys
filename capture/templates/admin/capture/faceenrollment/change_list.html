@@ -7,6 +7,11 @@
         <button type="submit" class="button">Clear All Face Enrollments</button>
     </form>
 </li>
+<li>
+    <a href="{% url 'admin:capture_faceenrollment_generate_links' %}" class="button">
+        Generate Face Enrollment Links
+    </a>
+</li>
 {{ block.super }}
 {% endblock %}
 

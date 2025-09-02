@@ -1,7 +1,16 @@
+import io
+from collections import defaultdict
+from datetime import timedelta
+
 from django.contrib import admin
+from django.http import HttpResponse
 from django.shortcuts import redirect
 from django.urls import path
+from django.utils import timezone
+from openpyxl import Workbook
+from openpyxl.styles import Font
 
+from pagasys.models import Employee
 from pagasys.utils import scope_queryset
 from .models import AttendanceDevice, FaceEnrollment, EnrollmentLink, PunchEvent, PunchException
 from .aws import count_all_faces, delete_all_faces
@@ -46,7 +55,12 @@ class FaceEnrollmentAdmin(ScopedAdminMixin, admin.ModelAdmin):
                 "clear-all-aws-faces/",
                 self.admin_site.admin_view(self.clear_all_aws_faces),
                 name="capture_faceenrollment_clear_all_aws_faces",
-            )
+            ),
+            path(
+                "generate-links/",
+                self.admin_site.admin_view(self.generate_links),
+                name="capture_faceenrollment_generate_links",
+            ),
         ]
         return my_urls + urls
 
@@ -71,6 +85,44 @@ class FaceEnrollmentAdmin(ScopedAdminMixin, admin.ModelAdmin):
         FaceEnrollment.objects.all().delete()
         self.message_user(request, "Cleared all face enrollments")
         return redirect("..")
+
+    def generate_links(self, request):
+        employees = scope_queryset(Employee.objects.all(), request.user)
+        now = timezone.now()
+        expires = now + timedelta(days=2)
+        links_by_branch: dict[str, list[tuple[str, str]]] = defaultdict(list)
+        for emp in employees:
+            link = EnrollmentLink.objects.create(
+                employee=emp,
+                expires_at=expires,
+                max_uses=1,
+            )
+            branch = emp.branch.name if emp.branch else "Unknown"
+            links_by_branch[branch].append((emp.get_full_name(), link.url))
+
+        wb = Workbook()
+        wb.remove(wb.active)
+        for branch, rows in links_by_branch.items():
+            ws = wb.create_sheet(title=branch[:31])
+            ws.append(["Name", "Enrollment URL"])
+            for cell in ws[1]:
+                cell.font = Font(bold=True)
+            for name, url in rows:
+                ws.append([name, url])
+            for column_cells in ws.columns:
+                length = max(len(str(cell.value)) if cell.value else 0 for cell in column_cells)
+                ws.column_dimensions[column_cells[0].column_letter].width = length + 2
+            ws.freeze_panes = "A2"
+
+        with io.BytesIO() as bio:
+            wb.save(bio)
+            bio.seek(0)
+            response = HttpResponse(
+                bio.getvalue(),
+                content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        response["Content-Disposition"] = "attachment; filename=face_enrollment_links.xlsx"
+        return response
 
 
 @admin.register(EnrollmentLink)
