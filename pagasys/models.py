@@ -352,7 +352,7 @@ class Employee(AbstractUser):
         max_length=20,
         choices=VISA_TYPE_CHOICES,
         default="company",
-        help_text="Whether the employee uses a company or personal visa",
+        help_text="Whether the employee uses a company, personal, or visit visa",
     )
 
     primary_contact = models.CharField(
@@ -370,12 +370,16 @@ class Employee(AbstractUser):
         max_length=10,
         choices=PAYMENT_STATUS_CHOICES,
         default="cash",
-        help_text="Payment method: WPS or Cash",
+        help_text=(
+            "Payment method: WPS or Cash. Automatically cash for personal or visit visas"
+        ),
     )
     wps_account_number = models.CharField(
         max_length=30,
         blank=True,
-        help_text="WPS account number (required if payment status is WPS)",
+        help_text=(
+            "WPS account number (required if payment status is WPS; not allowed for personal or visit visas)"
+        ),
     )
     current_address = models.TextField(blank=True, help_text="Current residential address")
     permanent_address = models.TextField(blank=True, help_text="Permanent home country address")
@@ -398,12 +402,12 @@ class Employee(AbstractUser):
     wps_id = models.CharField(
         max_length=50,
         blank=True,
-        help_text="WPS ID",
+        help_text="WPS ID (not allowed for personal or visit visas)",
     )
     c3_id = models.CharField(
         max_length=50,
         blank=True,
-        help_text="C3 ID",
+        help_text="C3 ID (not allowed for personal or visit visas)",
     )
     profile_picture = models.ImageField(
         upload_to="profile_pictures/",
@@ -561,6 +565,18 @@ class Employee(AbstractUser):
         else:  # personal or visit visa
             if self.trade_license:
                 raise ValidationError({"trade_license": ["Trade license must be empty for personal or visit visa"]})
+            if self.payment_status != "cash":
+                raise ValidationError({"payment_status": ["Personal or visit visa requires cash payment"]})
+            if self.wps_account_number:
+                raise ValidationError({
+                    "wps_account_number": [
+                        "WPS account number must be empty for personal or visit visa"
+                    ]
+                })
+            if self.wps_id:
+                raise ValidationError({"wps_id": ["WPS ID must be empty for personal or visit visa"]})
+            if self.c3_id:
+                raise ValidationError({"c3_id": ["C3 ID must be empty for personal or visit visa"]})
 
         # Personal visa with designation company mismatch:
         # ensure designation matches branch.company
@@ -569,9 +585,6 @@ class Employee(AbstractUser):
 
         if self.work_calendar and self.work_calendar.company_id != branch.company_id:
             raise ValidationError("Work calendar company must match employee company")
-
-        if self.visa_type == "visit" and self.payment_status != "cash":
-            raise ValidationError({"payment_status": ["Visit visa requires cash payment"]})
 
         if self.payment_status == "wps" and not self.wps_account_number:
             raise ValidationError({"wps_account_number": ["WPS account number required when payment status is WPS"]})

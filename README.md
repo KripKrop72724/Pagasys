@@ -7,8 +7,10 @@ comprehensive automated test suite.
 
 ## Project Overview
 
-* **Visa types** – Employees may have a **company** or **personal** visa. Company
-  visas require an associated trade license while personal visas must omit it.
+* **Visa types** – Employees may have a **company**, **personal**, or **visit** visa.
+  Company visas require an associated trade license. Personal and visit visas
+  must omit the license and always use cash payments; WPS/C3 identifiers are not
+  permitted.
 * **Bulk operations** – Every API endpoint supports bulk create, update and
   delete actions in addition to standard CRUD behaviour.
 * **Role based access** – Built‑in groups (Company Admin, Branch Manager,

@@ -15,6 +15,14 @@ function initEmployeeAdmin() {
     : document.querySelector(
         '.form-row.field-wps_account_number, .grp-row.field-wps_account_number'
       );
+  const wpsIdField = document.getElementById('id_wps_id');
+  const wpsIdRow = wpsIdField
+    ? wpsIdField.closest('.form-row, .grp-row')
+    : document.querySelector('.form-row.field-wps_id, .grp-row.field-wps_id');
+  const c3Field = document.getElementById('id_c3_id');
+  const c3Row = c3Field
+    ? c3Field.closest('.form-row, .grp-row')
+    : document.querySelector('.form-row.field-c3_id, .grp-row.field-c3_id');
 
   if (isSuperEl && groupsField) {
     const row = groupsField.closest('.form-row');
@@ -41,18 +49,29 @@ function initEmployeeAdmin() {
     if (!visaTypeEl) return;
     const personal = visaTypeEl.value === 'personal';
     const visit = visaTypeEl.value === 'visit';
-    if (licenseRow) licenseRow.style.display = personal || visit ? 'none' : '';
+    const pv = personal || visit;
+    if (licenseRow) licenseRow.style.display = pv ? 'none' : '';
     if (licenseField) {
-      licenseField.disabled = personal || visit;
-      if (personal || visit) {
+      licenseField.disabled = pv;
+      if (pv) {
         licenseField.value = '';
       }
     }
     if (paymentStatusEl) {
-      paymentStatusEl.disabled = visit;
-      if (visit) {
+      paymentStatusEl.disabled = pv;
+      if (pv) {
         paymentStatusEl.value = 'cash';
       }
+    }
+    if (wpsIdRow) wpsIdRow.style.display = pv ? 'none' : '';
+    if (wpsIdField) {
+      wpsIdField.disabled = pv;
+      if (pv) wpsIdField.value = '';
+    }
+    if (c3Row) c3Row.style.display = pv ? 'none' : '';
+    if (c3Field) {
+      c3Field.disabled = pv;
+      if (pv) c3Field.value = '';
     }
     togglePaymentFields();
   }

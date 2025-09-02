@@ -384,6 +384,42 @@ class ModelValidationTests(ModelFactoryMixin, TestCase):
         )
         emp.full_clean()  # should not raise
 
+    def test_personal_visa_disallows_wps_and_ids(self):
+        emp = Employee(
+            username="per1",
+            password="pass",
+            visa_type="personal",
+            department=self.department,
+            first_name="A",
+            last_name="B",
+            hire_date="2024-01-02",
+            employment_type="permanent",
+            payment_status="wps",
+            wps_account_number="123",
+            wps_id="W1",
+            c3_id="C1",
+        )
+        with self.assertRaises(ValidationError):
+            emp.full_clean()
+
+    def test_visit_visa_disallows_wps_and_ids(self):
+        emp = Employee(
+            username="vis1",
+            password="pass",
+            visa_type="visit",
+            department=self.department,
+            first_name="A",
+            last_name="B",
+            hire_date="2024-01-02",
+            employment_type="permanent",
+            payment_status="wps",
+            wps_account_number="123",
+            wps_id="W1",
+            c3_id="C1",
+        )
+        with self.assertRaises(ValidationError):
+            emp.full_clean()
+
     def test_unique_constraints(self):
         with self.assertRaises(IntegrityError):
             with transaction.atomic():
