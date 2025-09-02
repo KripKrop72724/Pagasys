@@ -51,7 +51,7 @@ class EmployeeExcelUploadTests(TestCase):
             "VISIT VISA",
             "MALE",
             "SCH",
-            "INDIAN",
+            "NEPAL",
             "1990/01/01",
             "2023/01/01",
             "12345",
@@ -67,10 +67,12 @@ class EmployeeExcelUploadTests(TestCase):
         result = import_employee_workbook(bio)
         self.assertEqual(result["created"], 2)
         self.assertEqual(result["errors"], [])
-        emp1 = Employee.objects.get(username="971565358302")
+        emp1 = Employee.objects.get(username="muhammadyounis")
         self.assertEqual(emp1.visa_type, "personal")
-        emp2 = Employee.objects.get(username="12345")
+        self.assertEqual(emp1.nationality, "PK")
+        emp2 = Employee.objects.get(username="aliahmed")
         self.assertEqual(emp2.visa_type, "visit")
+        self.assertEqual(emp2.nationality, "NP")
         self.assertEqual(emp2.special_notes, "VISIT VISA")
         group = Group.objects.get(name=EMPLOYEE_ROLE)
         self.assertTrue(emp1.groups.filter(name=EMPLOYEE_ROLE).exists())

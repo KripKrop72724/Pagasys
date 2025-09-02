@@ -5,7 +5,6 @@ from typing import IO, List, Dict, Tuple
 
 from django.contrib.auth.models import Group
 from django.db import transaction
-from django.utils.text import slugify
 from openpyxl import load_workbook
 
 from .models import Branch, Department, Designation, Employee
@@ -17,6 +16,7 @@ NATIONALITY_MAP = {
     "EGYPTION": "EG",
     "INDIAN": "IN",
     "NEPALI": "NP",
+    "NEPAL": "NP",
     "SRI LANKAN": "LK",
     "PAKISTAN": "PK",
     "NIGERIAN": "NG",
@@ -87,7 +87,7 @@ def import_employee_workbook(file: IO[bytes]) -> Dict[str, object]:
                         hire_date = datetime.strptime(str(hire_raw), "%Y/%m/%d").date()
 
                 tp_number = str(row[header_index["TP NUMBER"]]).strip()
-                username_base = tp_number or slugify(f"{first}-{last}")
+                username_base = "".join(name.split()).lower()
                 username = username_base
                 suffix = 1
                 while Employee.objects.filter(username=username).exists():
