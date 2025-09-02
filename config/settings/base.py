@@ -51,6 +51,7 @@ CORS_ALLOWED_ORIGINS = env.list(
         "https://api.pagasys.pro",
         "https://pagasys.pro",
         "https://prodapi.pagasys.pro",
+        "http://localhost:3000"
     ],
 )
 CORS_ALLOW_CREDENTIALS = True
