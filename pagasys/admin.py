@@ -4,10 +4,11 @@ from django.contrib.auth.forms import AdminUserCreationForm, UserChangeForm
 from django.core.exceptions import ValidationError
 from django import forms
 from django.contrib.admin.widgets import FilteredSelectMultiple
-from django.db import transaction
+from django.db import connection, transaction
 from django.shortcuts import redirect
 from django.template.response import TemplateResponse
 from django.urls import path
+from django.db.models import Max
 from datetime import timedelta
 from copy import deepcopy
 
@@ -527,6 +528,11 @@ class EmployeeAdmin(CleanSaveModelMixin, ScopedAdminMixin, UserAdmin):
                 self.admin_site.admin_view(self.company_visa_upload),
                 name="pagasys_employee_company_visa_upload",
             ),
+            path(
+                "reset-id-sequence/",
+                self.admin_site.admin_view(self.reset_id_sequence),
+                name="pagasys_employee_reset_id_sequence",
+            ),
         ]
         return custom + urls
 
@@ -577,6 +583,23 @@ class EmployeeAdmin(CleanSaveModelMixin, ScopedAdminMixin, UserAdmin):
         return TemplateResponse(
             request, "admin/pagasys/employee/company_visa_upload.html", context
         )
+
+    def reset_id_sequence(self, request):
+        max_id = self.model.objects.aggregate(max_id=Max("id"))["max_id"] or 0
+        table_name = self.model._meta.db_table
+        with connection.cursor() as cursor:
+            if connection.vendor == "postgresql":
+                cursor.execute(
+                    "SELECT setval(pg_get_serial_sequence(%s, 'id'), %s, true)",
+                    [table_name, max_id],
+                )
+            elif connection.vendor == "sqlite":
+                cursor.execute(
+                    "UPDATE sqlite_sequence SET seq = %s WHERE name = %s",
+                    [max_id, table_name],
+                )
+        messages.success(request, "Employee ID sequence reset.")
+        return redirect("..")
 
     class Media:
         js = ["pagasys/js/employee_admin.js"]
