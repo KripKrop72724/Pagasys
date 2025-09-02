@@ -8066,6 +8066,9 @@ components:
         faces:
           type: string
           readOnly: true
+        collection_id:
+          type: string
+          readOnly: true
         updated_at:
           type: string
           format: date-time
@@ -8077,6 +8080,7 @@ components:
           readOnly: true
           description: Creation timestamp
       required:
+      - collection_id
       - created_at
       - faces
       - updated_at

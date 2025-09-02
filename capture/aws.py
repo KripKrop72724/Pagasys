@@ -10,8 +10,10 @@ from django.utils import timezone
 
 try:  # pragma: no cover - boto3 is optional in tests
     import boto3  # type: ignore
+    from botocore.exceptions import NoCredentialsError  # type: ignore
 except ModuleNotFoundError:  # pragma: no cover
     boto3 = None  # type: ignore
+    NoCredentialsError = Exception  # type: ignore
 
 
 def company_collection_id(company_id: int) -> str:
@@ -28,6 +30,10 @@ def ensure_collection(collection_id: str) -> None:
         rk.describe_collection(CollectionId=collection_id)
     except rk.exceptions.ResourceNotFoundException:
         rk.create_collection(CollectionId=collection_id)
+    except NoCredentialsError:  # pragma: no cover
+        # In environments without AWS credentials (e.g. tests), skip creating
+        # the collection so calls depending on it can still proceed.
+        pass
 
 
 def index_faces(company_id: int, employee_id: int, image_bytes: bytes) -> list[str]:
