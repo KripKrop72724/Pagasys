@@ -108,8 +108,8 @@ from .models import (
 class CompanySerializer(ScopedSerializerMixin, serializers.ModelSerializer):
     """Serializer for Company.
 
-    Exposes contact fields such as address, logo, email, phone and
-    website in addition to the basic metadata.
+    Exposes contact fields such as address, logo, email, phone, website
+    and bank account number in addition to the basic metadata.
     """
 
     class Meta:
@@ -153,9 +153,10 @@ class DesignationSerializer(ScopedSerializerMixin, serializers.ModelSerializer):
 class TradeLicenseSerializer(ScopedSerializerMixin, serializers.ModelSerializer):
     """Serializer for :class:`~pagasys.models.TradeLicense`.
 
-    The ``branches`` many-to-many relation is kept in ``fields`` via
-    ``"__all__"`` so that DRF's ``save()`` automatically calls
-    ``save_m2m()`` during bulk operations.
+    Branch associations as well as issued and expiry dates are optional. The
+    ``branches`` many-to-many relation is kept in ``fields`` via ``"__all__"``
+    so that DRF's ``save()`` automatically calls ``save_m2m()`` during bulk
+    operations.
     """
 
     class Meta:
@@ -370,6 +371,9 @@ class EmployeeSerializer(ScopedSerializerMixin, serializers.ModelSerializer):
     visa_file_number = serializers.CharField(required=False, allow_blank=True, help_text="Government visa file number")
     wps_id = serializers.CharField(required=False, allow_blank=True, help_text="WPS ID")
     c3_id = serializers.CharField(required=False, allow_blank=True, help_text="C3 ID")
+    special_notes = serializers.CharField(
+        required=False, allow_blank=True, help_text="Special notes about the employee"
+    )
     profile_picture = serializers.ImageField(required=False, allow_null=True, help_text="Profile picture")
 
     class Meta:
@@ -403,6 +407,7 @@ class EmployeeSerializer(ScopedSerializerMixin, serializers.ModelSerializer):
             'visa_file_number',
             'wps_id',
             'c3_id',
+            'special_notes',
             'groups',
         ]
         extra_kwargs = {

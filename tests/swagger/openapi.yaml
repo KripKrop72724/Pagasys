@@ -614,6 +614,15 @@ paths:
           Example:
             value: <value>
       - in: query
+        name: bank_account_number
+        schema:
+          type: string
+        description: Filter by bank_account_number. Combine multiple parameters for
+          compound filtering.
+        examples:
+          Example:
+            value: <value>
+      - in: query
         name: email
         schema:
           type: string
@@ -4175,6 +4184,15 @@ paths:
           Example:
             value: <value>
       - in: query
+        name: special_notes
+        schema:
+          type: string
+        description: Filter by special_notes. Combine multiple parameters for compound
+          filtering.
+        examples:
+          Example:
+            value: <value>
+      - in: query
         name: trade_license
         schema:
           type: string
@@ -7376,8 +7394,8 @@ components:
       description: |-
         Serializer for Company.
 
-        Exposes contact fields such as address, logo, email, phone and
-        website in addition to the basic metadata.
+        Exposes contact fields such as address, logo, email, phone, website
+        and bank account number in addition to the basic metadata.
       properties:
         id:
           type: integer
@@ -7412,6 +7430,10 @@ components:
           format: uri
           description: Official company website
           maxLength: 200
+        bank_account_number:
+          type: string
+          description: Bank account number used for payroll transactions
+          maxLength: 64
       required:
       - id
       - name
@@ -7919,6 +7941,9 @@ components:
         c3_id:
           type: string
           description: C3 ID
+        special_notes:
+          type: string
+          description: Special notes about the employee
         groups:
           type: array
           items:
@@ -9363,8 +9388,8 @@ components:
       description: |-
         Serializer for Company.
 
-        Exposes contact fields such as address, logo, email, phone and
-        website in addition to the basic metadata.
+        Exposes contact fields such as address, logo, email, phone, website
+        and bank account number in addition to the basic metadata.
       properties:
         id:
           type: integer
@@ -9399,6 +9424,10 @@ components:
           format: uri
           description: Official company website
           maxLength: 200
+        bank_account_number:
+          type: string
+          description: Bank account number used for payroll transactions
+          maxLength: 64
     PatchedDepartment:
       type: object
       description: Serializer for Department
@@ -9811,6 +9840,9 @@ components:
         c3_id:
           type: string
           description: C3 ID
+        special_notes:
+          type: string
+          description: Special notes about the employee
         groups:
           type: array
           items:
@@ -10303,9 +10335,10 @@ components:
       description: |-
         Serializer for :class:`~pagasys.models.TradeLicense`.
 
-        The ``branches`` many-to-many relation is kept in ``fields`` via
-        ``"__all__"`` so that DRF's ``save()`` automatically calls
-        ``save_m2m()`` during bulk operations.
+        Branch associations as well as issued and expiry dates are optional. The
+        ``branches`` many-to-many relation is kept in ``fields`` via ``"__all__"``
+        so that DRF's ``save()`` automatically calls ``save_m2m()`` during bulk
+        operations.
       properties:
         id:
           type: integer
@@ -10331,10 +10364,12 @@ components:
         issued_date:
           type: string
           format: date
+          nullable: true
           description: Date license was issued
         expiry_date:
           type: string
           format: date
+          nullable: true
           description: Date license expires
         max_visas:
           type: integer
@@ -10349,7 +10384,8 @@ components:
           type: array
           items:
             type: integer
-          description: Which branches this license covers
+          description: Which branches this license covers. Leave empty for a company-wide
+            license
     PatchedWorkCalendar:
       type: object
       description: Serializer for WorkCalendar
@@ -11223,9 +11259,10 @@ components:
       description: |-
         Serializer for :class:`~pagasys.models.TradeLicense`.
 
-        The ``branches`` many-to-many relation is kept in ``fields`` via
-        ``"__all__"`` so that DRF's ``save()`` automatically calls
-        ``save_m2m()`` during bulk operations.
+        Branch associations as well as issued and expiry dates are optional. The
+        ``branches`` many-to-many relation is kept in ``fields`` via ``"__all__"``
+        so that DRF's ``save()`` automatically calls ``save_m2m()`` during bulk
+        operations.
       properties:
         id:
           type: integer
@@ -11251,10 +11288,12 @@ components:
         issued_date:
           type: string
           format: date
+          nullable: true
           description: Date license was issued
         expiry_date:
           type: string
           format: date
+          nullable: true
           description: Date license expires
         max_visas:
           type: integer
@@ -11269,13 +11308,11 @@ components:
           type: array
           items:
             type: integer
-          description: Which branches this license covers
+          description: Which branches this license covers. Leave empty for a company-wide
+            license
       required:
-      - branches
       - company
-      - expiry_date
       - id
-      - issued_date
       - license_no
       - max_visas
     TradeLicenseSerializerBulkCreateResponse:

@@ -3,8 +3,8 @@ from django.contrib.admin.sites import AdminSite
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 
-from pagasys.models import Company, Branch, Department, TradeLicense
-from pagasys.admin import TradeLicenseAdmin
+from pagasys.models import Company, Branch, Department, TradeLicense, Employee
+from pagasys.admin import TradeLicenseAdmin, EmployeeAdmin
 
 
 class AdminFullCleanTests(TestCase):
@@ -64,6 +64,20 @@ class AdminFullCleanTests(TestCase):
         admin.save_model(self._get_request(), obj, form, False)
         self.assertTrue(TradeLicense.objects.filter(license_no="NEW").exists())
 
+    def test_save_model_allows_missing_dates_and_branches(self):
+        admin = TradeLicenseAdmin(TradeLicense, self.site)
+        obj = TradeLicense(
+            company=self.company,
+            license_no="NODATES",
+            max_visas=1,
+        )
+        form = type("F", (), {"add_error": lambda *a, **k: None, "cleaned_data": {"branches": []}})()
+        admin.save_model(self._get_request(), obj, form, False)
+        lic = TradeLicense.objects.get(license_no="NODATES")
+        self.assertIsNone(lic.issued_date)
+        self.assertIsNone(lic.expiry_date)
+        self.assertEqual(list(lic.branches.all()), [])
+
     def test_branch_company_mismatch_rejected(self):
         admin = TradeLicenseAdmin(TradeLicense, self.site)
         other = Company.objects.create(name="O")
@@ -113,3 +127,20 @@ class AdminFullCleanTests(TestCase):
         admin = TradeLicenseAdmin(TradeLicense, self.site)
         media = admin.media
         self.assertIn("tradelicense_admin.js", "".join(media._js))
+
+    def test_employee_branch_scope_enforced(self):
+        admin = EmployeeAdmin(get_user_model(), self.site)
+        other_branch = Branch.objects.create(company=self.company, name="B2")
+        dept = Department.objects.create(branch=other_branch, name="D2")
+        emp = get_user_model()(
+            username="empb",
+            password="pass",
+            trade_license=self.license,
+            department=dept,
+            hire_date="2024-01-02",
+            employment_type="permanent",
+            visa_type="company",
+        )
+        form = type("F", (), {"add_error": lambda *a, **k: None, "cleaned_data": {}})()
+        with self.assertRaises(ValidationError):
+            admin.save_model(self._get_request(), emp, form, False)

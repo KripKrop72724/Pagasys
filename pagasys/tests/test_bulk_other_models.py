@@ -219,6 +219,23 @@ class OtherBulkActionsTests(TestCase):
             lic = TradeLicense.objects.get(id=lic_id)
             self.assertEqual(list(lic.branches.all()), [self.branch])
 
+    def test_license_bulk_create_without_branches(self):
+        """Bulk create licenses without branch scope"""
+        payload = [
+            {
+                "company": self.company.id,
+                "license_no": "LNO",
+                "max_visas": 5,
+            }
+        ]
+        res = self.client.post("/api/licenses/bulk/", payload, format="json")
+        self.assertEqual(res.status_code, 201)
+        lic_id = res.data["created"][0]["id"]
+        lic = TradeLicense.objects.get(id=lic_id)
+        self.assertEqual(list(lic.branches.all()), [])
+        self.assertIsNone(lic.issued_date)
+        self.assertIsNone(lic.expiry_date)
+
     def test_license_bulk_update_branches(self):
         """Updating license branch relations works in bulk."""
         lic = TradeLicense.objects.create(

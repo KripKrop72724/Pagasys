@@ -49,6 +49,7 @@ class CompanyAPITests(TestCase):
                 "email": "a@b.com",
                 "phone": "+1",
                 "website": "http://example.com",
+                "bank_account_number": "AE000000000000000001234567",
             }
             res = self.client.post("/api/companies/", payload, format="multipart")
             self.assertEqual(res.status_code, 201)
@@ -61,9 +62,22 @@ class CompanyAPITests(TestCase):
             self.assertEqual(res.data["email"], payload["email"])
             self.assertEqual(res.data["phone"], payload["phone"])
             self.assertEqual(res.data["website"], payload["website"])
+            self.assertEqual(
+                res.data["bank_account_number"], payload["bank_account_number"]
+            )
 
             res = self.client.patch(
-                f"/api/companies/{comp_id}/", {"address": "456 Ave"}, format="json"
+                f"/api/companies/{comp_id}/",
+                {"address": "456 Ave", "bank_account_number": "AE999"},
+                format="json",
             )
             self.assertEqual(res.status_code, 200)
             self.assertEqual(res.data["address"], "456 Ave")
+            self.assertEqual(res.data["bank_account_number"], "AE999")
+
+    def test_filter_by_bank_account_number(self):
+        Company.objects.create(name="BankCo", bank_account_number="AC123")
+        res = self.client.get("/api/companies/?bank_account_number=AC123")
+        self.assertEqual(res.status_code, 200)
+        ids = [c["id"] for c in res.data["results"]]
+        self.assertEqual(ids, [Company.objects.get(name="BankCo").id])

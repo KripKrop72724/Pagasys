@@ -137,6 +137,12 @@ class BranchSelectMultiple(FilteredSelectMultiple):
 
 
 class TradeLicenseForm(forms.ModelForm):
+    """Form for :class:`TradeLicense` with dynamic branch queryset.
+
+    Branches are optional; leaving the field empty creates a company-wide
+    license. Issued and expiry dates are also optional.
+    """
+
     class Meta:
         model = TradeLicense
         fields = "__all__"
@@ -178,8 +184,8 @@ class BranchForm(forms.ModelForm):
 class CompanyAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
     """Admin configuration for companies with comprehensive filters.
 
-    Includes address, logo, email, phone and website fields to capture
-    detailed company contact information.
+    Includes address, logo, email, phone, website and bank account number
+    fields to capture detailed contact and payroll information.
     """
 
     list_filter = ["name"]
@@ -190,6 +196,13 @@ class CompanyAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
             {
                 "fields": ("address", "logo", "email", "phone", "website"),
                 "description": "Optional fields describing how to reach the company.",
+            },
+        ),
+        (
+            "Financial details",
+            {
+                "fields": ("bank_account_number",),
+                "description": "Bank account number used for payroll disbursements.",
             },
         ),
     )
@@ -222,6 +235,13 @@ class DesignationAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
 
 @admin.register(TradeLicense)
 class TradeLicenseAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
+    """Admin configuration for trade licenses with comprehensive filters.
+
+    Branch assignments, issued date and expiry date are optional. When
+    branches are selected the license becomes branch‑scoped; otherwise it
+    can be applied to any employee of the company.
+    """
+
     form = TradeLicenseForm
     filter_horizontal = ["branches"]
     list_filter = [
@@ -333,6 +353,7 @@ class EmployeeAdminCreationForm(AdminUserCreationForm):
             "visa_file_number",
             "wps_id",
             "c3_id",
+            "special_notes",
             "hire_date",
             "employment_type",
         )
@@ -413,6 +434,7 @@ class EmployeeAdmin(CleanSaveModelMixin, ScopedAdminMixin, UserAdmin):
                     "hometown",
                     "profile_picture",
                     "gender",
+                    "special_notes",
                 )
             },
         ),
@@ -466,6 +488,7 @@ class EmployeeAdmin(CleanSaveModelMixin, ScopedAdminMixin, UserAdmin):
                     "hometown",
                     "profile_picture",
                     "gender",
+                    "special_notes",
                 )
             },
         ),

@@ -78,6 +78,7 @@ class AdminCRUDTests(ModelFactoryMixin, TestCase):
                     "email": "info@co.com",
                     "phone": "+1",
                     "website": "http://co.com",
+                    "bank_account_number": "AC1",
                 },
             )
             self.assertEqual(res.status_code, 302)
@@ -94,6 +95,7 @@ class AdminCRUDTests(ModelFactoryMixin, TestCase):
                     "email": "contact@co.com",
                     "phone": "+2",
                     "website": "http://co2.com",
+                    "bank_account_number": "AC2",
                 },
             )
             self.assertEqual(res.status_code, 302)
@@ -104,6 +106,7 @@ class AdminCRUDTests(ModelFactoryMixin, TestCase):
             self.assertEqual(comp.email, "contact@co.com")
             self.assertEqual(comp.phone, "+2")
             self.assertEqual(comp.website, "http://co2.com")
+            self.assertEqual(comp.bank_account_number, "AC2")
 
             delete_url = reverse("admin:pagasys_company_delete", args=[comp.id])
             res = self.client.post(delete_url, {"post": "yes"})
@@ -167,14 +170,15 @@ class AdminCRUDTests(ModelFactoryMixin, TestCase):
                 "license_document": SimpleUploadedFile(
                     "lic.pdf", b"%PDF-1.4", content_type="application/pdf"
                 ),
-                "issued_date": "2024-01-01",
-                "expiry_date": "2099-01-01",
                 "max_visas": 1,
-                "branches": [self.branch.id],
+                "branches": [],
             }
             res = self.client.post(add_url, data)
             self.assertEqual(res.status_code, 302)
             obj = TradeLicense.objects.get(license_no="LNEW")
+            self.assertIsNone(obj.issued_date)
+            self.assertIsNone(obj.expiry_date)
+            self.assertEqual(list(obj.branches.all()), [])
 
             change_url = reverse("admin:pagasys_tradelicense_change", args=[obj.id])
             data["name"] = "License 2"
@@ -183,6 +187,7 @@ class AdminCRUDTests(ModelFactoryMixin, TestCase):
             data["license_document"] = SimpleUploadedFile(
                 "lic2.pdf", b"%PDF-1.4", content_type="application/pdf"
             )
+            data["branches"] = []
             res = self.client.post(change_url, data)
             self.assertEqual(res.status_code, 302)
             obj.refresh_from_db()
@@ -247,10 +252,12 @@ class AdminCRUDTests(ModelFactoryMixin, TestCase):
             "hire_date": "2024-02-01",
             "employment_type": "permanent",
             "visa_type": "company",
+            "special_notes": "VIP",
         }
         res = self.client.post(add_url, data)
         self.assertEqual(res.status_code, 302)
         emp = Employee.objects.get(username="empadd")
+        self.assertEqual(emp.special_notes, "VIP")
 
         change_url = reverse("admin:pagasys_employee_change", args=[emp.id])
         res = self.client.get(change_url)

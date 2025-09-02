@@ -122,6 +122,19 @@ class TradeLicenseSerializerBranchTests(TestCase):
         ser = TradeLicenseSerializer(data=data)
         self.assertTrue(ser.is_valid(), ser.errors)
 
+    def test_missing_dates_and_branches_ok(self):
+        data = {
+            "company": self.company.id,
+            "license_no": "L2",
+            "max_visas": 1,
+        }
+        ser = TradeLicenseSerializer(data=data)
+        self.assertTrue(ser.is_valid(), ser.errors)
+        lic = ser.save()
+        self.assertIsNone(lic.issued_date)
+        self.assertIsNone(lic.expiry_date)
+        self.assertEqual(list(lic.branches.all()), [])
+
     def test_update_company_with_old_branch_fails(self):
         lic = TradeLicense.objects.create(
             company=self.company,

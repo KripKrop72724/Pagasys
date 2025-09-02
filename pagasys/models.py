@@ -49,6 +49,11 @@ class Company(models.Model):
         blank=True,
         help_text="Official company website",
     )
+    bank_account_number = models.CharField(
+        max_length=64,
+        blank=True,
+        help_text="Bank account number used for payroll transactions",
+    )
 
     class Meta:
         verbose_name_plural = "companies"
@@ -167,7 +172,8 @@ class TradeLicense(models.Model):
     branches = models.ManyToManyField(
         Branch,
         related_name="licenses",
-        help_text="Which branches this license covers",
+        blank=True,
+        help_text="Which branches this license covers. Leave empty for a company-wide license",
     )
     license_no = models.CharField(
         max_length=100,
@@ -192,8 +198,8 @@ class TradeLicense(models.Model):
         validators=[FileExtensionValidator(["pdf", "jpg", "jpeg", "png"])],
         help_text="Scanned copy of the trade license",
     )
-    issued_date = models.DateField(help_text="Date license was issued")
-    expiry_date = models.DateField(help_text="Date license expires")
+    issued_date = models.DateField(blank=True, null=True, help_text="Date license was issued")
+    expiry_date = models.DateField(blank=True, null=True, help_text="Date license expires")
     max_visas = models.PositiveIntegerField(help_text="Maximum number of visa slots")
 
     class Meta:
@@ -202,7 +208,11 @@ class TradeLicense(models.Model):
         ordering = ["id"]
         constraints = [
             models.CheckConstraint(
-                check=models.Q(expiry_date__gte=models.F("issued_date")),
+                check=(
+                    models.Q(expiry_date__isnull=True)
+                    | models.Q(issued_date__isnull=True)
+                    | models.Q(expiry_date__gte=models.F("issued_date"))
+                ),
                 name="license_expiry_after_issue",
             ),
             models.CheckConstraint(
@@ -401,6 +411,10 @@ class Employee(AbstractUser):
         null=True,
         help_text="Profile picture",
     )
+    special_notes = models.TextField(
+        blank=True,
+        help_text="Special notes about the employee",
+    )
 
     trade_license = models.ForeignKey(
         TradeLicense,
@@ -528,10 +542,11 @@ class Employee(AbstractUser):
                 raise ValidationError({"trade_license": ["This field is required for company visas"]})
             today = timezone.now().date()
             expiry = self.trade_license.expiry_date
-            if isinstance(expiry, str):
-                expiry = date.fromisoformat(expiry)
-            if expiry < today:
-                raise ValidationError("Cannot assign an expired trade license to an employee")
+            if expiry:
+                if isinstance(expiry, str):
+                    expiry = date.fromisoformat(expiry)
+                if expiry < today:
+                    raise ValidationError("Cannot assign an expired trade license to an employee")
             current = self.trade_license.employees.exclude(pk=self.pk).count()
             if current >= self.trade_license.max_visas:
                 raise ValidationError("Visa quota reached")
@@ -541,6 +556,8 @@ class Employee(AbstractUser):
 
             if self.trade_license.company != branch.company:
                 raise ValidationError("License company must match branch company")
+            if self.trade_license.branches.exists() and not self.trade_license.branches.filter(pk=branch.pk).exists():
+                raise ValidationError("Trade license does not cover employee's branch")
         else:  # personal or visit visa
             if self.trade_license:
                 raise ValidationError({"trade_license": ["Trade license must be empty for personal or visit visa"]})

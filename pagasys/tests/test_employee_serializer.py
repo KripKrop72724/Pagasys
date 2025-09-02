@@ -99,6 +99,23 @@ class EmployeeSerializerPasswordTests(TestCase):
         self.assertEqual(emp.wps_id, "W123")
         self.assertEqual(emp.c3_id, "C456")
 
+    def test_special_notes_serialization(self):
+        data = {
+            "username": "u_notes",
+            "password": "secret",
+            "trade_license": self.license.id,
+            "department": self.department.id,
+            "hire_date": "2024-01-02",
+            "employment_type": "permanent",
+            "visa_type": "company",
+            "special_notes": "Needs extra training",
+        }
+        ser = EmployeeSerializer(data=data)
+        self.assertTrue(ser.is_valid(), ser.errors)
+        emp = ser.save()
+        self.assertEqual(emp.special_notes, "Needs extra training")
+        self.assertEqual(EmployeeSerializer(emp).data["special_notes"], "Needs extra training")
+
 
 class EmployeeSerializerGroupTests(TestCase):
     def setUp(self):
@@ -233,6 +250,53 @@ class EmployeeSerializerVisaTypeTests(TestCase):
         ser = EmployeeSerializer(data=data)
         self.assertFalse(ser.is_valid())
         self.assertIn("trade_license", ser.errors)
+
+
+class EmployeeSerializerBranchScopeTests(TestCase):
+    def setUp(self):
+        self.company = Company.objects.create(name="Co")
+        self.branch1 = Branch.objects.create(company=self.company, name="B1")
+        self.branch2 = Branch.objects.create(company=self.company, name="B2")
+        self.department1 = Department.objects.create(branch=self.branch1, name="D1")
+        self.department2 = Department.objects.create(branch=self.branch2, name="D2")
+        self.scoped_license = TradeLicense.objects.create(
+            company=self.company,
+            license_no="LS",
+            max_visas=5,
+        )
+        self.scoped_license.branches.set([self.branch1])
+        self.unscoped_license = TradeLicense.objects.create(
+            company=self.company,
+            license_no="LU",
+            max_visas=5,
+        )
+
+    def test_branch_scoped_license_rejected(self):
+        data = {
+            "username": "empb1",
+            "password": "pass",
+            "trade_license": self.scoped_license.id,
+            "department": self.department2.id,
+            "hire_date": "2024-01-02",
+            "employment_type": "permanent",
+            "visa_type": "company",
+        }
+        ser = EmployeeSerializer(data=data)
+        self.assertFalse(ser.is_valid())
+        self.assertIn("non_field_errors", ser.errors)
+
+    def test_unscoped_license_allows_any_branch(self):
+        data = {
+            "username": "empb2",
+            "password": "pass",
+            "trade_license": self.unscoped_license.id,
+            "department": self.department2.id,
+            "hire_date": "2024-01-02",
+            "employment_type": "permanent",
+            "visa_type": "company",
+        }
+        ser = EmployeeSerializer(data=data)
+        self.assertTrue(ser.is_valid(), ser.errors)
 
 
 class EmployeeSerializerPaymentTests(TestCase):
