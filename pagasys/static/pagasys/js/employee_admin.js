@@ -50,16 +50,16 @@ function initEmployeeAdmin() {
     const personal = visaTypeEl.value === 'personal';
     const visit = visaTypeEl.value === 'visit';
     const pv = personal || visit;
-    if (licenseRow) licenseRow.style.display = pv ? 'none' : '';
+    if (licenseRow) licenseRow.style.display = personal || visit ? 'none' : '';
     if (licenseField) {
-      licenseField.disabled = pv;
-      if (pv) {
+      licenseField.disabled = personal || visit;
+      if (personal || visit) {
         licenseField.value = '';
       }
     }
     if (paymentStatusEl) {
-      paymentStatusEl.disabled = pv;
-      if (pv) {
+      paymentStatusEl.disabled = visit;
+      if (visit) {
         paymentStatusEl.value = 'cash';
       }
     }
