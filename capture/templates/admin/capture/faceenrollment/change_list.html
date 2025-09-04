@@ -2,10 +2,8 @@
 
 {% block object-tools-items %}
 <li>
-    <form action="{% url 'admin:capture_faceenrollment_clear_all_aws_faces' %}" method="post" style="display:inline">
-        {% csrf_token %}
-        <button type="submit" class="button">Clear All Face Enrollments</button>
-    </form>
+    <a href="{% url 'admin:capture_faceenrollment_clear_all_aws_faces' %}"
+       class="button deletelink">Clear All Face Enrollments</a>
 </li>
 <li>
     <a href="{% url 'admin:capture_faceenrollment_generate_links' %}" class="button">

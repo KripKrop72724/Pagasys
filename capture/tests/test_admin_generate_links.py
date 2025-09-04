@@ -8,7 +8,7 @@ from django.utils import timezone
 from django.test import TestCase
 from openpyxl import load_workbook
 
-from capture.models import EnrollmentLink
+from capture.models import EnrollmentLink, FaceEnrollment
 from pagasys.tests.test_models import ModelFactoryMixin
 
 
@@ -83,3 +83,25 @@ class GenerateEnrollmentLinksAdminTests(ModelFactoryMixin, TestCase):
         self.assertEqual(ws["B1"].value, "Enrollment URL")
         self.assertEqual(ws.max_row, 3)
         self.assertTrue(ws["B2"].value.startswith("http"))
+
+    def test_generate_links_skips_enrolled_employees(self):
+        FaceEnrollment.objects.create(
+            employee=self.emp1,
+            collection_id="c",
+            face_ids=["f1"],
+            status="active",
+        )
+        url = reverse("admin:capture_faceenrollment_generate_links")
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(EnrollmentLink.objects.count(), 2)
+        employee_ids = set(EnrollmentLink.objects.values_list("employee", flat=True))
+        self.assertIn(self.admin.id, employee_ids)
+        self.assertIn(self.emp2.id, employee_ids)
+        self.assertNotIn(self.emp1.id, employee_ids)
+
+        wb = load_workbook(io.BytesIO(resp.content))
+        ws = wb["B1"]
+        self.assertEqual(ws.max_row, 2)  # header + one row
+        names = [ws[f"A{row}"].value for row in range(2, ws.max_row + 1)]
+        self.assertNotIn(self.emp1.get_full_name(), names)

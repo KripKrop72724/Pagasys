@@ -121,8 +121,12 @@ def test_admin_clear_all_faces_view(monkeypatch, client, department):
     )
     client.force_login(admin)
     fe = FaceEnrollment.objects.create(employee=admin, collection_id="c", face_ids=["f1"], status="active")
+    resp = client.get(reverse("admin:capture_faceenrollment_clear_all_aws_faces"))
+    assert resp.status_code == 200
     resp = client.post(
-        reverse("admin:capture_faceenrollment_clear_all_aws_faces"), follow=True
+        reverse("admin:capture_faceenrollment_clear_all_aws_faces"),
+        {"confirm": "DELETE"},
+        follow=True,
     )
     assert called.get("called") is True
     assert resp.status_code == 200

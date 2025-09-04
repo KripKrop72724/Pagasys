@@ -1,0 +1,13 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+<h1>Confirm Clear All Face Enrollments</h1>
+<p>This will remove every face enrollment and delete all associated faces from AWS Rekognition. This action cannot be undone.</p>
+<form method="post">
+    {% csrf_token %}
+    <p>Type <strong>DELETE</strong> to confirm:</p>
+    <input type="text" name="confirm" />
+    <button type="submit" class="deletelink">Clear All Face Enrollments</button>
+    <a href=".." class="button cancel-link">Cancel</a>
+</form>
+{% endblock %}

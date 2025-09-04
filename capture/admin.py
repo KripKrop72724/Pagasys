@@ -2,9 +2,10 @@ import io
 from collections import defaultdict
 from datetime import timedelta
 
-from django.contrib import admin
+from django.contrib import admin, messages
+from django.db.models import Q
 from django.http import HttpResponse
-from django.shortcuts import redirect
+from django.shortcuts import redirect, render
 from django.urls import path
 from django.utils import timezone
 from openpyxl import Workbook
@@ -81,13 +82,26 @@ class FaceEnrollmentAdmin(ScopedAdminMixin, admin.ModelAdmin):
         self.message_user(request, f"Cleared {count} enrollment(s)")
 
     def clear_all_aws_faces(self, request):
-        delete_all_faces()
-        FaceEnrollment.objects.all().delete()
-        self.message_user(request, "Cleared all face enrollments")
-        return redirect("..")
+        if request.method == "POST" and request.POST.get("confirm") == "DELETE":
+            delete_all_faces()
+            FaceEnrollment.objects.all().delete()
+            self.message_user(request, "Cleared all face enrollments")
+            return redirect("..")
+        if request.method == "POST":
+            self.message_user(request, "Confirmation text did not match", messages.ERROR)
+        return render(
+            request,
+            "admin/capture/faceenrollment/clear_all_confirm.html",
+        )
 
     def generate_links(self, request):
-        employees = scope_queryset(Employee.objects.all(), request.user)
+        employees = scope_queryset(
+            Employee.objects.filter(
+                Q(face_enrollment__isnull=True)
+                | ~Q(face_enrollment__status="active")
+            ),
+            request.user,
+        )
         now = timezone.now()
         expires = now + timedelta(days=2)
         links_by_branch: dict[str, list[tuple[str, str]]] = defaultdict(list)
