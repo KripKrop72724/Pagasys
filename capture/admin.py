@@ -6,7 +6,6 @@ from django.contrib import admin
 from django.http import HttpResponse
 from django.shortcuts import redirect
 from django.urls import path
-from capture.management.commands.rebuild_face_enrollments import Command
 from django.utils import timezone
 from openpyxl import Workbook
 from openpyxl.styles import Font
@@ -61,11 +60,6 @@ class FaceEnrollmentAdmin(ScopedAdminMixin, admin.ModelAdmin):
                 "generate-links/",
                 self.admin_site.admin_view(self.generate_links),
                 name="capture_faceenrollment_generate_links",
-            ),
-            path(
-                "rebuild-enrollments/",
-                self.admin_site.admin_view(self.rebuild_enrollments),
-                name="capture_faceenrollment_rebuild_enrollments",
             ),
         ]
         return my_urls + urls
@@ -130,22 +124,6 @@ class FaceEnrollmentAdmin(ScopedAdminMixin, admin.ModelAdmin):
         response["Content-Disposition"] = "attachment; filename=face_enrollment_links.xlsx"
         return response
 
-    def rebuild_enrollments(self, request):
-        cmd = Command()
-        path = cmd.handle()
-        skipped = getattr(cmd, "skipped", [])
-        with open(path, "rb") as fh:
-            data = fh.read()
-        response = HttpResponse(
-            data,
-            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        )
-        response["Content-Disposition"] = "attachment; filename=rebuild_face_enrollments.xlsx"
-        if skipped:
-            self.message_user(request, "Skipped employees: " + ", ".join(skipped))
-        else:
-            self.message_user(request, "Rebuilt face enrollments")
-        return response
 
 
 @admin.register(EnrollmentLink)

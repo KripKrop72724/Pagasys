@@ -73,10 +73,8 @@ shift rule `FACE_MIN_CONF` or the default setting
 `FACE_MATCH_DEFAULT_MIN_CONF` (0.90).
 
 The `rebuild_face_enrollments` management command scans S3 for enrollment
-images, reindexes them into Rekognition and writes an Excel report. The Face
-Enrollment admin includes a **Rebuild Face Enrollments** button that runs this
-command and downloads the report, listing any employees with insufficient
-images.
+images, reindexes them into Rekognition and writes an Excel report while
+logging progress and summarizing any employees with insufficient images.
 
 Two primary endpoints power the workflow:
 

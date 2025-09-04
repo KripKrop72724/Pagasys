@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import tempfile
 from typing import Any, Tuple
 
@@ -15,20 +16,28 @@ from capture.aws import (
 from capture.models import FaceEnrollment
 
 
-def rebuild_from_s3() -> Tuple[str, list[str]]:
+def rebuild_from_s3(logger: logging.Logger) -> Tuple[str, list[tuple[str, str]], list[str]]:
     reenrolled: list[tuple[str, str]] = []
     skipped: list[str] = []
 
     for emp in Employee.objects.all():
+        logger.info("Processing %s (ID %s)", emp.get_full_name(), emp.id)
         if emp.company is None:
+            logger.warning("Skipping %s: no company", emp.get_full_name())
+            skipped.append(emp.get_full_name())
             continue
         images = fetch_enroll_images(emp.company.id, emp.id)
+        logger.info("Found %d image(s) for %s", len(images), emp.get_full_name())
         if len(images) < 4:
+            logger.warning(
+                "Skipping %s: only %d image(s)", emp.get_full_name(), len(images)
+            )
             skipped.append(emp.get_full_name())
             continue
         face_ids: list[str] = []
         for img in images:
-            face_ids.extend(index_faces(emp.company.id, emp.id, img))
+            indexed = index_faces(emp.company.id, emp.id, img)
+            face_ids.extend(indexed)
         FaceEnrollment.objects.update_or_create(
             employee=emp,
             defaults={
@@ -39,6 +48,9 @@ def rebuild_from_s3() -> Tuple[str, list[str]]:
         )
         branch_name = emp.branch.name if emp.branch else "Unknown"
         reenrolled.append((branch_name, emp.get_full_name()))
+        logger.info(
+            "Reenrolled %s with %d face(s)", emp.get_full_name(), len(face_ids)
+        )
 
     wb = Workbook()
     ws_re = wb.create_sheet("Reenrolled")
@@ -56,17 +68,31 @@ def rebuild_from_s3() -> Tuple[str, list[str]]:
     tmp = tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False)
     wb.save(tmp.name)
     tmp.close()
-    return tmp.name, skipped
+    logger.info("Report written to %s", tmp.name)
+    return tmp.name, reenrolled, skipped
 
 
 class Command(BaseCommand):
     help = "Rebuild face enrollments from images stored in S3"
 
     def handle(self, *args: Any, **options: Any):
-        path, skipped = rebuild_from_s3()
-        self.skipped = skipped
+        logger = logging.getLogger(__name__)
+        handler = logging.StreamHandler(self.stdout)
+        logger.addHandler(handler)
+        logger.setLevel(logging.INFO)
+        path, reenrolled, skipped = rebuild_from_s3(logger)
+        total = len(reenrolled) + len(skipped)
+        logger.info(
+            "Summary: processed %d employees, reenrolled %d, skipped %d",
+            total,
+            len(reenrolled),
+            len(skipped),
+        )
         if skipped:
-            self.stdout.write("Skipped employees: " + ", ".join(skipped))
+            logger.info("Skipped employees: %s", ", ".join(skipped))
         else:
-            self.stdout.write("Skipped employees: none")
+            logger.info("Skipped employees: none")
+        logger.removeHandler(handler)
+        self.reenrolled = reenrolled
+        self.skipped = skipped
         return path
