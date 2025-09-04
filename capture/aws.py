@@ -166,6 +166,26 @@ def put_enroll_to_s3(company_id: int, employee_id: int, image_bytes: bytes) -> t
     return _put_to_s3(settings.AWS_S3_BUCKET_ENROLL, key, image_bytes)
 
 
+def fetch_enroll_images(company_id: int, employee_id: int) -> list[bytes]:
+    """Return enrollment images for an employee from S3."""
+    if boto3 is None:  # pragma: no cover
+        raise RuntimeError("boto3 is required for S3 operations")
+    s3 = boto3.client("s3")
+    prefix = f"attendance-enroll/{company_id}/{employee_id}/"
+    images: list[bytes] = []
+    paginator = s3.get_paginator("list_objects_v2")
+    for page in paginator.paginate(
+        Bucket=settings.AWS_S3_BUCKET_ENROLL, Prefix=prefix
+    ):
+        for obj in page.get("Contents", []):
+            key = obj["Key"]
+            resp = s3.get_object(
+                Bucket=settings.AWS_S3_BUCKET_ENROLL, Key=key
+            )
+            images.append(resp["Body"].read())
+    return images
+
+
 def _put_to_s3(bucket: str, key: str, image_bytes: bytes) -> tuple[str, str]:
     if boto3 is None:  # pragma: no cover
         raise RuntimeError("boto3 is required for S3 operations")
