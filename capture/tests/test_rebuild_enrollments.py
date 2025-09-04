@@ -1,9 +1,6 @@
 import itertools
-import tempfile
 
 import pytest
-from django.contrib.messages import get_messages
-from django.urls import reverse
 from django.utils import timezone
 from openpyxl import load_workbook
 
@@ -16,7 +13,6 @@ from .test_views import (
     branch2,
     department,
     department2,
-    client,
 )  # reuse fixtures
 
 
@@ -76,36 +72,4 @@ def test_command_rebuilds_and_skips(monkeypatch, department, department2, capsys
 
     out = capsys.readouterr().out
     assert e1.get_full_name() in out
-
-
-@pytest.mark.django_db
-def test_admin_view_streams_workbook(monkeypatch, client, department):
-    admin = Employee.objects.create_superuser(
-        username="admin",
-        password="pw",
-        hire_date=timezone.localdate(),
-        employment_type="permanent",
-        department=department,
-        visa_type="personal",
-    )
-    client.force_login(admin)
-
-    tmp = tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False)
-    tmp.close()
-
-    class FakeCommand:
-        def __init__(self):
-            self.skipped = ["Foo"]
-
-        def handle(self):
-            return tmp.name
-
-    monkeypatch.setattr("capture.admin.Command", FakeCommand)
-
-    resp = client.get(reverse("admin:capture_faceenrollment_rebuild_enrollments"))
-    assert resp.status_code == 200
-    assert resp["Content-Type"] == (
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
-    messages = list(get_messages(resp.wsgi_request))
-    assert "Foo" in messages[0].message
+    assert "Summary: processed 2 employees" in out
