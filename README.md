@@ -413,6 +413,237 @@ for traceability. These records are exposed via `/api/holiday-audit-logs/`,
 which supports filtering by calendar, action and timestamp range with
 custom ordering options.
 
+## Attendance Computation Layer
+
+The computation layer turns raw punches and policy definitions into
+payroll‑ready daily records. It operates on three core models:
+
+* **AttPair** – paired `IN`/`OUT` sessions built from eligible
+  `PunchEvent` records. Pairing enforces geofence, face, and scope
+  requirements and flags anomalies such as missing outs or duplicate ins.
+* **LeaveRequest/LeaveDay** – approved leave is materialised per day so it
+  can be overlaid on attendance without recomputing date ranges.
+* **AttDay** – the canonical, lockable daily outcome containing work
+  minutes, break deductions, overtime buckets, leave portions and
+  anomalies. Payroll and reporting consume this table.
+
+### Flow
+
+1. **Punch capture** – devices submit events to `/api/capture/punch`.
+2. **Pairing** – a signal enqueues `pair_employee_day_task`, which runs
+   `build_pairs_for()` to create `AttPair` rows per employee/day. The
+   pairing worker enforces face/geofence/scope rules, resolves
+   `auto`/`in`/`out` semantics deterministically and records canonical
+   anomalies such as `unpaired_out` or `missing_out_closed_at_next_in`.
+3. **Day compute** – `compute_employee_day_task` blends `AttPair`
+   sessions with rostered shifts, shift rules, leave, and holidays to
+   populate an `AttDay` row. Break rules (`FIXED_BREAK_WINDOW`,
+   `REQUIRED_BREAK_AFTER_CONSECUTIVE`, `MIN_TOTAL_BREAK_PER_DAY`,
+   `PAID_BREAK_WINDOW`) adjust paid/unpaid minutes, Ramadan reductions
+   lower scheduled requirements, overtime minutes are classified with
+   Holiday → Night → Regular precedence and `MAX_DAILY_HOURS` caps spill
+   extra minutes into OT and log `overtime_over_cap` anomalies.
+4. **Adjustments** – approved `AttAdjustment` records apply additive
+   deltas and optional status overrides. Creating a manual `AttPair`
+   (`POST /companies/{cid}/att-pairs/`) or `AttAdjustment`
+   (`POST /companies/{cid}/att-adjustments/`) triggers a recompute for
+   the affected day.
+5. **Payroll** – once validated, days can be locked to prevent further
+   modification. Locked days reject new adjustments and recompute jobs.
+
+### Shift rule resolution
+
+`ShiftRule` rows are filtered per shift and date before computation. The
+helper `active_rules(shift, day)` returns only rules whose date ranges and
+weekday masks include the target day:
+
+```python
+def active_rules(shift, day):
+    if not shift:
+        return []
+    weekday = day.strftime("%a").upper()[:3]
+    return list(
+        ShiftRule.objects
+        .filter(shift=shift)
+        .filter(Q(active_from__isnull=True) | Q(active_from__lte=day))
+        .filter(Q(active_to__isnull=True) | Q(active_to__gte=day))
+        .filter(Q(weekdays="") | Q(weekdays__icontains=weekday))
+    )
+```
+
+Rules are grouped by kind and applied in the order returned, allowing
+seasonal windows (e.g., Ramadan) or weekday‑specific break rules without
+manual toggling.
+
+### Auto punch state machine
+
+The pairing worker treats `auto` events deterministically so repeated
+recomputes always yield the same sessions:
+
+| Sequence | Resulting pairs | Anomalies |
+|----------|-----------------|-----------|
+| `IN → AUTO → OUT` | One pair from the first `IN` to the `AUTO`; trailing `OUT` is ignored | `unpaired_out` |
+| `AUTO → AUTO` | First `AUTO` opens, second closes the session | — |
+| `IN → IN` | Second `IN` closes the first at its timestamp | `missing_out_closed_at_next_in` |
+| `OUT` with no open `IN` | No pair recorded | `unpaired_out` |
+
+Any leftover open `IN` is auto‑closed at the scheduled shift end.
+
+### Break rules
+
+Break processing combines shift templates with rule windows to avoid
+double deductions:
+
+* **`FIXED_BREAK_WINDOW`** – enforce a minimum break inside a specific time
+  range. If an employee works 08:00‑18:00 with a `12:00-13:00`
+  fixed window and only logs a 30‑minute break, `auto_deduct`
+  enforcement subtracts the missing 30 minutes and records
+  `break_auto_deduct_<rule_id>`.
+* **`REQUIRED_BREAK_AFTER_CONSECUTIVE`** – after `N` continuous work
+  minutes, require a break of `M` minutes. Example: a 300‑minute
+  threshold with `M=30` inserts a deduction when an employee works
+  5 straight hours.
+* **`MIN_TOTAL_BREAK_PER_DAY`** – top up total break time at day end. A
+  60‑minute requirement will deduct the shortfall if only 45 minutes
+  were taken.
+* **`PAID_BREAK_WINDOW`** – minutes inside the window count as paid
+  break and do not reduce `work_min`.
+
+#### Configuring rule windows in the admin
+
+All break and night‑OT rules are created via the
+[`ShiftRule` admin](/admin/pagasys/shiftrule/). Example setups:
+
+1. **Fixed break window** – `kind="fixed_break_window"`, `value="12:00-13:00"`,
+   `params={"paid": false, "enforcement": "auto_deduct", "min_minutes": 60}`.
+   Missing minutes are auto‑deducted and logged as
+   `break_auto_deduct_<id>`.
+2. **Required break after consecutive work** –
+   `kind="required_break_after_consecutive"`, `value=300`,
+   `params={"minutes": 30, "paid": false, "enforcement": "auto_deduct"}`.
+   After five hours of continuous work, 30 minutes are deducted.
+3. **Minimum total break per day** –
+   `kind="min_total_break_per_day"`, `value=60`,
+   `params={"paid": false, "enforcement": "auto_deduct"}`.
+   If only 45 minutes are taken, 15 are deducted.
+4. **Paid break window** – `kind="paid_break_window"`,
+   `value="15:00-15:15"`, `params={"enforcement": "warn"}`. Minutes in the
+   window accumulate in `paid_break_min`.
+5. **Night overtime window** – `kind="night_ot_window"`,
+   `value="22:00-06:00"`. Minutes inside are tallied as `ot_night_min`.
+
+### Overtime and reductions
+
+Overtime classification walks the minute timeline with
+Holiday → Night → Regular precedence. A 20:00‑04:00 shift with a
+`22:00-06:00` night window yields 120 night minutes (22:00‑00:00 &
+00:00‑04:00) and the remainder as regular OT. `MAX_DAILY_HOURS`
+spills extra minutes beyond the cap into OT and logs
+`overtime_over_cap`.
+
+Ramadan reductions lower the scheduled requirement before
+late/early/status evaluation. For example, a 540‑minute shift with a
+`RAMADAN_REDUCE_MINUTES=60` rule only requires 480 minutes; arriving 45
+minutes late records `late_min=0`.
+
+### Manual adjustments and anomalies
+
+#### Manual pair creation
+
+Missed punches can be corrected by inserting a manual session:
+
+1. In the [`AttPair` admin](/admin/attendance/attpair/add/), choose the
+   employee and roster **date**, enter `in_ts` and `out_ts` timestamps, and
+   set **source** to "manual". Saving the form queues recomputation for that
+   day.
+2. Via API, send:
+
+```json
+POST /companies/{cid}/att-pairs/
+{
+  "employee": 1,
+  "date": "2024-05-01",
+  "in_ts": "2024-05-01T09:00:00+04:00",
+  "out_ts": "2024-05-01T17:00:00+04:00",
+  "source": "manual"
+}
+```
+
+The response returns the created pair and recomputation updates the
+corresponding `AttDay`.
+
+#### Manual adjustments
+
+`AttAdjustment` records apply additive deltas after computation and may
+override the final status.
+
+1. Visit the [`AttAdjustment` admin](/admin/attendance/attadjustment/add/)
+   and fill the minute deltas plus an optional `override_status` and reason.
+2. Or call `POST /companies/{cid}/att-adjustments/` with a payload such as:
+
+```json
+{
+  "employee": 1,
+  "date": "2024-05-01",
+  "delta_work_min": 15,
+  "reason": "handover"
+}
+```
+
+Saving either form recomputes the day and records a
+`manual_adjustments_applied` anomaly.
+
+The calculator surfaces a canonical anomaly map on `AttDay`. Common
+keys include:
+
+* `face_required_no_match`
+* `geofence_rule_violation`
+* `outside_scope`
+* `unpaired_out`
+* `missing_out_closed_at_next_in`
+* `break_auto_deduct_<rule_id>`
+* `overtime_over_cap`
+* `manual_adjustments_applied`
+
+Use `/companies/{cid}/att-days/` or the
+[`AttDay` admin](/admin/attendance/attday/) to inspect anomalies and
+their impact.
+
+### API Endpoints
+
+All attendance endpoints are documented in the generated Swagger/OpenAPI
+schema and live under the company scope:
+
+* `GET /companies/{cid}/att-pairs/` – list paired sessions.
+* `POST /companies/{cid}/att-pairs/` – create a manual pair (`in_ts` and
+  `out_ts` must be ISO‑8601 timestamps with timezone).
+* `GET /companies/{cid}/att-days/` – list computed daily results with
+  anomaly maps.
+* `POST /companies/{cid}/att-adjustments/` – record manual minute
+  deltas and optional status overrides.
+* `POST /companies/{cid}/att-days/recompute/` – queue recomputation for a
+  date range and optional employees.
+* `POST /companies/{cid}/att-days/lock/` – lock or unlock a range of days
+  to freeze numbers for payroll.
+
+Each endpoint honours the standard scoping rules so users only see data
+within their company or branch.
+
+### Admin Usage
+
+The Django admin exposes dedicated pages for all attendance models:
+
+* [`AttDay` admin](/admin/attendance/attday/) – review computed days and
+  run bulk actions **Queue recompute** (recalculate in the background),
+  **Lock selected** (freeze totals) and **Unlock selected**.
+* [`AttPair` admin](/admin/attendance/attpair/) – inspect individual
+  sessions; manual pairs show `source="manual"`.
+* [`AttAdjustment` admin](/admin/attendance/attadjustment/) – review or
+  edit manual adjustments.
+
+Filters and search fields help administrators quickly locate specific
+employees or dates.
+
 ## Testing & Linting
 
 Run code quality checks with `flake8` and execute the test suite with `pytest`:

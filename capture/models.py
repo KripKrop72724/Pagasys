@@ -303,6 +303,7 @@ class PunchEvent(models.Model):
         indexes = [
             models.Index(fields=["company", "employee", "device_ts"]),
             models.Index(fields=["device", "external_id"]),
+            models.Index(fields=["roster_date"]),
         ]
         constraints = [
             models.UniqueConstraint(

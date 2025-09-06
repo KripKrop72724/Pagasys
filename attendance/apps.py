@@ -1,9 +1,9 @@
 from django.apps import AppConfig
 
 
-class CaptureConfig(AppConfig):
+class AttendanceConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
-    name = "capture"
+    name = "attendance"
 
-    def ready(self):  # pragma: no cover - simple import
+    def ready(self):  # pragma: no cover - import signals
         from . import signals  # noqa: F401
