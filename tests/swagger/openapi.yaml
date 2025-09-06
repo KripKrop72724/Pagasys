@@ -2028,18 +2028,6 @@ paths:
         required: true
       tags:
       - Capture
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/AttendanceDevice'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/AttendanceDevice'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/AttendanceDevice'
-        required: true
       security:
       - jwtAuth: []
       responses:
@@ -3110,7 +3098,10 @@ paths:
   /api/companies/{company_id}/roster/bulk-upsert/:
     post:
       operationId: companies_roster_bulk_upsert_create
-      description: Restrict queryset to the company inferred from URL or request.user.
+      description: Atomically upsert roster entries. Dates coinciding with calendar
+        holidays are automatically flagged with `is_holiday`, and `was_holiday` records
+        that a holiday was scheduled. Include `is_holiday` in an entry to explicitly
+        override the default.
       parameters:
       - in: path
         name: company_id
@@ -3124,13 +3115,25 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PolicyRosterEntry'
+              $ref: '#/components/schemas/RosterBulkUpsertRequest'
+            examples:
+              UpsertExample:
+                value:
+                  entries:
+                  - employee: 1
+                    date: '2024-07-04'
+                    shift: 1
+                  - employee: 1
+                    date: '2024-07-05'
+                    shift: 1
+                    is_holiday: false
+                summary: Upsert example
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/PolicyRosterEntry'
+              $ref: '#/components/schemas/RosterBulkUpsertRequest'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/PolicyRosterEntry'
+              $ref: '#/components/schemas/RosterBulkUpsertRequest'
         required: true
       security:
       - jwtAuth: []
@@ -3139,12 +3142,28 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PolicyRosterEntry'
+                $ref: '#/components/schemas/RosterBulkUpsertResponse'
+              examples:
+                UpsertExample:
+                  value:
+                    entries:
+                    - employee: 1
+                      date: '2024-07-04'
+                      shift: 1
+                    - employee: 1
+                      date: '2024-07-05'
+                      shift: 1
+                      is_holiday: false
+                  summary: Upsert example
           description: ''
   /api/companies/{company_id}/roster/schedule-range/:
     post:
       operationId: companies_roster_schedule_range_create
-      description: Restrict queryset to the company inferred from URL or request.user.
+      description: Create or update consecutive roster entries starting from `start_date`.
+        Provide either `days` (number of days) or `until` (inclusive end date). `rest_weekdays`
+        may list weekday codes such as ['SAT','SUN'] to mark rest days automatically.
+        Entries on calendar holidays are flagged with `is_holiday`, and `was_holiday`
+        records that a holiday was originally scheduled.
       parameters:
       - in: path
         name: company_id
@@ -3158,13 +3177,31 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PolicyRosterEntry'
+              $ref: '#/components/schemas/RosterRange'
+            examples:
+              ByDaysWithWeekendRest:
+                value:
+                  employee: 1
+                  shift: 1
+                  start_date: '2024-07-01'
+                  days: 7
+                  rest_weekdays:
+                  - SAT
+                  - SUN
+                summary: By days with weekend rest
+              UntilDate:
+                value:
+                  employee: 1
+                  shift: 1
+                  start_date: '2024-07-01'
+                  until: '2024-07-31'
+                summary: Until date
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/PolicyRosterEntry'
+              $ref: '#/components/schemas/RosterRange'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/PolicyRosterEntry'
+              $ref: '#/components/schemas/RosterRange'
         required: true
       security:
       - jwtAuth: []
@@ -3173,19 +3210,100 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PolicyRosterEntry'
-          description: ''
+                $ref: '#/components/schemas/RosterRangeResult'
+              examples:
+                ByDaysWithWeekendRest:
+                  value:
+                    employee: 1
+                    shift: 1
+                    start_date: '2024-07-01'
+                    days: 7
+                    rest_weekdays:
+                    - SAT
+                    - SUN
+                  summary: By days with weekend rest
+                UntilDate:
+                  value:
+                    employee: 1
+                    shift: 1
+                    start_date: '2024-07-01'
+                    until: '2024-07-31'
+                  summary: Until date
+                SuccessResponse:
+                  value:
+                    count: 31
+                  summary: Success response
+          description: Count of roster entries created or updated
   /api/companies/{company_id}/roster/summary/:
     get:
-      operationId: companies_roster_summary_retrieve
-      description: Restrict queryset to the company inferred from URL or request.user.
+      operationId: companies_roster_summary_list
+      description: Summarize roster entries grouped by employee, shift, or date.
       parameters:
+      - in: query
+        name: branch
+        schema:
+          type: number
       - in: path
         name: company_id
         schema:
           type: string
           pattern: ^\d+$
         required: true
+      - in: query
+        name: date_from
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: date_to
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: employee
+        schema:
+          type: number
+      - in: query
+        name: group_by
+        schema:
+          type: string
+          enum:
+          - date
+          - employee
+          - shift
+        description: Grouping field
+      - in: query
+        name: is_rest_day
+        schema:
+          type: boolean
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: shift
+        schema:
+          type: number
       tags:
       - companies
       security:
@@ -3195,7 +3313,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PolicyRosterEntry'
+                $ref: '#/components/schemas/PaginatedRosterSummaryList'
           description: ''
   /api/companies/{company_id}/shift-rules/:
     get:
@@ -3439,7 +3557,8 @@ paths:
   /api/companies/{company_id}/shift-rules/validate/:
     post:
       operationId: companies_shift_rules_validate_create
-      description: Restrict queryset to the company inferred from URL or request.user.
+      description: Dry-run a shift rule without saving. Demonstrates boolean flags
+        in params.
       parameters:
       - in: path
         name: company_id
@@ -3454,6 +3573,17 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/PolicyShiftRule'
+            examples:
+              PaidBreakWindow:
+                value:
+                  shift: 1
+                  kind: fixed_break_window
+                  value: 13:00-13:30
+                  params:
+                    paid: true
+                    enforcement: warn
+                    min_minutes: 30
+                summary: Paid break window
           application/x-www-form-urlencoded:
             schema:
               $ref: '#/components/schemas/PolicyShiftRule'
@@ -3468,7 +3598,18 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PolicyShiftRule'
+                $ref: '#/components/schemas/ShiftRuleValidateResponse'
+              examples:
+                PaidBreakWindow:
+                  value:
+                    shift: 1
+                    kind: fixed_break_window
+                    value: 13:00-13:30
+                    params:
+                      paid: true
+                      enforcement: warn
+                      min_minutes: 30
+                  summary: Paid break window
           description: ''
   /api/companies/{company_id}/shift-templates/:
     get:
@@ -3737,25 +3878,97 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PolicyShiftTemplate'
+                $ref: '#/components/schemas/ShiftTemplatePreview'
           description: ''
   /api/companies/{company_id}/shift-templates/{id}/rules/:
     get:
-      operationId: companies_shift_templates_rules_retrieve
+      operationId: companies_shift_templates_rules_list
       description: Restrict queryset to the company inferred from URL or request.user.
       parameters:
+      - in: query
+        name: active_on
+        schema:
+          type: string
+        description: Filter by active_on. Combine multiple parameters for compound
+          filtering.
+        examples:
+          Example:
+            value: <value>
       - in: path
         name: company_id
         schema:
           type: string
           pattern: ^\d+$
         required: true
+      - in: query
+        name: cross_midnight
+        schema:
+          type: boolean
       - in: path
         name: id
         schema:
           type: integer
         description: A unique integer value identifying this shift template.
         required: true
+      - in: query
+        name: kind
+        schema:
+          type: string
+        description: Filter by kind. Combine multiple parameters for compound filtering.
+        examples:
+          Example:
+            value: <value>
+      - in: query
+        name: name
+        schema:
+          type: string
+      - in: query
+        name: ordering
+        schema:
+          type: string
+        description: Comma-separated list of fields to sort by
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: requires_face
+        schema:
+          type: boolean
+      - in: query
+        name: rounding_min
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: shift
+        schema:
+          type: string
+        description: Filter by shift. Combine multiple parameters for compound filtering.
+        examples:
+          Example:
+            value: <value>
+      - in: query
+        name: weekday
+        schema:
+          type: string
+        description: Filter by weekday. Combine multiple parameters for compound filtering.
+        examples:
+          Example:
+            value: <value>
       tags:
       - companies
       security:
@@ -3765,7 +3978,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PolicyShiftTemplate'
+                $ref: '#/components/schemas/PaginatedPolicyShiftRuleList'
           description: ''
   /api/companies/{company_id}/work-calendars/:
     get:
@@ -3992,21 +4205,99 @@ paths:
           description: No response body
   /api/companies/{company_id}/work-calendars/{id}/holidays/:
     get:
-      operationId: companies_work_calendars_holidays_retrieve
+      operationId: companies_work_calendars_holidays_list
       description: Restrict queryset to the company inferred from URL or request.user.
       parameters:
+      - in: query
+        name: calendar
+        schema:
+          type: string
+        description: Filter by calendar. Combine multiple parameters for compound
+          filtering.
+        examples:
+          Example:
+            value: <value>
       - in: path
         name: company_id
         schema:
           type: string
           pattern: ^\d+$
         required: true
+      - in: query
+        name: date_from
+        schema:
+          type: string
+        description: Filter by date_from. Combine multiple parameters for compound
+          filtering.
+        examples:
+          Example:
+            value: <value>
+      - in: query
+        name: date_to
+        schema:
+          type: string
+        description: Filter by date_to. Combine multiple parameters for compound filtering.
+        examples:
+          Example:
+            value: <value>
       - in: path
         name: id
         schema:
           type: integer
         description: A unique integer value identifying this work calendar.
         required: true
+      - in: query
+        name: is_default
+        schema:
+          type: boolean
+      - in: query
+        name: is_public
+        schema:
+          type: boolean
+        description: Filter by is_public. Combine multiple parameters for compound
+          filtering.
+        examples:
+          Example:
+            value: 'true'
+      - in: query
+        name: name
+        schema:
+          type: string
+        description: Filter by name. Combine multiple parameters for compound filtering.
+        examples:
+          Example:
+            value: <value>
+      - in: query
+        name: on_date
+        schema:
+          type: string
+        description: Filter by on_date. Combine multiple parameters for compound filtering.
+        examples:
+          Example:
+            value: <value>
+      - in: query
+        name: ordering
+        schema:
+          type: string
+        description: Comma-separated list of fields to sort by
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
       tags:
       - companies
       security:
@@ -4016,12 +4307,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PolicyWorkCalendar'
+                $ref: '#/components/schemas/PaginatedPolicyHolidayList'
           description: ''
   /api/companies/{company_id}/work-calendars/{id}/holidays/import/:
     post:
       operationId: companies_work_calendars_holidays_import_create
-      description: Restrict queryset to the company inferred from URL or request.user.
+      description: Bulk import holidays. Each item accepts a 'date', 'name' and optional
+        'is_public' boolean flag.
       parameters:
       - in: path
         name: company_id
@@ -4041,13 +4333,26 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PolicyWorkCalendar'
+              type: array
+              items:
+                $ref: '#/components/schemas/HolidayImportRequest'
+            examples:
+              ImportExample:
+                value:
+                - - date: '2024-01-01'
+                    name: New Year
+                    is_public: true
+                summary: Import example
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/PolicyWorkCalendar'
+              type: array
+              items:
+                $ref: '#/components/schemas/HolidayImportRequest'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/PolicyWorkCalendar'
+              type: array
+              items:
+                $ref: '#/components/schemas/HolidayImportRequest'
         required: true
       security:
       - jwtAuth: []
@@ -4056,7 +4361,14 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PolicyWorkCalendar'
+                $ref: '#/components/schemas/HolidayImportResponse'
+              examples:
+                ImportExample:
+                  value:
+                  - date: '2024-01-01'
+                    name: New Year
+                    is_public: true
+                  summary: Import example
           description: ''
   /api/companies/{id}/:
     get:
@@ -7517,7 +7829,22 @@ paths:
   /api/roster-entries/overview/:
     get:
       operationId: roster_entries_overview_retrieve
-      description: CRUD for roster entries
+      description: 'Return a grid of roster entries grouped by employee for a range
+        of dates. Example: `/api/roster-entries/overview/?start=2024-07-01&days=2`.'
+      parameters:
+      - in: query
+        name: days
+        schema:
+          type: integer
+        description: Number of days
+        required: true
+      - in: query
+        name: start
+        schema:
+          type: string
+          format: date
+        description: Start date
+        required: true
       tags:
       - roster-entries
       security:
@@ -7527,7 +7854,27 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RosterEntry'
+                $ref: '#/components/schemas/RosterOverview'
+              examples:
+                OverviewResponse:
+                  value:
+                    start: '2024-07-01'
+                    days: 2
+                    employees:
+                    - id: 1
+                      name: Alice
+                      entries:
+                      - date: '2024-07-01'
+                        shift: 1
+                        is_rest_day: false
+                        is_holiday: false
+                        was_holiday: false
+                      - date: '2024-07-02'
+                        shift: null
+                        is_rest_day: true
+                        is_holiday: false
+                        was_holiday: false
+                  summary: Overview response
           description: ''
   /api/schema/:
     get:
@@ -9670,6 +10017,26 @@ components:
         * `created` - created
         * `updated` - updated
         * `deleted` - deleted
+    HolidayImportRequest:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+        name:
+          type: string
+        is_public:
+          type: boolean
+      required:
+      - date
+      - name
+    HolidayImportResponse:
+      type: object
+      properties:
+        count:
+          type: integer
+      required:
+      - count
     HolidaySerializerBulkCreateResponse:
       type: object
       properties:
@@ -10841,6 +11208,29 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/RosterEntry'
+    PaginatedRosterSummaryList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/RosterSummary'
     PaginatedShiftRuleList:
       type: object
       required:
@@ -12736,6 +13126,40 @@ components:
           type: boolean
       required:
       - queued
+    RestWeekdaysEnum:
+      enum:
+      - MON
+      - TUE
+      - WED
+      - THU
+      - FRI
+      - SAT
+      - SUN
+      type: string
+      description: |-
+        * `MON` - MON
+        * `TUE` - TUE
+        * `WED` - WED
+        * `THU` - THU
+        * `FRI` - FRI
+        * `SAT` - SAT
+        * `SUN` - SUN
+    RosterBulkUpsertRequest:
+      type: object
+      properties:
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/PolicyRosterEntry'
+      required:
+      - entries
+    RosterBulkUpsertResponse:
+      type: object
+      properties:
+        upserted:
+          type: integer
+      required:
+      - upserted
     RosterEntry:
       type: object
       description: Serializer for RosterEntry
@@ -12807,6 +13231,123 @@ components:
       required:
       - errors
       - updated
+    RosterOverview:
+      type: object
+      properties:
+        start:
+          type: string
+          format: date
+        days:
+          type: integer
+        employees:
+          type: array
+          items:
+            $ref: '#/components/schemas/RosterOverviewEmployee'
+      required:
+      - days
+      - employees
+      - start
+    RosterOverviewEmployee:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/RosterOverviewEntry'
+      required:
+      - entries
+      - id
+      - name
+    RosterOverviewEntry:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+        shift:
+          type: integer
+          nullable: true
+        is_rest_day:
+          type: boolean
+        is_holiday:
+          type: boolean
+        was_holiday:
+          type: boolean
+      required:
+      - date
+      - is_holiday
+      - is_rest_day
+      - shift
+      - was_holiday
+    RosterRange:
+      type: object
+      description: Serialize parameters for creating roster entries across a date
+        range.
+      properties:
+        employee:
+          type: integer
+          description: Employee ID to schedule
+        shift:
+          type: integer
+          description: Shift template to assign
+        start_date:
+          type: string
+          format: date
+          description: First day of the range
+        days:
+          type: integer
+          minimum: 1
+          description: Number of days to create starting from start_date
+        until:
+          type: string
+          format: date
+          description: Inclusive end date; alternative to days
+        rest_weekdays:
+          type: array
+          items:
+            $ref: '#/components/schemas/RestWeekdaysEnum'
+          description: Weekday codes to mark as rest days, e.g. ['SAT','SUN']
+      required:
+      - employee
+      - shift
+      - start_date
+    RosterRangeResult:
+      type: object
+      properties:
+        count:
+          type: integer
+      required:
+      - count
+    RosterSummary:
+      type: object
+      properties:
+        employee:
+          type: integer
+        first_name:
+          type: string
+        middle_name:
+          type: string
+        last_name:
+          type: string
+        shift:
+          type: integer
+        shift_name:
+          type: string
+        date:
+          type: string
+          format: date
+        days:
+          type: integer
+        entries:
+          type: integer
+        rest_days:
+          type: integer
+      required:
+      - rest_days
     RotateKeyResponse:
       type: object
       properties:
@@ -12914,6 +13455,15 @@ components:
       required:
       - errors
       - updated
+    ShiftRuleValidateResponse:
+      type: object
+      properties:
+        valid:
+          type: boolean
+        normalized: {}
+      required:
+      - normalized
+      - valid
     ShiftTemplate:
       type: object
       description: Serializer for ShiftTemplate
@@ -12992,6 +13542,28 @@ components:
       - id
       - name
       - start_time
+    ShiftTemplatePreview:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        duration_min:
+          type: integer
+        unpaid_break_min:
+          type: integer
+        rounded_increment_min:
+          type: integer
+        cross_midnight:
+          type: boolean
+      required:
+      - cross_midnight
+      - duration_min
+      - id
+      - name
+      - rounded_increment_min
+      - unpaid_break_min
     ShiftTemplateSerializerBulkCreateResponse:
       type: object
       properties:

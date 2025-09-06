@@ -1,4 +1,4 @@
-from rest_framework import generics, status, viewsets, serializers
+from rest_framework import generics, status, viewsets
 from datetime import date, timedelta
 
 from rest_framework.permissions import IsAuthenticated, DjangoModelPermissions
@@ -11,7 +11,6 @@ from drf_spectacular.utils import (
     extend_schema_view,
     OpenApiParameter,
     OpenApiTypes,
-    inline_serializer,
     OpenApiExample,
 )
 from django_filters.rest_framework import DjangoFilterBackend
@@ -58,6 +57,7 @@ from .serializers import (
     bulk_create_response_serializer,
     bulk_update_response_serializer,
     bulk_delete_response_serializer,
+    RosterOverviewSerializer,
 )
 from .openapi_utils import document_filters, _generate_parameters
 
@@ -781,7 +781,6 @@ class RosterEntryViewSet(BulkCreateMixin, BulkUpdateMixin, BulkDeleteMixin, view
         qs = super().get_queryset()
         return scope_queryset(qs, self.request.user)
 
-    @action(detail=False, methods=["get"], url_path="overview")
     @extend_schema(
         description=(
             "Return a grid of roster entries grouped by employee for a range of dates. "
@@ -791,36 +790,7 @@ class RosterEntryViewSet(BulkCreateMixin, BulkUpdateMixin, BulkDeleteMixin, view
             OpenApiParameter("start", OpenApiTypes.DATE, description="Start date", required=True),
             OpenApiParameter("days", OpenApiTypes.INT, description="Number of days", required=True),
         ],
-        responses={
-            200: inline_serializer(
-                name="RosterOverview",
-                fields={
-                    "start": serializers.DateField(),
-                    "days": serializers.IntegerField(),
-                    "employees": serializers.ListField(
-                        child=inline_serializer(
-                            name="RosterOverviewEmployee",
-                            fields={
-                                "id": serializers.IntegerField(),
-                                "name": serializers.CharField(),
-                                "entries": serializers.ListField(
-                                    child=inline_serializer(
-                                        name="RosterOverviewEntry",
-                                        fields={
-                                            "date": serializers.DateField(),
-                                            "shift": serializers.IntegerField(allow_null=True),
-                                            "is_rest_day": serializers.BooleanField(),
-                                            "is_holiday": serializers.BooleanField(),
-                                            "was_holiday": serializers.BooleanField(),
-                                        },
-                                    )
-                                ),
-                            },
-                        )
-                    ),
-                },
-            )
-        },
+        responses=RosterOverviewSerializer,
         examples=[
             OpenApiExample(
                 "Overview response",
@@ -854,6 +824,7 @@ class RosterEntryViewSet(BulkCreateMixin, BulkUpdateMixin, BulkDeleteMixin, view
             )
         ],
     )
+    @action(detail=False, methods=["get"], url_path="overview")
     def overview(self, request):
         start_param = request.query_params.get("start")
         days_param = request.query_params.get("days")
