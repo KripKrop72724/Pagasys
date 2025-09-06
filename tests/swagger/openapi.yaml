@@ -1234,8 +1234,9 @@ paths:
   /api/companies/{company_id}/att-days/recompute/:
     post:
       operationId: companies_att_days_recompute_create
-      description: Queue recomputation for a date range and optional employees. Dates
-        must be supplied in YYYY-MM-DD and interpreted in the company's timezone.
+      description: Queue recomputation for a date range and optional employees. Range
+        limited to 31 days and 50 employees. Dates must be supplied in YYYY-MM-DD
+        and interpreted in the company's timezone.
       parameters:
       - in: path
         name: company_id
@@ -1733,6 +1734,41 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/companies/{company_id}/att-pairs/rebuild/:
+    post:
+      operationId: companies_att_pairs_rebuild_create
+      description: Rebuild pairs and recompute days for a date range. Range limited
+        to 31 days and 50 employees.
+      parameters:
+      - in: path
+        name: company_id
+        schema:
+          type: string
+          pattern: ^\d+$
+        required: true
+      tags:
+      - Attendance
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecomputeRange'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RecomputeRange'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RecomputeRange'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RebuildResponse'
+          description: Tasks queued
   /api/companies/{company_id}/devices/:
     get:
       operationId: companies_devices_list
@@ -12666,6 +12702,13 @@ components:
       - out_of_scope
       - requires_face
       - roster_fallback
+    RebuildResponse:
+      type: object
+      properties:
+        queued:
+          type: integer
+      required:
+      - queued
     RecomputeRange:
       type: object
       description: Serializer for recompute and lock actions.
