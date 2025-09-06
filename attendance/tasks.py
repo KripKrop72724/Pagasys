@@ -1,5 +1,6 @@
 from celery import shared_task
 from datetime import date, timedelta
+from django.utils.timezone import localdate
 
 from .services import build_pairs_for, compute_att_day
 
@@ -34,7 +35,7 @@ def recompute_range_task(employee_ids: list, start_iso: str, end_iso: str):
 def recompute_yesterday_task():
     from pagasys.models import Employee
 
-    yesterday = date.today() - timedelta(days=1)
+    yesterday = localdate() - timedelta(days=1)
     eids = list(
         Employee.objects.filter(is_active=True).values_list("id", flat=True)
     )
