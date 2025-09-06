@@ -258,8 +258,9 @@ GET /api/roster-entries/overview/?start=2024-07-01&days=7
 ### Policy layer
 
 Endpoints under `/api/companies/<company_id>/` expose a
-fully‑scoped attendance policy API. Each resource supports pagination,
-ordering and the filters shown below:
+fully‑scoped attendance policy API. Each resource supports pagination
+with the `page` and `page_size` query parameters (default page size is 100 and
+may be increased up to 1000), ordering and the filters shown below:
 
 | Resource | Path | Filters |
 | --- | --- | --- |
