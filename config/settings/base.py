@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 from pathlib import Path
 from datetime import timedelta
+from celery.schedules import crontab
 import os
 import environ
 import dj_database_url
@@ -88,6 +89,7 @@ INSTALLED_APPS = [
     "drf_spectacular",
     "pagasys",
     "capture",
+    "attendance",
     "django_ratelimit",
 ]
 
@@ -295,6 +297,13 @@ CELERY_BROKER_URL = env('CELERY_BROKER_URL', default='redis://redis:6379/0')
 CELERY_RESULT_BACKEND = env('CELERY_RESULT_BACKEND', default=CELERY_BROKER_URL)
 CELERY_TASK_ALWAYS_EAGER = env.bool('CELERY_TASK_ALWAYS_EAGER', default=False)
 CELERY_TASK_EAGER_PROPAGATES = env.bool('CELERY_TASK_EAGER_PROPAGATES', default=True)
+
+CELERY_BEAT_SCHEDULE = {
+    "attendance-nightly-recompute": {
+        "task": "attendance.tasks.recompute_yesterday_task",
+        "schedule": crontab(hour=2, minute=0),
+    }
+}
 
 SILENCED_SYSTEM_CHECKS = [
     "security.W019",

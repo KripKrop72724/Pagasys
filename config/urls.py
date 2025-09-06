@@ -27,6 +27,7 @@ urlpatterns = [
     path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
     path('api/', include('pagasys.urls')),
     path('api/', include('capture.urls')),
+    path('api/', include('attendance.urls')),
     path('healthz/', healthz),
     path('', healthz),
 ]

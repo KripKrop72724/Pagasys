@@ -1,0 +1,45 @@
+from celery import shared_task
+from datetime import date, timedelta
+
+from .services import build_pairs_for, compute_att_day
+
+
+@shared_task(queue="compute")
+def pair_employee_day_task(employee_id: int, day_iso: str):
+    d = date.fromisoformat(day_iso)
+    return build_pairs_for(employee_id, d)
+
+
+@shared_task(queue="compute")
+def compute_employee_day_task(employee_id: int, day_iso: str):
+    d = date.fromisoformat(day_iso)
+    return compute_att_day(employee_id, d)
+
+
+@shared_task(queue="compute")
+def recompute_range_task(employee_ids: list, start_iso: str, end_iso: str):
+    s = date.fromisoformat(start_iso)
+    e = date.fromisoformat(end_iso)
+    cur = s
+    total = 0
+    while cur <= e:
+        for eid in employee_ids:
+            build_pairs_for(eid, cur)
+            total += compute_att_day(eid, cur)
+        cur += timedelta(days=1)
+    return total
+
+
+@shared_task(queue="compute")
+def recompute_yesterday_task():
+    from pagasys.models import Employee
+
+    yesterday = date.today() - timedelta(days=1)
+    eids = list(
+        Employee.objects.filter(is_active=True).values_list("id", flat=True)
+    )
+    if not eids:
+        return 0
+    return recompute_range_task(
+        eids, yesterday.isoformat(), yesterday.isoformat()
+    )

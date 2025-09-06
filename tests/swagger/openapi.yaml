@@ -711,6 +711,992 @@ paths:
               schema:
                 $ref: '#/components/schemas/Company'
           description: ''
+  /api/companies/{company_id}/att-adjustments/:
+    get:
+      operationId: companies_att_adjustments_list
+      description: 'Compound filtering is supported. Example: ?employee=<value>&date=<value>'
+      parameters:
+      - in: path
+        name: company_id
+        schema:
+          type: string
+          pattern: ^\d+$
+        required: true
+      - in: query
+        name: date
+        schema:
+          type: string
+        description: Filter by date. Combine multiple parameters for compound filtering.
+        examples:
+          Example:
+            value: <value>
+      - in: query
+        name: employee
+        schema:
+          type: string
+        description: Filter by employee. Combine multiple parameters for compound
+          filtering.
+        examples:
+          Example:
+            value: <value>
+      - in: query
+        name: ordering
+        schema:
+          type: string
+        description: Comma-separated list of fields to sort by
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      tags:
+      - Attendance
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedAttAdjustmentList'
+              examples:
+                Add30MinutesPaidBreakAndOverrideStatus:
+                  value:
+                    count: 123
+                    next: http://api.example.org/accounts/?page=4
+                    previous: http://api.example.org/accounts/?page=2
+                    results:
+                    - employee: 1
+                      date: '2024-01-03'
+                      delta_paid_break_min: 30
+                      override_status: present
+                      reason: Manager approved paid break
+                  summary: Add 30 minutes paid break and override status
+          description: ''
+    post:
+      operationId: companies_att_adjustments_create
+      description: Create a manual attendance adjustment.
+      parameters:
+      - in: path
+        name: company_id
+        schema:
+          type: string
+          pattern: ^\d+$
+        required: true
+      tags:
+      - Attendance
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttAdjustment'
+            examples:
+              Request:
+                value:
+                  employee: 1
+                  date: '2024-01-05'
+                  delta_ot_regular_min: -30
+                  override_status: present
+                  reason: Reduce overtime by 30 minutes
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AttAdjustment'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AttAdjustment'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttAdjustment'
+              examples:
+                Response:
+                  value:
+                    id: 1
+                    employee: 1
+                    date: '2024-01-05'
+                    delta_ot_regular_min: -30
+                    override_status: present
+                    reason: Reduce overtime by 30 minutes
+                    created_by_id: 99
+                    created_at: '2024-01-06T09:00:00Z'
+          description: ''
+  /api/companies/{company_id}/att-adjustments/{id}/:
+    get:
+      operationId: companies_att_adjustments_retrieve
+      description: Retrieve a manual attendance adjustment.
+      parameters:
+      - in: path
+        name: company_id
+        schema:
+          type: string
+          pattern: ^\d+$
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this att adjustment.
+        required: true
+      tags:
+      - Attendance
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttAdjustment'
+              examples:
+                Add30MinutesPaidBreakAndOverrideStatus:
+                  value:
+                    employee: 1
+                    date: '2024-01-03'
+                    delta_paid_break_min: 30
+                    override_status: present
+                    reason: Manager approved paid break
+                  summary: Add 30 minutes paid break and override status
+          description: ''
+    put:
+      operationId: companies_att_adjustments_update
+      description: Review and manage manual attendance adjustments.
+      parameters:
+      - in: path
+        name: company_id
+        schema:
+          type: string
+          pattern: ^\d+$
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this att adjustment.
+        required: true
+      tags:
+      - Attendance
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttAdjustment'
+            examples:
+              Add30MinutesPaidBreakAndOverrideStatus:
+                value:
+                  employee: 1
+                  date: '2024-01-03'
+                  delta_paid_break_min: 30
+                  override_status: present
+                  reason: Manager approved paid break
+                summary: Add 30 minutes paid break and override status
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AttAdjustment'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AttAdjustment'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttAdjustment'
+              examples:
+                Add30MinutesPaidBreakAndOverrideStatus:
+                  value:
+                    employee: 1
+                    date: '2024-01-03'
+                    delta_paid_break_min: 30
+                    override_status: present
+                    reason: Manager approved paid break
+                  summary: Add 30 minutes paid break and override status
+          description: ''
+    patch:
+      operationId: companies_att_adjustments_partial_update
+      description: Review and manage manual attendance adjustments.
+      parameters:
+      - in: path
+        name: company_id
+        schema:
+          type: string
+          pattern: ^\d+$
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this att adjustment.
+        required: true
+      tags:
+      - Attendance
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedAttAdjustment'
+            examples:
+              Add30MinutesPaidBreakAndOverrideStatus:
+                value:
+                  employee: 1
+                  date: '2024-01-03'
+                  delta_paid_break_min: 30
+                  override_status: present
+                  reason: Manager approved paid break
+                summary: Add 30 minutes paid break and override status
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedAttAdjustment'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedAttAdjustment'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttAdjustment'
+              examples:
+                Add30MinutesPaidBreakAndOverrideStatus:
+                  value:
+                    employee: 1
+                    date: '2024-01-03'
+                    delta_paid_break_min: 30
+                    override_status: present
+                    reason: Manager approved paid break
+                  summary: Add 30 minutes paid break and override status
+          description: ''
+    delete:
+      operationId: companies_att_adjustments_destroy
+      description: Review and manage manual attendance adjustments.
+      parameters:
+      - in: path
+        name: company_id
+        schema:
+          type: string
+          pattern: ^\d+$
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this att adjustment.
+        required: true
+      tags:
+      - Attendance
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/companies/{company_id}/att-days/:
+    get:
+      operationId: companies_att_days_list
+      description: 'Compound filtering is supported. Example: ?employee=<value>&date=<value>'
+      parameters:
+      - in: path
+        name: company_id
+        schema:
+          type: string
+          pattern: ^\d+$
+        required: true
+      - in: query
+        name: date
+        schema:
+          type: string
+        description: Filter by date. Combine multiple parameters for compound filtering.
+        examples:
+          Example:
+            value: <value>
+      - in: query
+        name: employee
+        schema:
+          type: string
+        description: Filter by employee. Combine multiple parameters for compound
+          filtering.
+        examples:
+          Example:
+            value: <value>
+      - in: query
+        name: is_holiday
+        schema:
+          type: string
+        description: Filter by is_holiday. Combine multiple parameters for compound
+          filtering.
+        examples:
+          Example:
+            value: <value>
+      - in: query
+        name: is_rest_day
+        schema:
+          type: string
+        description: Filter by is_rest_day. Combine multiple parameters for compound
+          filtering.
+        examples:
+          Example:
+            value: <value>
+      - in: query
+        name: locked
+        schema:
+          type: string
+        description: Filter by locked. Combine multiple parameters for compound filtering.
+        examples:
+          Example:
+            value: <value>
+      - in: query
+        name: ordering
+        schema:
+          type: string
+        description: Comma-separated list of fields to sort by
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - in: query
+        name: status
+        schema:
+          type: string
+        description: Filter by status. Combine multiple parameters for compound filtering.
+        examples:
+          Example:
+            value: <value>
+      tags:
+      - Attendance
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedAttDayList'
+              examples:
+                IN-AUTO-OUTResponse:
+                  value:
+                    count: 123
+                    next: http://api.example.org/accounts/?page=4
+                    previous: http://api.example.org/accounts/?page=2
+                    results:
+                    - - id: 1
+                        employee: 1
+                        date: '2024-01-01'
+                        work_min: 480
+                        anomalies: {}
+                  summary: IN-AUTO-OUT response
+                DuplicateINResponse:
+                  value:
+                    count: 123
+                    next: http://api.example.org/accounts/?page=4
+                    previous: http://api.example.org/accounts/?page=2
+                    results:
+                    - - id: 2
+                        employee: 1
+                        date: '2024-01-02'
+                        work_min: 60
+                        anomalies:
+                          missing_out_closed_at_next_in: 1
+                  summary: Duplicate IN response
+          description: ''
+  /api/companies/{company_id}/att-days/{id}/:
+    get:
+      operationId: companies_att_days_retrieve
+      description: Retrieve a single computed attendance day.
+      parameters:
+      - in: path
+        name: company_id
+        schema:
+          type: string
+          pattern: ^\d+$
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this att day.
+        required: true
+      tags:
+      - Attendance
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttDay'
+              examples:
+                DayWithAnomalies:
+                  value:
+                    id: 1
+                    employee: 1
+                    date: '2024-01-02'
+                    work_min: 450
+                    anomalies:
+                      unpaired_out: 1
+                      face_required_no_match: 2
+                  summary: Day with anomalies
+          description: ''
+  /api/companies/{company_id}/att-days/lock/:
+    post:
+      operationId: companies_att_days_lock_create
+      description: Lock or unlock attendance days within a date range. Dates are expected
+        in YYYY-MM-DD and evaluated in the company timezone.
+      parameters:
+      - in: path
+        name: company_id
+        schema:
+          type: string
+          pattern: ^\d+$
+        required: true
+      tags:
+      - Attendance
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LockDays'
+            examples:
+              LockDays:
+                value:
+                  employee_ids:
+                  - 1
+                  start: '2024-01-01'
+                  end: '2024-01-07'
+                  locked: true
+                summary: Lock days
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LockDays'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/LockDays'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LockResponse'
+              examples:
+                LockDays:
+                  value:
+                    employee_ids:
+                    - 1
+                    start: '2024-01-01'
+                    end: '2024-01-07'
+                    locked: true
+                  summary: Lock days
+          description: Count of records updated
+  /api/companies/{company_id}/att-days/recompute/:
+    post:
+      operationId: companies_att_days_recompute_create
+      description: Queue recomputation for a date range and optional employees. Dates
+        must be supplied in YYYY-MM-DD and interpreted in the company's timezone.
+      parameters:
+      - in: path
+        name: company_id
+        schema:
+          type: string
+          pattern: ^\d+$
+        required: true
+      tags:
+      - Attendance
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecomputeRange'
+            examples:
+              RecomputeRange:
+                value:
+                  employee_ids:
+                  - 1
+                  - 2
+                  start: '2024-01-01'
+                  end: '2024-01-07'
+                summary: Recompute range
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RecomputeRange'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RecomputeRange'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecomputeResponse'
+              examples:
+                RecomputeRange:
+                  value:
+                    employee_ids:
+                    - 1
+                    - 2
+                    start: '2024-01-01'
+                    end: '2024-01-07'
+                  summary: Recompute range
+          description: Recompute task queued
+  /api/companies/{company_id}/att-pairs/:
+    get:
+      operationId: companies_att_pairs_list
+      description: 'Compound filtering is supported. Example: ?employee=<value>&date=<value>'
+      parameters:
+      - in: path
+        name: company_id
+        schema:
+          type: string
+          pattern: ^\d+$
+        required: true
+      - in: query
+        name: date
+        schema:
+          type: string
+        description: Filter by date. Combine multiple parameters for compound filtering.
+        examples:
+          Example:
+            value: <value>
+      - in: query
+        name: employee
+        schema:
+          type: string
+        description: Filter by employee. Combine multiple parameters for compound
+          filtering.
+        examples:
+          Example:
+            value: <value>
+      - in: query
+        name: ordering
+        schema:
+          type: string
+        description: Comma-separated list of fields to sort by
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - in: query
+        name: source
+        schema:
+          type: string
+        description: Filter by source. Combine multiple parameters for compound filtering.
+        examples:
+          Example:
+            value: <value>
+      tags:
+      - Attendance
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedAttPairList'
+              examples:
+                IN-AUTO-OUTPair:
+                  value:
+                    count: 123
+                    next: http://api.example.org/accounts/?page=4
+                    previous: http://api.example.org/accounts/?page=2
+                    results:
+                    - id: 1
+                      employee: 1
+                      date: '2024-01-01'
+                      in_event_id: 10
+                      out_event_id: 11
+                      in_ts: '2024-01-01T08:00:00+04:00'
+                      out_ts: '2024-01-01T17:00:00+04:00'
+                      duration_min: 540
+                      cross_midnight: false
+                      source: auto
+                      anomaly: {}
+                  summary: IN-AUTO-OUT pair
+                DuplicateINClosesPriorSession:
+                  value:
+                    count: 123
+                    next: http://api.example.org/accounts/?page=4
+                    previous: http://api.example.org/accounts/?page=2
+                    results:
+                    - id: 2
+                      employee: 1
+                      date: '2024-01-02'
+                      in_event_id: 12
+                      out_event_id: null
+                      in_ts: '2024-01-02T08:00:00+04:00'
+                      out_ts: '2024-01-02T08:30:00+04:00'
+                      duration_min: 30
+                      cross_midnight: false
+                      source: auto
+                      anomaly:
+                        missing_out_closed_at_next_in: true
+                  summary: Duplicate IN closes prior session
+          description: ''
+    post:
+      operationId: companies_att_pairs_create
+      description: Create a manual attendance pair and recompute the day. `in_ts`
+        and `out_ts` must be full ISO-8601 timestamps including timezone offsets.
+      parameters:
+      - in: path
+        name: company_id
+        schema:
+          type: string
+          pattern: ^\d+$
+        required: true
+      tags:
+      - Attendance
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ManualAttPair'
+            examples:
+              ManualPairRequest:
+                value:
+                  employee: 1
+                  date: '2024-01-01'
+                  in_ts: '2024-01-01T08:00:00+04:00'
+                  out_ts: '2024-01-01T17:00:00+04:00'
+                summary: Manual pair request
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ManualAttPair'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ManualAttPair'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttPair'
+              examples:
+                ManualPairRequest:
+                  value:
+                    employee: 1
+                    date: '2024-01-01'
+                    in_ts: '2024-01-01T08:00:00+04:00'
+                    out_ts: '2024-01-01T17:00:00+04:00'
+                  summary: Manual pair request
+                ManualPairResponse:
+                  value:
+                    id: 99
+                    employee: 1
+                    date: '2024-01-01'
+                    in_event_id: -1
+                    out_event_id: null
+                    in_ts: '2024-01-01T08:00:00+04:00'
+                    out_ts: '2024-01-01T17:00:00+04:00'
+                    duration_min: 540
+                    cross_midnight: false
+                    source: manual
+                    anomaly: {}
+                  summary: Manual pair response
+          description: ''
+  /api/companies/{company_id}/att-pairs/{id}/:
+    get:
+      operationId: companies_att_pairs_retrieve
+      description: Retrieve a specific paired session and its anomalies.
+      parameters:
+      - in: path
+        name: company_id
+        schema:
+          type: string
+          pattern: ^\d+$
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this att pair.
+        required: true
+      tags:
+      - Attendance
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttPair'
+              examples:
+                IN-AUTO-OUTPair:
+                  value:
+                    id: 1
+                    employee: 1
+                    date: '2024-01-01'
+                    in_event_id: 10
+                    out_event_id: 11
+                    in_ts: '2024-01-01T08:00:00+04:00'
+                    out_ts: '2024-01-01T17:00:00+04:00'
+                    duration_min: 540
+                    cross_midnight: false
+                    source: auto
+                    anomaly: {}
+                  summary: IN-AUTO-OUT pair
+                DuplicateINClosesPriorSession:
+                  value:
+                    id: 2
+                    employee: 1
+                    date: '2024-01-02'
+                    in_event_id: 12
+                    out_event_id: null
+                    in_ts: '2024-01-02T08:00:00+04:00'
+                    out_ts: '2024-01-02T08:30:00+04:00'
+                    duration_min: 30
+                    cross_midnight: false
+                    source: auto
+                    anomaly:
+                      missing_out_closed_at_next_in: true
+                  summary: Duplicate IN closes prior session
+          description: ''
+    put:
+      operationId: companies_att_pairs_update
+      description: Review and manage paired punch sessions used for computation. 'auto'
+        punches toggle sessions, and anomalies such as 'missing_out_closed_at_next_in'
+        indicate irregular sequences.
+      parameters:
+      - in: path
+        name: company_id
+        schema:
+          type: string
+          pattern: ^\d+$
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this att pair.
+        required: true
+      tags:
+      - Attendance
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttPair'
+            examples:
+              IN-AUTO-OUTPair:
+                value:
+                  id: 1
+                  employee: 1
+                  date: '2024-01-01'
+                  in_event_id: 10
+                  out_event_id: 11
+                  in_ts: '2024-01-01T08:00:00+04:00'
+                  out_ts: '2024-01-01T17:00:00+04:00'
+                  duration_min: 540
+                  cross_midnight: false
+                  source: auto
+                  anomaly: {}
+                summary: IN-AUTO-OUT pair
+              DuplicateINClosesPriorSession:
+                value:
+                  id: 2
+                  employee: 1
+                  date: '2024-01-02'
+                  in_event_id: 12
+                  out_event_id: null
+                  in_ts: '2024-01-02T08:00:00+04:00'
+                  out_ts: '2024-01-02T08:30:00+04:00'
+                  duration_min: 30
+                  cross_midnight: false
+                  source: auto
+                  anomaly:
+                    missing_out_closed_at_next_in: true
+                summary: Duplicate IN closes prior session
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AttPair'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AttPair'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttPair'
+              examples:
+                IN-AUTO-OUTPair:
+                  value:
+                    id: 1
+                    employee: 1
+                    date: '2024-01-01'
+                    in_event_id: 10
+                    out_event_id: 11
+                    in_ts: '2024-01-01T08:00:00+04:00'
+                    out_ts: '2024-01-01T17:00:00+04:00'
+                    duration_min: 540
+                    cross_midnight: false
+                    source: auto
+                    anomaly: {}
+                  summary: IN-AUTO-OUT pair
+                DuplicateINClosesPriorSession:
+                  value:
+                    id: 2
+                    employee: 1
+                    date: '2024-01-02'
+                    in_event_id: 12
+                    out_event_id: null
+                    in_ts: '2024-01-02T08:00:00+04:00'
+                    out_ts: '2024-01-02T08:30:00+04:00'
+                    duration_min: 30
+                    cross_midnight: false
+                    source: auto
+                    anomaly:
+                      missing_out_closed_at_next_in: true
+                  summary: Duplicate IN closes prior session
+          description: ''
+    patch:
+      operationId: companies_att_pairs_partial_update
+      description: Review and manage paired punch sessions used for computation. 'auto'
+        punches toggle sessions, and anomalies such as 'missing_out_closed_at_next_in'
+        indicate irregular sequences.
+      parameters:
+      - in: path
+        name: company_id
+        schema:
+          type: string
+          pattern: ^\d+$
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this att pair.
+        required: true
+      tags:
+      - Attendance
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedAttPair'
+            examples:
+              IN-AUTO-OUTPair:
+                value:
+                  id: 1
+                  employee: 1
+                  date: '2024-01-01'
+                  in_event_id: 10
+                  out_event_id: 11
+                  in_ts: '2024-01-01T08:00:00+04:00'
+                  out_ts: '2024-01-01T17:00:00+04:00'
+                  duration_min: 540
+                  cross_midnight: false
+                  source: auto
+                  anomaly: {}
+                summary: IN-AUTO-OUT pair
+              DuplicateINClosesPriorSession:
+                value:
+                  id: 2
+                  employee: 1
+                  date: '2024-01-02'
+                  in_event_id: 12
+                  out_event_id: null
+                  in_ts: '2024-01-02T08:00:00+04:00'
+                  out_ts: '2024-01-02T08:30:00+04:00'
+                  duration_min: 30
+                  cross_midnight: false
+                  source: auto
+                  anomaly:
+                    missing_out_closed_at_next_in: true
+                summary: Duplicate IN closes prior session
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedAttPair'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedAttPair'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttPair'
+              examples:
+                IN-AUTO-OUTPair:
+                  value:
+                    id: 1
+                    employee: 1
+                    date: '2024-01-01'
+                    in_event_id: 10
+                    out_event_id: 11
+                    in_ts: '2024-01-01T08:00:00+04:00'
+                    out_ts: '2024-01-01T17:00:00+04:00'
+                    duration_min: 540
+                    cross_midnight: false
+                    source: auto
+                    anomaly: {}
+                  summary: IN-AUTO-OUT pair
+                DuplicateINClosesPriorSession:
+                  value:
+                    id: 2
+                    employee: 1
+                    date: '2024-01-02'
+                    in_event_id: 12
+                    out_event_id: null
+                    in_ts: '2024-01-02T08:00:00+04:00'
+                    out_ts: '2024-01-02T08:30:00+04:00'
+                    duration_min: 30
+                    cross_midnight: false
+                    source: auto
+                    anomaly:
+                      missing_out_closed_at_next_in: true
+                  summary: Duplicate IN closes prior session
+          description: ''
+    delete:
+      operationId: companies_att_pairs_destroy
+      description: Review and manage paired punch sessions used for computation. 'auto'
+        punches toggle sessions, and anomalies such as 'missing_out_closed_at_next_in'
+        indicate irregular sequences.
+      parameters:
+      - in: path
+        name: company_id
+        schema:
+          type: string
+          pattern: ^\d+$
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this att pair.
+        required: true
+      tags:
+      - Attendance
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
   /api/companies/{company_id}/devices/:
     get:
       operationId: companies_devices_list
@@ -7237,6 +8223,316 @@ components:
         * `in` - in
         * `out` - out
         * `auto` - auto
+    AttAdjustment:
+      type: object
+      description: |-
+        Manual, additive deltas applied after computation. Negative values reduce
+        totals. Set `override_status` to replace the computed AttDay.status.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        employee:
+          type: integer
+          description: Employee ID
+        date:
+          type: string
+          format: date
+          description: Roster date the adjustment applies to
+        delta_work_min:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+          description: Additive minutes applied to work_min
+        delta_unpaid_break_min:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+          description: Additive minutes applied to unpaid_break_min
+        delta_paid_break_min:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+          description: Additive minutes applied to paid_break_min
+        delta_ot_regular_min:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+          description: Additive minutes applied to ot_regular_min
+        delta_ot_night_min:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+          description: Additive minutes applied to ot_night_min
+        delta_ot_holiday_min:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+          description: Additive minutes applied to ot_holiday_min
+        override_status:
+          type: string
+          description: Override computed status (e.g. 'present')
+          maxLength: 16
+        reason:
+          type: string
+          description: Human-readable reason for the adjustment
+          maxLength: 255
+        created_by_id:
+          type: integer
+          readOnly: true
+          description: Identifier of the user who created the adjustment
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - created_by_id
+      - date
+      - employee
+      - id
+      - reason
+    AttDay:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        anomalies:
+          type: object
+          additionalProperties:
+            type: integer
+          readOnly: true
+          description: Counts keyed by canonical anomaly names (e.g. unpaired_out,
+            missing_out_closed_at_next_in, missing_out, auto_closed, capped, face_required_no_match,
+            geofence_rule_violation, outside_scope, overtime_over_cap, break_auto_deduct_*,
+            manual_adjustments_applied). Keys like 'break_auto_deduct_<rule_id>' use
+            a rule-specific suffix.
+        date:
+          type: string
+          format: date
+          readOnly: true
+        work_min:
+          type: integer
+          readOnly: true
+          description: Net work minutes after unpaid breaks and deductions
+        unpaid_break_min:
+          type: integer
+          readOnly: true
+          description: Total unpaid break minutes deducted from work_min
+        paid_break_min:
+          type: integer
+          readOnly: true
+          description: Paid break minutes that do not reduce work_min
+        late_min:
+          type: integer
+          readOnly: true
+          description: Minutes late beyond shift start after grace
+        early_leave_min:
+          type: integer
+          readOnly: true
+          description: Minutes left early before shift end after grace
+        ot_regular_min:
+          type: integer
+          readOnly: true
+          description: Overtime minutes outside night/holiday buckets
+        ot_night_min:
+          type: integer
+          readOnly: true
+          description: Overtime minutes classified as night
+        ot_holiday_min:
+          type: integer
+          readOnly: true
+          description: Overtime minutes worked on holidays
+        is_holiday:
+          type: boolean
+          readOnly: true
+        is_rest_day:
+          type: boolean
+          readOnly: true
+        on_leave:
+          type: boolean
+          readOnly: true
+        leave_portion:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,2}(?:\.\d{0,2})?$
+          readOnly: true
+          description: Portion of the day covered by approved leave (0-1)
+        status:
+          allOf:
+          - $ref: '#/components/schemas/AttDayStatusEnum'
+          readOnly: true
+          description: |-
+            Final attendance status consumed by payroll and reports
+
+            * `present` - present
+            * `absent` - absent
+            * `leave` - leave
+            * `holiday` - holiday
+            * `rest` - rest
+            * `partial` - partial
+        pairs_count:
+          type: integer
+          readOnly: true
+          description: Number of AttPair sessions contributing to this day
+        punches_used:
+          type: integer
+          readOnly: true
+          description: Total punch events used to build the pairs
+        compute_version:
+          type: integer
+          readOnly: true
+          description: Internal algorithm version used for this compute
+        computed_at:
+          type: string
+          format: date-time
+          readOnly: true
+        locked:
+          type: boolean
+          readOnly: true
+          description: Freeze this day to prevent recomputation or adjustments
+        employee:
+          type: integer
+          readOnly: true
+        shift:
+          type: integer
+          readOnly: true
+          nullable: true
+        roster:
+          type: integer
+          readOnly: true
+          nullable: true
+      required:
+      - anomalies
+      - compute_version
+      - computed_at
+      - date
+      - early_leave_min
+      - employee
+      - id
+      - is_holiday
+      - is_rest_day
+      - late_min
+      - leave_portion
+      - locked
+      - on_leave
+      - ot_holiday_min
+      - ot_night_min
+      - ot_regular_min
+      - paid_break_min
+      - pairs_count
+      - punches_used
+      - roster
+      - shift
+      - status
+      - unpaid_break_min
+      - work_min
+    AttDayStatusEnum:
+      enum:
+      - present
+      - absent
+      - leave
+      - holiday
+      - rest
+      - partial
+      type: string
+      description: |-
+        * `present` - present
+        * `absent` - absent
+        * `leave` - leave
+        * `holiday` - holiday
+        * `rest` - rest
+        * `partial` - partial
+    AttPair:
+      type: object
+      description: |-
+        Paired IN/OUT session derived from punch events.
+
+        'auto' punches open a new session when none is active or close the
+        current session. Anomalies such as 'missing_out_closed_at_next_in'
+        appear when a new IN arrives before an OUT.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        date:
+          type: string
+          format: date
+          readOnly: true
+          description: Roster date this pair belongs to
+        in_event_id:
+          type: integer
+          readOnly: true
+          description: ID of the originating IN punch event
+        out_event_id:
+          type: integer
+          readOnly: true
+          nullable: true
+          description: ID of the OUT punch event, if any
+        in_ts:
+          type: string
+          format: date-time
+          readOnly: true
+          description: Timestamp of the IN punch
+        out_ts:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          description: Timestamp of the OUT punch, if any
+        duration_min:
+          type: integer
+          readOnly: true
+          description: Minutes between in_ts and out_ts, capped per policy
+        cross_midnight:
+          type: boolean
+          readOnly: true
+          description: True if out_ts falls on the day after in_ts
+        source:
+          allOf:
+          - $ref: '#/components/schemas/SourceEnum'
+          readOnly: true
+          description: |-
+            Origin of the pair; 'auto' punches open a new session or close the current one, while 'manual' pairs are entered by managers
+
+            * `auto` - auto
+            * `manual` - manual
+        anomaly:
+          readOnly: true
+          description: 'Canonical anomalies detected for this pair, e.g. {''missing_out_closed_at_next_in'':
+            true}'
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        employee:
+          type: integer
+          readOnly: true
+      required:
+      - anomaly
+      - created_at
+      - cross_midnight
+      - date
+      - duration_min
+      - employee
+      - id
+      - in_event_id
+      - in_ts
+      - out_event_id
+      - out_ts
+      - source
+      - updated_at
     AttendanceDevice:
       type: object
       properties:
@@ -8056,7 +9352,7 @@ components:
       properties:
         status:
           allOf:
-          - $ref: '#/components/schemas/StatusEnum'
+          - $ref: '#/components/schemas/FaceEnrollmentStatusStatusEnum'
           description: |-
             Current enrollment status
 
@@ -8084,6 +9380,16 @@ components:
       - created_at
       - faces
       - updated_at
+    FaceEnrollmentStatusStatusEnum:
+      enum:
+      - active
+      - revoked
+      - pending
+      type: string
+      description: |-
+        * `active` - active
+        * `revoked` - revoked
+        * `pending` - pending
     GenderEnum:
       enum:
       - male
@@ -8309,6 +9615,61 @@ components:
       required:
       - errors
       - updated
+    LockDays:
+      type: object
+      description: Serializer for locking/unlocking attendance days.
+      properties:
+        employee_ids:
+          type: array
+          items:
+            type: integer
+          description: Optional list of employee IDs to limit the operation
+        start:
+          type: string
+          format: date
+          description: Start date in ISO format (YYYY-MM-DD)
+        end:
+          type: string
+          format: date
+          description: End date in ISO format (YYYY-MM-DD)
+        locked:
+          type: boolean
+          default: true
+          description: Set to true to lock days or false to unlock
+      required:
+      - end
+      - start
+    LockResponse:
+      type: object
+      properties:
+        updated:
+          type: integer
+      required:
+      - updated
+    ManualAttPair:
+      type: object
+      description: Serializer for creating manual attendance pairs.
+      properties:
+        employee:
+          type: integer
+          description: Employee ID
+        date:
+          type: string
+          format: date
+          description: Roster date in YYYY-MM-DD
+        in_ts:
+          type: string
+          format: date-time
+          description: Clock-in timestamp in ISO 8601 with timezone
+        out_ts:
+          type: string
+          format: date-time
+          description: Clock-out timestamp in ISO 8601 with timezone
+      required:
+      - date
+      - employee
+      - in_ts
+      - out_ts
     NationalityEnum:
       enum:
       - AF
@@ -8811,6 +10172,75 @@ components:
         * `YE` - Yemen
         * `ZM` - Zambia
         * `ZW` - Zimbabwe
+    PaginatedAttAdjustmentList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/AttAdjustment'
+    PaginatedAttDayList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/AttDay'
+    PaginatedAttPairList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/AttPair'
     PaginatedAttendanceDeviceList:
       type: object
       required:
@@ -9317,6 +10747,143 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/WorkCalendar'
+    PatchedAttAdjustment:
+      type: object
+      description: |-
+        Manual, additive deltas applied after computation. Negative values reduce
+        totals. Set `override_status` to replace the computed AttDay.status.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        employee:
+          type: integer
+          description: Employee ID
+        date:
+          type: string
+          format: date
+          description: Roster date the adjustment applies to
+        delta_work_min:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+          description: Additive minutes applied to work_min
+        delta_unpaid_break_min:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+          description: Additive minutes applied to unpaid_break_min
+        delta_paid_break_min:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+          description: Additive minutes applied to paid_break_min
+        delta_ot_regular_min:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+          description: Additive minutes applied to ot_regular_min
+        delta_ot_night_min:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+          description: Additive minutes applied to ot_night_min
+        delta_ot_holiday_min:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+          description: Additive minutes applied to ot_holiday_min
+        override_status:
+          type: string
+          description: Override computed status (e.g. 'present')
+          maxLength: 16
+        reason:
+          type: string
+          description: Human-readable reason for the adjustment
+          maxLength: 255
+        created_by_id:
+          type: integer
+          readOnly: true
+          description: Identifier of the user who created the adjustment
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedAttPair:
+      type: object
+      description: |-
+        Paired IN/OUT session derived from punch events.
+
+        'auto' punches open a new session when none is active or close the
+        current session. Anomalies such as 'missing_out_closed_at_next_in'
+        appear when a new IN arrives before an OUT.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        date:
+          type: string
+          format: date
+          readOnly: true
+          description: Roster date this pair belongs to
+        in_event_id:
+          type: integer
+          readOnly: true
+          description: ID of the originating IN punch event
+        out_event_id:
+          type: integer
+          readOnly: true
+          nullable: true
+          description: ID of the OUT punch event, if any
+        in_ts:
+          type: string
+          format: date-time
+          readOnly: true
+          description: Timestamp of the IN punch
+        out_ts:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          description: Timestamp of the OUT punch, if any
+        duration_min:
+          type: integer
+          readOnly: true
+          description: Minutes between in_ts and out_ts, capped per policy
+        cross_midnight:
+          type: boolean
+          readOnly: true
+          description: True if out_ts falls on the day after in_ts
+        source:
+          allOf:
+          - $ref: '#/components/schemas/SourceEnum'
+          readOnly: true
+          description: |-
+            Origin of the pair; 'auto' punches open a new session or close the current one, while 'manual' pairs are entered by managers
+
+            * `auto` - auto
+            * `manual` - manual
+        anomaly:
+          readOnly: true
+          description: 'Canonical anomalies detected for this pair, e.g. {''missing_out_closed_at_next_in'':
+            true}'
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        employee:
+          type: integer
+          readOnly: true
     PatchedAttendanceDevice:
       type: object
       properties:
@@ -10949,6 +12516,33 @@ components:
       - out_of_scope
       - requires_face
       - roster_fallback
+    RecomputeRange:
+      type: object
+      description: Serializer for recompute and lock actions.
+      properties:
+        employee_ids:
+          type: array
+          items:
+            type: integer
+          description: Optional list of employee IDs to limit the operation
+        start:
+          type: string
+          format: date
+          description: Start date in ISO format (YYYY-MM-DD)
+        end:
+          type: string
+          format: date
+          description: End date in ISO format (YYYY-MM-DD)
+      required:
+      - end
+      - start
+    RecomputeResponse:
+      type: object
+      properties:
+        queued:
+          type: boolean
+      required:
+      - queued
     RosterEntry:
       type: object
       description: Serializer for RosterEntry
@@ -11233,16 +12827,14 @@ components:
       required:
       - errors
       - updated
-    StatusEnum:
+    SourceEnum:
       enum:
-      - active
-      - revoked
-      - pending
+      - auto
+      - manual
       type: string
       description: |-
-        * `active` - active
-        * `revoked` - revoked
-        * `pending` - pending
+        * `auto` - auto
+        * `manual` - manual
     TokenObtainPair:
       type: object
       properties:
