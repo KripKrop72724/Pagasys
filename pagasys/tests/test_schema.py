@@ -56,6 +56,7 @@ class OpenAPISchemaTests(TestCase):
         param_names = [p['name'] for p in branch_get['parameters']]
         self.assertIn('ordering', param_names)
         self.assertIn('page', param_names)
+        self.assertIn('page_size', param_names)
         self.assertIn('company', param_names)
 
     def test_bulk_paths_present(self):

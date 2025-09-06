@@ -255,8 +255,9 @@ REST_FRAMEWORK = {
         'django_filters.rest_framework.DjangoFilterBackend',
         'rest_framework.filters.OrderingFilter',
     ],
-    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'DEFAULT_PAGINATION_CLASS': 'pagasys.pagination.GlobalPagination',
     'PAGE_SIZE': 100,
+    'MAX_PAGE_SIZE': 1000,
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
     'EXCEPTION_HANDLER': 'pagasys.policy.exceptions.unified_exception_handler',
 }
