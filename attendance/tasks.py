@@ -5,20 +5,44 @@ from django.utils.timezone import localdate
 from .services import build_pairs_for, compute_att_day
 
 
-@shared_task(queue="compute")
-def pair_employee_day_task(employee_id: int, day_iso: str):
+@shared_task(
+    bind=True,
+    queue="compute",
+    acks_late=True,
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_jitter=True,
+)
+def pair_employee_day_task(self, employee_id: int, day_iso: str):
+    """Build AttPair records for a given employee/day with retry semantics."""
     d = date.fromisoformat(day_iso)
     return build_pairs_for(employee_id, d)
 
 
-@shared_task(queue="compute")
-def compute_employee_day_task(employee_id: int, day_iso: str):
+@shared_task(
+    bind=True,
+    queue="compute",
+    acks_late=True,
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_jitter=True,
+)
+def compute_employee_day_task(self, employee_id: int, day_iso: str):
+    """Compute AttDay aggregates for an employee/day with retry semantics."""
     d = date.fromisoformat(day_iso)
     return compute_att_day(employee_id, d)
 
 
-@shared_task(queue="compute")
-def recompute_range_task(employee_ids: list, start_iso: str, end_iso: str):
+@shared_task(
+    bind=True,
+    queue="compute",
+    acks_late=True,
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_jitter=True,
+)
+def recompute_range_task(self, employee_ids: list, start_iso: str, end_iso: str):
+    """Rebuild pairs and recompute days for a range with retry semantics."""
     s = date.fromisoformat(start_iso)
     e = date.fromisoformat(end_iso)
     cur = s

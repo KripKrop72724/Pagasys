@@ -47,6 +47,9 @@ def _eligible(ev: PunchEvent):
 
 @transaction.atomic
 def build_pairs_for(employee_id: int, day: date) -> int:
+    """Construct AttPair records for an employee/day if not locked."""
+    if AttDay.objects.filter(employee_id=employee_id, date=day, locked=True).exists():
+        return 0
     roster = (
         RosterEntry.objects.select_related("shift")
         .filter(employee_id=employee_id, date=day)
@@ -135,7 +138,15 @@ def build_pairs_for(employee_id: int, day: date) -> int:
     return saved
 
 
+@transaction.atomic
 def compute_att_day(employee_id: int, day: date) -> int:
+    """Compute the canonical AttDay, skipping locked records."""
+    obj, _ = AttDay.objects.select_for_update().get_or_create(
+        employee_id=employee_id, date=day, defaults={"locked": False}
+    )
+    if obj.locked:
+        return 0
+
     roster = (
         RosterEntry.objects.select_related(
             "shift",
@@ -249,12 +260,6 @@ def compute_att_day(employee_id: int, day: date) -> int:
         status = "partial"
     else:
         status = "leave" if on_leave else "absent"
-
-    obj, _ = AttDay.objects.get_or_create(
-        employee_id=employee_id, date=day, defaults={"locked": False}
-    )
-    if obj.locked:
-        return 0
 
     work_min, unpaid_break, paid_break, ot_reg, ot_night, ot_hol, status, anomalies_all = apply_att_adjustments(
         employee_id,
