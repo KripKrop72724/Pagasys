@@ -1,0 +1,9 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<h1>Manual recompute</h1>
+<form method="post">{% csrf_token %}
+{{ form.as_p }}
+<input type="hidden" name="post" value="yes">
+<input type="submit" value="Queue">
+</form>
+{% endblock %}

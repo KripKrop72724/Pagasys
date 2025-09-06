@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from rest_framework import viewsets, status, serializers
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -13,6 +15,7 @@ from drf_spectacular.utils import (
 
 from pagasys.openapi_utils import document_filters
 from pagasys.utils import scope_queryset
+from pagasys.models import Employee
 
 from .models import AttDay, AttPair, AttAdjustment
 from .serializers import (
@@ -23,7 +26,14 @@ from .serializers import (
     LockDaysSerializer,
     AttAdjustmentSerializer,
 )
-from .tasks import recompute_range_task
+from .tasks import (
+    recompute_range_task,
+    pair_employee_day_task,
+    compute_employee_day_task,
+)
+
+MAX_RANGE_DAYS = 31
+MAX_EMPLOYEES = 50
 
 
 @extend_schema_view(
@@ -89,6 +99,7 @@ class AttDayViewSet(viewsets.ReadOnlyModelViewSet):
     @extend_schema(
         description=(
             "Queue recomputation for a date range and optional employees."
+            f" Range limited to {MAX_RANGE_DAYS} days and {MAX_EMPLOYEES} employees."
             " Dates must be supplied in YYYY-MM-DD and interpreted in the"
             " company's timezone."
         ),
@@ -247,6 +258,50 @@ class AttPairViewSet(viewsets.ModelViewSet):
         output = AttPairSerializer(pair, context=self.get_serializer_context())
         headers = self.get_success_headers(output.data)
         return Response(output.data, status=status.HTTP_201_CREATED, headers=headers)
+
+    @extend_schema(
+        description=(
+            "Rebuild pairs and recompute days for a date range. "
+            f"Range limited to {MAX_RANGE_DAYS} days and {MAX_EMPLOYEES} employees."
+        ),
+        request=RecomputeRangeSerializer,
+        responses={
+            200: OpenApiResponse(
+                description="Tasks queued",
+                response=inline_serializer(
+                    name="RebuildResponse",
+                    fields={"queued": serializers.IntegerField()},
+                ),
+            )
+        },
+    )
+    @action(detail=False, methods=["post"], url_path="rebuild")
+    def rebuild(self, request, *args, **kwargs):
+        params = RecomputeRangeSerializer(data=request.data or {})
+        params.is_valid(raise_exception=True)
+        data = params.validated_data
+        start, end = data["start"], data["end"]
+        if end < start or (end - start).days > MAX_RANGE_DAYS:
+            raise serializers.ValidationError("Date range too large")
+        ids = data.get("employee_ids") or []
+        qs = (
+            Employee.objects.filter(id__in=ids)
+            if ids
+            else Employee.objects.filter(is_active=True)
+        )
+        eids = list(qs.values_list("id", flat=True)[:MAX_EMPLOYEES])
+        if not eids:
+            raise serializers.ValidationError("No valid employees")
+        queued = 0
+        cur = start
+        while cur <= end:
+            for eid in eids:
+                day_iso = cur.isoformat()
+                pair_employee_day_task.delay(eid, day_iso)
+                compute_employee_day_task.delay(eid, day_iso)
+                queued += 1
+            cur += timedelta(days=1)
+        return Response({"queued": queued})
 
 
 # attach filter documentation

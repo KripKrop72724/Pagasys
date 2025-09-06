@@ -1,10 +1,15 @@
+from datetime import timedelta
+
 from django.contrib import admin, messages
 from django.utils.safestring import mark_safe
 from django import forms
+from django.template.response import TemplateResponse
+from django.shortcuts import redirect
 
 from pagasys.admin import ScopedAdminMixin
+from pagasys.models import Employee
 from .models import AttDay, AttPair, AttAdjustment, LeaveRequest, LeaveDay
-from .tasks import compute_employee_day_task
+from .tasks import compute_employee_day_task, recompute_range_task
 
 
 class AttAdjustmentForm(forms.ModelForm):
@@ -30,7 +35,33 @@ class AttDayAdmin(ScopedAdminMixin, admin.ModelAdmin):
     list_filter = ("status", "is_holiday", "is_rest_day", "locked")
     search_fields = ("employee__first_name", "employee__last_name")
     readonly_fields = ("computed_at",)
-    actions = ["recompute_selected", "lock_selected", "unlock_selected"]
+    actions = [
+        "recompute_selected",
+        "lock_selected",
+        "unlock_selected",
+        "manual_recompute",
+    ]
+
+    class ManualRecomputeForm(forms.Form):
+        start = forms.DateField()
+        end = forms.DateField()
+        employee_ids = forms.CharField(
+            required=False,
+            help_text="Comma-separated employee IDs",
+        )
+
+        def clean_employee_ids(self):
+            raw = self.cleaned_data.get("employee_ids", "")
+            ids = []
+            for part in raw.split(","):
+                part = part.strip()
+                if not part:
+                    continue
+                try:
+                    ids.append(int(part))
+                except ValueError:
+                    raise forms.ValidationError("Employee IDs must be integers")
+            return ids
 
     def changelist_view(self, request, extra_context=None):
         self.message_user(
@@ -67,6 +98,44 @@ class AttDayAdmin(ScopedAdminMixin, admin.ModelAdmin):
     )
 
 
+    MAX_RANGE_DAYS = 31
+    MAX_EMPLOYEES = 50
+
+    def manual_recompute(self, request, queryset):  # pragma: no cover - admin view
+        """Render a form to manually queue recomputation for a date span."""
+        if request.POST.get('post'):
+            form = self.ManualRecomputeForm(request.POST)
+            if form.is_valid():
+                start = form.cleaned_data['start']
+                end = form.cleaned_data['end']
+                if end < start or (end - start).days > self.MAX_RANGE_DAYS:
+                    self.message_user(
+                        request,
+                        f"Range must be within {self.MAX_RANGE_DAYS} days",
+                        level=messages.ERROR,
+                    )
+                    return redirect(request.get_full_path())
+                ids = form.cleaned_data['employee_ids']
+                qs = (
+                    Employee.objects.filter(id__in=ids)
+                    if ids
+                    else Employee.objects.filter(is_active=True)
+                )
+                eids = list(qs.values_list('id', flat=True)[: self.MAX_EMPLOYEES])
+                recompute_range_task.delay(
+                    eids, start.isoformat(), end.isoformat()
+                )
+                self.message_user(
+                    request,
+                    f"Queued recompute for {len(eids)} employees",
+                )
+                return redirect(request.get_full_path())
+        else:
+            form = self.ManualRecomputeForm()
+        context = {'form': form, 'title': 'Manual recompute'}
+        return TemplateResponse(request, 'admin/manual_recompute.html', context)
+
+    manual_recompute.short_description = "Manual recompute by date range"
 @admin.register(AttPair)
 class AttPairAdmin(ScopedAdminMixin, admin.ModelAdmin):
     """Review paired IN/OUT punch sessions."""
