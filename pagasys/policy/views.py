@@ -34,6 +34,7 @@ from .serializers import (
     RosterEntrySerializer,
     LeaveTypeSerializer,
     RosterRangeSerializer,
+    HolidayImportRequest,
     HolidayImportResponseSerializer,
     ShiftTemplatePreviewSerializer,
     RosterBulkUpsertRequestSerializer,
@@ -49,7 +50,7 @@ from .filters import (
     LeaveTypeFilter,
 )
 from .permissions import IsCompanyMember, CompanyScopedQuerysetMixin, ActionRolePermission
-from pagasys.openapi_utils import document_filters
+from pagasys.openapi_utils import document_filters, _generate_parameters
 from pagasys.utils import scope_queryset
 
 import django_filters.rest_framework as drf_filters
@@ -87,8 +88,11 @@ class WorkCalendarViewSet(BasePolicyViewSet):
     ordering = ["id"]
     search_fields = ["name"]
 
+    @extend_schema(
+        responses=HolidaySerializer(many=True),
+        parameters=_generate_parameters(type('HolidayViewSet', (), {"filterset_class": HolidayFilter})),
+    )
     @action(detail=True, methods=["get"])
-    @extend_schema(responses=HolidaySerializer(many=True))
     def holidays(self, request, company_id=None, pk=None):
         cal = self.get_object()
         qs = cal.holidays.all()
@@ -97,7 +101,6 @@ class WorkCalendarViewSet(BasePolicyViewSet):
         ser = HolidaySerializer(page or f.qs, many=True)
         return self.get_paginated_response(ser.data) if page else Response(ser.data)
 
-    @action(detail=True, methods=["post"], url_path="holidays/import")
     @extend_schema(
         description=(
             "Bulk import holidays. Each item accepts a 'date', 'name' and "
@@ -109,9 +112,10 @@ class WorkCalendarViewSet(BasePolicyViewSet):
                 value=[{"date": "2024-01-01", "name": "New Year", "is_public": True}],
             )
         ],
-        request=HolidaySerializer(many=True),
+        request=HolidayImportRequest(many=True),
         responses=HolidayImportResponseSerializer,
     )
+    @action(detail=True, methods=["post"], url_path="holidays/import")
     def import_holidays(self, request, company_id=None, pk=None):
         cal = self.get_object()
         items = request.data if isinstance(request.data, list) else []
@@ -156,8 +160,11 @@ class ShiftTemplateViewSet(BasePolicyViewSet):
     ordering = ["id"]
     search_fields = ["name"]
 
+    @extend_schema(
+        responses=ShiftRuleSerializer(many=True),
+        parameters=_generate_parameters(type('ShiftRuleViewSet', (), {"filterset_class": ShiftRuleFilter})),
+    )
     @action(detail=True, methods=["get"])
-    @extend_schema(responses=ShiftRuleSerializer(many=True))
     def rules(self, request, company_id=None, pk=None):
         tpl = self.get_object()
         qs = tpl.rules.all()
@@ -166,8 +173,8 @@ class ShiftTemplateViewSet(BasePolicyViewSet):
         ser = ShiftRuleSerializer(page or f.qs, many=True)
         return self.get_paginated_response(ser.data) if page else Response(ser.data)
 
-    @action(detail=True, methods=["get"])
     @extend_schema(responses=ShiftTemplatePreviewSerializer)
+    @action(detail=True, methods=["get"])
     def preview(self, request, company_id=None, pk=None):
         from pagasys.models import _minutes_between
         tpl = self.get_object()
@@ -188,7 +195,6 @@ class ShiftRuleViewSet(BasePolicyViewSet):
     filterset_class = ShiftRuleFilter
     ordering = ["id"]
 
-    @action(detail=False, methods=["post"])
     @extend_schema(
         description="Dry-run a shift rule without saving. Demonstrates boolean flags in params.",
         examples=[
@@ -204,6 +210,7 @@ class ShiftRuleViewSet(BasePolicyViewSet):
         ],
         responses=ShiftRuleValidateResponseSerializer,
     )
+    @action(detail=False, methods=["post"])
     def validate(self, request, company_id=None):
         ser = self.get_serializer(data=request.data)
         ser.is_valid(raise_exception=True)
@@ -241,7 +248,6 @@ class RosterViewSet(BasePolicyViewSet):
         is_h, was_h = holiday_flags(emp, d, override if explicit else None)
         serializer.save(is_holiday=is_h, was_holiday=was_h)
 
-    @action(detail=False, methods=["post"], url_path="bulk-upsert")
     @extend_schema(
         description=(
             "Atomically upsert roster entries. Dates coinciding with calendar "
@@ -268,6 +274,7 @@ class RosterViewSet(BasePolicyViewSet):
         request=RosterBulkUpsertRequestSerializer,
         responses={200: RosterBulkUpsertResponseSerializer},
     )
+    @action(detail=False, methods=["post"], url_path="bulk-upsert")
     def bulk_upsert(self, request, company_id=None):
         req = RosterBulkUpsertRequestSerializer(data=request.data, context={"request": request})
         if not req.is_valid():
@@ -306,7 +313,6 @@ class RosterViewSet(BasePolicyViewSet):
         payload = {"upserted": len(to_create)}
         return Response(RosterBulkUpsertResponseSerializer(payload).data, status=200)
 
-    @action(detail=False, methods=["post"], url_path="schedule-range")
     @extend_schema(
         description=(
             "Create or update consecutive roster entries starting from `start_date`."
@@ -342,6 +348,7 @@ class RosterViewSet(BasePolicyViewSet):
                 response_only=True,
             ),
         ],
+        request=RosterRangeSerializer,
         responses={
             200: OpenApiResponse(
                 description="Count of roster entries created or updated",
@@ -352,6 +359,7 @@ class RosterViewSet(BasePolicyViewSet):
             )
         },
     )
+    @action(detail=False, methods=["post"], url_path="schedule-range")
     def schedule_range(self, request, company_id=None):
         params = RosterRangeSerializer(data=request.data, context=self.get_serializer_context())
         params.is_valid(raise_exception=True)
@@ -399,7 +407,6 @@ class RosterViewSet(BasePolicyViewSet):
             )
         return Response({"count": len(entries)}, status=200)
 
-    @action(detail=False, methods=["get"])
     @extend_schema(
         description="Summarize roster entries grouped by employee, shift, or date.",
         parameters=[
@@ -413,6 +420,7 @@ class RosterViewSet(BasePolicyViewSet):
         ],
         responses=RosterSummarySerializer(many=True),
     )
+    @action(detail=False, methods=["get"])
     def summary(self, request, company_id=None):
         group_by = request.query_params.get("group_by", "employee")
         qs = self.filter_queryset(self.get_queryset())

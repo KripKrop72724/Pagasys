@@ -106,6 +106,7 @@ class AttendanceDeviceViewSet(CompanyScopedQuerysetMixin, viewsets.ModelViewSet)
 
     @extend_schema(
         description="Generate a new API key for the device.",
+        request=None,
         responses=RotateKeyResponseSerializer,
     )
     @action(detail=True, methods=["post"], url_path="rotate-key")

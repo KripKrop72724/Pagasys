@@ -312,6 +312,29 @@ class RosterEntrySerializer(ScopedSerializerMixin, serializers.ModelSerializer):
         return attrs
 
 
+class RosterOverviewEntrySerializer(serializers.Serializer):
+    date = serializers.DateField()
+    shift = serializers.IntegerField(allow_null=True)
+    is_rest_day = serializers.BooleanField()
+    is_holiday = serializers.BooleanField()
+    was_holiday = serializers.BooleanField()
+
+
+class RosterOverviewEmployeeSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    name = serializers.CharField()
+    entries = RosterOverviewEntrySerializer(many=True)
+
+
+class RosterOverviewSerializer(serializers.Serializer):
+    start = serializers.DateField()
+    days = serializers.IntegerField()
+    employees = RosterOverviewEmployeeSerializer(many=True)
+
+    class Meta:
+        ref_name = "RosterOverviewSerializer"
+
+
 class LeaveTypeSerializer(ScopedSerializerMixin, serializers.ModelSerializer):
     """Serializer for LeaveType"""
 

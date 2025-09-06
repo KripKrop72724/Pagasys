@@ -207,6 +207,12 @@ class RosterRangeSerializer(serializers.Serializer):
         return attrs
 
 
+class HolidayImportRequest(serializers.Serializer):
+    date = serializers.DateField()
+    name = serializers.CharField()
+    is_public = serializers.BooleanField(required=False)
+
+
 class HolidayImportResponseSerializer(serializers.Serializer):
     count = serializers.IntegerField()
 
