@@ -8,6 +8,8 @@
     # via -r requirements-dev.in
 attrs==25.3.0
     # via pytest-docker
+coverage[toml]==7.10.6
+    # via pytest-cov
 execnet==2.1.1
     # via pytest-xdist
 flake8==7.3.0
@@ -19,7 +21,9 @@ mccabe==0.7.0
 packaging==25.0
     # via pytest
 pluggy==1.6.0
-    # via pytest
+    # via
+    #   pytest
+    #   pytest-cov
 pycodestyle==2.14.0
     # via flake8
 pyflakes==3.4.0
@@ -29,14 +33,15 @@ pygments==2.19.2
 pytest==8.4.1
     # via
     #   -r requirements-dev.in
+    #   pytest-cov
     #   pytest-django
     #   pytest-docker
     #   pytest-xdist
+pytest-cov==6.3.0
+    # via -r requirements-dev.in
 pytest-django==4.11.1
     # via -r requirements-dev.in
 pytest-docker==3.2.3
     # via -r requirements-dev.in
 pytest-xdist==3.8.0
     # via -r requirements-dev.in
-opencv-python-headless==4.12.0.88
-    # via capture image validation

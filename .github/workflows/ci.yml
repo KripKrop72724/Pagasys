@@ -44,7 +44,22 @@ jobs:
             caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
 
       - name: Run tests
-        run: pytest -n auto -q --disable-warnings --maxfail=1
+        run: pytest -n auto -q --disable-warnings --maxfail=1 --cov=pagasys --cov-report=xml --cov-report=html --cov-fail-under=90
+
+      - name: Upload coverage reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: |
+            coverage.xml
+            htmlcov
+
+      - name: Upload to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          files: coverage.xml
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   build-and-push:
     name: Build & Publish Docker
