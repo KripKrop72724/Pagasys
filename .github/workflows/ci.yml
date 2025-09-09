@@ -92,4 +92,3 @@ jobs:
           tags: |
             ghcr.io/${{ env.REPOSITORY_LC }}:latest
             ghcr.io/${{ env.REPOSITORY_LC }}:${{ github.sha }}
-
