@@ -226,7 +226,7 @@ jobs:
     name: Deploy to Elastic Beanstalk
     needs: [lint-and-test, migrate]
     runs-on: ubuntu-latest
-    environment: pagasys-dev
+    environment: pagasys-development
     steps:
       - uses: actions/checkout@v4
 
