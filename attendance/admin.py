@@ -5,6 +5,7 @@ from django.utils.safestring import mark_safe
 from django import forms
 from django.template.response import TemplateResponse
 from django.shortcuts import redirect
+from django.urls import path
 
 from pagasys.admin import ScopedAdminMixin
 from pagasys.models import Employee
@@ -35,6 +36,7 @@ class AttDayAdmin(ScopedAdminMixin, admin.ModelAdmin):
     list_filter = ("status", "is_holiday", "is_rest_day", "locked")
     search_fields = ("employee__first_name", "employee__last_name")
     readonly_fields = ("computed_at",)
+    change_list_template = "admin/attendance/attday/change_list.html"
     actions = [
         "recompute_selected",
         "lock_selected",
@@ -62,6 +64,20 @@ class AttDayAdmin(ScopedAdminMixin, admin.ModelAdmin):
                 except ValueError:
                     raise forms.ValidationError("Employee IDs must be integers")
             return ids
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom = [
+            path(
+                "manual-recompute/",
+                self.admin_site.admin_view(self.manual_recompute_view),
+                name="attendance_attday_manual_recompute",
+            )
+        ]
+        return custom + urls
+
+    def manual_recompute_view(self, request):
+        return self.manual_recompute(request, AttDay.objects.none())
 
     def changelist_view(self, request, extra_context=None):
         self.message_user(
