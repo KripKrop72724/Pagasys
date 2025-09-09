@@ -142,8 +142,8 @@ jobs:
           }' >/tmp/ssm-params.json
 
           # 5) Send command
-          COMMAND_ID=$(aws ssm send-command \
-            --targets "Key=tag:elasticbeanstalk:environment-name,Values=pagasys-dev" \
+            COMMAND_ID=$(aws ssm send-command \
+              --targets "Key=tag:elasticbeanstalk:environment-name,Values=pagasys-development" \
             --document-name "AWS-RunShellScript" \
             --comment "Run Django migrations" \
             --parameters file:///tmp/ssm-params.json \
@@ -239,18 +239,18 @@ jobs:
 
       - name: Wait for EB environment to be ready
         run: |
-          STATUS=$(aws elasticbeanstalk describe-environments --environment-names pagasys-dev --query 'Environments[0].Status' --output text)
+          STATUS=$(aws elasticbeanstalk describe-environments --environment-names pagasys-development --query 'Environments[0].Status' --output text)
           while [ "$STATUS" != "Ready" ]; do
             echo "Environment status: $STATUS. Waiting..."
             sleep 20
-            STATUS=$(aws elasticbeanstalk describe-environments --environment-names pagasys-dev --query 'Environments[0].Status' --output text)
+            STATUS=$(aws elasticbeanstalk describe-environments --environment-names pagasys-development --query 'Environments[0].Status' --output text)
           done
           echo "Environment is Ready."
 
       - name: Get current EB version
         id: prev-version
         run: |
-          PREV_VERSION=$(aws elasticbeanstalk describe-environments --environment-names pagasys-dev --query 'Environments[0].VersionLabel' --output text)
+          PREV_VERSION=$(aws elasticbeanstalk describe-environments --environment-names pagasys-development --query 'Environments[0].VersionLabel' --output text)
           echo "version=$PREV_VERSION" >> $GITHUB_OUTPUT
 
       - name: Use EB compose file
@@ -265,13 +265,13 @@ jobs:
           aws_access_key: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws_secret_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           application_name: pagasys-dev
-          environment_name: pagasys-dev
+          environment_name: pagasys-development
           version_label: ${{ github.sha }}
           region: me-central-1
           deployment_package: deployment-package.zip
 
       - name: Wait for deployment to finish
-        run: aws elasticbeanstalk wait environment-updated --environment-name pagasys-dev
+        run: aws elasticbeanstalk wait environment-updated --environment-name pagasys-development
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -291,7 +291,7 @@ jobs:
 
           # 1) App HTTP health check from outside (runner) — REQUIRE 200
           URL=$(aws elasticbeanstalk describe-environments \
-            --environment-names pagasys-dev \
+            --environment-names pagasys-development \
             --query "Environments[0].CNAME" --output text)
 
           CODE=""
@@ -328,14 +328,14 @@ jobs:
           ]}' >/tmp/ssm-db.json
 
           CMD_ID=$(aws ssm send-command \
-            --targets "Key=tag:elasticbeanstalk:environment-name,Values=pagasys-dev" \
+            --targets "Key=tag:elasticbeanstalk:environment-name,Values=pagasys-development" \
             --document-name "AWS-RunShellScript" \
             --comment "Smoke test DB check" \
             --parameters file:///tmp/ssm-db.json \
             --query "Command.CommandId" --output text)
 
           INSTANCE_ID=$(aws ec2 describe-instances \
-            --filters "Name=tag:elasticbeanstalk:environment-name,Values=pagasys-dev" "Name=instance-state-name,Values=running" \
+            --filters "Name=tag:elasticbeanstalk:environment-name,Values=pagasys-development" "Name=instance-state-name,Values=running" \
             --query "Reservations[0].Instances[0].InstanceId" --output text)
 
           for i in {1..60}; do
@@ -359,8 +359,8 @@ jobs:
         if: steps.smoke.outcome == 'failure'
         run: |
           echo "Rolling back to version: ${{ steps.prev-version.outputs.version }}"
-          aws elasticbeanstalk update-environment --environment-name pagasys-dev --version-label "${{ steps.prev-version.outputs.version }}"
-          aws elasticbeanstalk wait environment-updated --environment-name pagasys-dev
+          aws elasticbeanstalk update-environment --environment-name pagasys-development --version-label "${{ steps.prev-version.outputs.version }}"
+          aws elasticbeanstalk wait environment-updated --environment-name pagasys-development
 
       - name: Fail workflow if smoke test failed
         if: steps.smoke.outcome == 'failure'
