@@ -107,7 +107,9 @@ class AdminDropdownScopeTests(TestCase):
         html = res.content.decode()
         import re
 
-        emp_block = re.search(r'<select[^>]*id="id_employee"[^>]*>(.*?)</select>', html, re.S).group(1)
+        emp_block = re.search(
+            r'<select[^>]*id="id_employees"[^>]*>(.*?)</select>', html, re.S
+        ).group(1)
         self.assertIn(f'value="{self.emp_c1.pk}"', emp_block)
         self.assertNotIn(f'value="{self.emp_c2.pk}"', emp_block)
 

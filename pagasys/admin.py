@@ -9,7 +9,7 @@ from django.shortcuts import redirect
 from django.template.response import TemplateResponse
 from django.urls import path
 from django.db.models import Max
-from datetime import timedelta
+from datetime import timedelta, date
 from copy import deepcopy
 from django.forms.models import construct_instance
 
@@ -845,13 +845,35 @@ class RosterEntryAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
         return form
 
     def save_model(self, request, obj, form, change):
-        employees = form.cleaned_data.get("employees")
-        if change or employees is None:
-            super().save_model(request, obj, form, change)
-            return
-        obj.employee = employees[0]
         repeat_days = form.cleaned_data.get("repeat_days")
         repeat_until = form.cleaned_data.get("repeat_until")
+        rest_weekday_names = form.cleaned_data.get("rest_weekdays")
+        employees = form.cleaned_data.get("employees")
+
+        if repeat_days is None and form.data.get("repeat_days"):
+            try:
+                repeat_days = int(form.data.get("repeat_days"))
+            except (TypeError, ValueError):
+                repeat_days = None
+        if repeat_until is None and form.data.get("repeat_until"):
+            try:
+                repeat_until = date.fromisoformat(form.data.get("repeat_until"))
+            except (TypeError, ValueError):
+                repeat_until = None
+        if rest_weekday_names is None and form.data.getlist("rest_weekdays"):
+            rest_weekday_names = form.data.getlist("rest_weekdays")
+
+        if change:
+            if repeat_days or repeat_until or rest_weekday_names:
+                employees = [obj.employee]
+            else:
+                super().save_model(request, obj, form, change)
+                return
+        elif employees is None:
+            super().save_model(request, obj, form, change)
+            return
+
+        obj.employee = employees[0]
         name_to_idx = {
             "mon": 0,
             "tue": 1,
@@ -861,9 +883,7 @@ class RosterEntryAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
             "sat": 5,
             "sun": 6,
         }
-        rest_weekdays = {
-            name_to_idx[w] for w in (form.cleaned_data.get("rest_weekdays") or [])
-        }
+        rest_weekdays = {name_to_idx[w] for w in (rest_weekday_names or [])}
         override = obj.is_holiday if "is_holiday" in form.changed_data else None
 
         start = obj.date

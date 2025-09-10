@@ -59,6 +59,7 @@ class RosterEntryAdminRangeTests(ModelFactoryMixin, TestCase):
         add_url = reverse("admin:pagasys_rosterentry_add")
         data = {
             "employee": self.employee.id,
+            "employees": [self.employee.id],
             "date": "2024-07-01",
             "shift": self.shift.id,
             "repeat_days": 7,
@@ -75,6 +76,7 @@ class RosterEntryAdminRangeTests(ModelFactoryMixin, TestCase):
         add_url = reverse("admin:pagasys_rosterentry_add")
         data = {
             "employee": self.employee.id,
+            "employees": [self.employee.id],
             "date": "2024-07-04",
             "shift": self.shift.id,
             "repeat_days": 1,
@@ -89,6 +91,7 @@ class RosterEntryAdminRangeTests(ModelFactoryMixin, TestCase):
         add_url = reverse("admin:pagasys_rosterentry_add")
         data = {
             "employee": self.employee.id,
+            "employees": [self.employee.id],
             "date": "2024-07-01",
             "shift": self.shift.id,
             "repeat_until": "2024-07-07",
@@ -104,6 +107,7 @@ class RosterEntryAdminRangeTests(ModelFactoryMixin, TestCase):
         add_url = reverse("admin:pagasys_rosterentry_add")
         data = {
             "employee": self.employee.id,
+            "employees": [self.employee.id],
             "date": "2024-07-06",  # Saturday
             "shift": self.shift.id,
             "rest_weekdays": ["sat"],
@@ -117,6 +121,7 @@ class RosterEntryAdminRangeTests(ModelFactoryMixin, TestCase):
         add_url = reverse("admin:pagasys_rosterentry_add")
         data = {
             "employee": self.employee.id,
+            "employees": [self.employee.id],
             "date": "2024-07-01",
             "shift": self.shift.id,
             "repeat_until": "2024-07-03",
@@ -129,6 +134,7 @@ class RosterEntryAdminRangeTests(ModelFactoryMixin, TestCase):
         add_url = reverse("admin:pagasys_rosterentry_add")
         data = {
             "employee": self.employee.id,
+            "employees": [self.employee.id],
             "date": "2024-07-01",
             "shift": self.shift.id,
             "repeat_days": 2,
