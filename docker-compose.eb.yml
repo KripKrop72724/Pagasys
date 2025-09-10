@@ -54,12 +54,7 @@ services:
       context: .
       dockerfile: Dockerfile
       target: runtime
-    command: >
-      sh -lc '
-      celery -A config.celery worker --loglevel=info
-      --concurrency=${CELERY_CONCURRENCY:-2}
-      -Q ${CELERY_QUEUES:-celery,compute}
-      '
+    command: celery -A config.celery worker --loglevel=info --concurrency=${CELERY_CONCURRENCY:-2} -Q ${CELERY_QUEUES:-celery,compute}
     environment:
       - DATABASE_URL
       - DB_HOST
