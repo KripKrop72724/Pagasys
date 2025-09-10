@@ -371,14 +371,14 @@ class AdminCRUDTests(ModelFactoryMixin, TestCase):
         )
         shift = self.create_shift_template(self.company, name="RST")
         add_url = reverse("admin:pagasys_rosterentry_add")
-        data = {"employee": emp.id, "date": "2024-07-01", "shift": shift.id}
+        data = {"employees": [emp.id], "date": "2024-07-01", "shift": shift.id}
         res = self.client.post(add_url, data)
         self.assertEqual(res.status_code, 302)
         entry = RosterEntry.objects.get(employee=emp, date="2024-07-01")
 
         change_url = reverse("admin:pagasys_rosterentry_change", args=[entry.id])
-        data["date"] = "2024-07-02"
-        res = self.client.post(change_url, data)
+        change_data = {"employee": emp.id, "date": "2024-07-02", "shift": shift.id}
+        res = self.client.post(change_url, change_data)
         self.assertEqual(res.status_code, 302)
         entry.refresh_from_db()
         self.assertEqual(str(entry.date), "2024-07-02")

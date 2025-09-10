@@ -761,6 +761,12 @@ class RosterEntryAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
     change_list_template = "admin/pagasys/rosterentry/change_list.html"
     readonly_fields = ["was_holiday"]
 
+    def get_fields(self, request, obj=None):
+        fields = super().get_fields(request, obj)
+        if obj is None:
+            fields = [f for f in fields if f != "employee"]
+        return fields
+
     def get_urls(self):
         from django.urls import path
 
@@ -832,6 +838,7 @@ class RosterEntryAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
             kwargs["form"] = RosterEntryRangeForm
         form = super().get_form(request, obj, **kwargs)
         if obj is None:
+            form.base_fields.pop("employee", None)
             form.base_fields["employees"].queryset = scope_queryset(
                 Employee.objects.all(), request.user
             )
@@ -839,6 +846,10 @@ class RosterEntryAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
 
     def save_model(self, request, obj, form, change):
         employees = form.cleaned_data.get("employees")
+        if change or employees is None:
+            super().save_model(request, obj, form, change)
+            return
+        obj.employee = employees[0]
         repeat_days = form.cleaned_data.get("repeat_days")
         repeat_until = form.cleaned_data.get("repeat_until")
         name_to_idx = {
