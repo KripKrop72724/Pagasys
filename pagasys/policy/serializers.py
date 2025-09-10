@@ -197,12 +197,14 @@ class RosterRangeSerializer(serializers.Serializer):
         super().__init__(*args, **kwargs)
         req = self.context.get("request")
         if req:
-            self.fields["employee"].queryset = scope_queryset(
-                Employee.objects.all(), req.user
-            )
+            emp_qs = scope_queryset(Employee.objects.all(), req.user)
+            self.fields["employee"].queryset = emp_qs
+            self.fields["employees"].queryset = emp_qs
             self.fields["shift"].queryset = scope_queryset(
                 ShiftTemplate.objects.all(), req.user
             )
+
+
 
     def validate(self, attrs):
         days = attrs.get("days")
@@ -210,15 +212,19 @@ class RosterRangeSerializer(serializers.Serializer):
         if (days and until) or (not days and not until):
             raise serializers.ValidationError("Provide either 'days' or 'until'")
 
-        employee = attrs.get("employee")
-        employees = attrs.get("employees")
+        employee = attrs.pop("employee", None)
+        employees = list(attrs.get("employees") or [])
         if bool(employee) == bool(employees):
             raise serializers.ValidationError(
-                "Provide either 'employee' or 'employees'"
+                "Provide either 'employee' or 'employees'",
             )
+        if employee:
+            attrs["employees"] = [employee]
+        else:
+            attrs["employees"] = employees
         if until and until < attrs["start_date"]:
             raise serializers.ValidationError(
-                {"until": "must be on or after start_date"}
+                {"until": "must be on or after start_date"},
             )
         return attrs
 

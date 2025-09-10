@@ -11,6 +11,7 @@ from django.urls import path
 from django.db.models import Max
 from datetime import timedelta
 from copy import deepcopy
+from django.forms.models import construct_instance
 
 from .excel_import import import_employee_workbook, import_company_visa_workbook
 
@@ -737,11 +738,15 @@ class RosterEntryRangeForm(forms.ModelForm):
             raise forms.ValidationError("Provide either repeat_days or repeat_until")
         return cleaned
 
+    def _post_clean(self):
+        """Skip model.full_clean(); validation handled per employee during save."""
+        opts = self._meta
+        construct_instance(self, self.instance, opts.fields, opts.exclude)
+
 
 @admin.register(RosterEntry)
 class RosterEntryAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
     """Admin configuration for roster entries."""
-    form = RosterEntryRangeForm
     list_display = [
         "employee",
         "date",
@@ -823,10 +828,13 @@ class RosterEntryAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
     def get_form(self, request, obj=None, **kwargs):
+        if obj is None:
+            kwargs["form"] = RosterEntryRangeForm
         form = super().get_form(request, obj, **kwargs)
-        form.base_fields["employees"].queryset = scope_queryset(
-            Employee.objects.all(), request.user
-        )
+        if obj is None:
+            form.base_fields["employees"].queryset = scope_queryset(
+                Employee.objects.all(), request.user
+            )
         return form
 
     def save_model(self, request, obj, form, change):
@@ -856,8 +864,7 @@ class RosterEntryAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
             else start
         )
         num_days = (end - start).days + 1
-        total_entries = num_days * len(employees)
-        if total_entries > ASYNC_BULK_THRESHOLD:
+        if len(employees) > ASYNC_BULK_THRESHOLD:
             codes = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]
             schedule_range_bulk.delay(
                 [e.id for e in employees],
