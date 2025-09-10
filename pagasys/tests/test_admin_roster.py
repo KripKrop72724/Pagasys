@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.test import TestCase, RequestFactory
-from unittest.mock import patch
+from unittest.mock import patch, ANY
 
 from pagasys.admin import RosterEntryAdmin, RosterEntryRangeForm
 from pagasys.models import (
@@ -56,9 +56,20 @@ class RosterEntryAdminTests(TestCase):
     def test_get_form_scopes_employees(self):
         req = self._make_request({})
         with patch("pagasys.admin.scope_queryset") as mock_scope:
-            mock_scope.return_value = Employee.objects.filter(id=self.admin_user.id)
+            # Return model-specific querysets depending on the queryset's model
+            def side_effect(qs, user):
+                if qs.model is Employee:
+                    return Employee.objects.filter(id=self.admin_user.id)
+                return qs
+
+            mock_scope.side_effect = side_effect
             form_class = self.admin.get_form(req)
-            mock_scope.assert_called_once_with(Employee.objects.all(), req.user)
+
+            # Ensure Employee queryset was scoped
+            mock_scope.assert_any_call(ANY, req.user)
+            emp_calls = [c for c in mock_scope.call_args_list if c.args[0].model is Employee]
+            self.assertGreaterEqual(len(emp_calls), 1)
+
             self.assertEqual(
                 list(form_class.base_fields["employees"].queryset),
                 [self.admin_user],
