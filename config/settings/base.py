@@ -53,7 +53,7 @@ CORS_ALLOWED_ORIGINS = env.list(
         "https://pagasys.pro",
         "https://pagasysv1.vercel.app/",
         "https://prodapi.pagasys.pro",
-        "http://localhost:3000"
+        "http://localhost:3000",
     ],
 )
 CORS_ALLOW_CREDENTIALS = True
