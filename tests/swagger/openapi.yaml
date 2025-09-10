@@ -3162,8 +3162,10 @@ paths:
       description: Create or update consecutive roster entries starting from `start_date`.
         Provide either `days` (number of days) or `until` (inclusive end date). `rest_weekdays`
         may list weekday codes such as ['SAT','SUN'] to mark rest days automatically.
-        Entries on calendar holidays are flagged with `is_holiday`, and `was_holiday`
-        records that a holiday was originally scheduled.
+        Supply either a single `employee` or an `employees` list. Entries on calendar
+        holidays are flagged with `is_holiday`, and `was_holiday` records that a holiday
+        was originally scheduled. Large batches return `202 Accepted` with a task ID for
+        asynchronous processing.
       parameters:
       - in: path
         name: company_id
@@ -3189,6 +3191,15 @@ paths:
                   - SAT
                   - SUN
                 summary: By days with weekend rest
+              MultipleEmployees:
+                value:
+                  employees:
+                  - 1
+                  - 2
+                  shift: 1
+                  start_date: '2024-07-01'
+                  days: 3
+                summary: Multiple employees
               UntilDate:
                 value:
                   employee: 1
@@ -3234,6 +3245,20 @@ paths:
                     count: 31
                   summary: Success response
           description: Count of roster entries created or updated
+        '202':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  task_id:
+                    type: string
+              examples:
+                AcceptedResponse:
+                  value:
+                    task_id: uuid
+                  summary: Accepted response
+          description: Task enqueued for asynchronous processing
   /api/companies/{company_id}/roster/summary/:
     get:
       operationId: companies_roster_summary_list
@@ -13291,6 +13316,11 @@ components:
         employee:
           type: integer
           description: Employee ID to schedule
+        employees:
+          type: array
+          items:
+            type: integer
+          description: List of employee IDs to schedule
         shift:
           type: integer
           description: Shift template to assign
@@ -13312,7 +13342,6 @@ components:
             $ref: '#/components/schemas/RestWeekdaysEnum'
           description: Weekday codes to mark as rest days, e.g. ['SAT','SUN']
       required:
-      - employee
       - shift
       - start_date
     RosterRangeResult:
