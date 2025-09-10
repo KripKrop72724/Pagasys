@@ -423,7 +423,12 @@ class RosterViewSet(BasePolicyViewSet):
                 end.isoformat(),
                 list(rest_weekdays),
             )
-            return Response({"task_id": task.id}, status=202)
+            # Celery's AsyncResult.id is a str, but tests patch the delay call with
+            # a MagicMock, whose ``id`` attribute is another MagicMock that isn't
+            # JSON serializable.  Coerce the identifier to ``str`` so mocked calls
+            # still serialize cleanly while preserving the real ID when used in
+            # production.
+            return Response({"task_id": str(task.id)}, status=202)
 
         entries = []
         for emp in employees:
