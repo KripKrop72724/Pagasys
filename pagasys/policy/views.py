@@ -390,7 +390,7 @@ class RosterViewSet(BasePolicyViewSet):
         )
         params.is_valid(raise_exception=True)
         data = params.validated_data
-        employees = [data["employee"]] if data.get("employee") else list(data["employees"])
+        employees = list(data["employees"])
 
         allowed_emp_ids = set(
             scope_queryset(Employee.objects.all(), request.user).values_list("id", flat=True)
@@ -415,8 +415,7 @@ class RosterViewSet(BasePolicyViewSet):
         )
         rest_weekdays = set(data.get("rest_weekdays", []))
         num_days = (end - start).days + 1
-        total_entries = num_days * len(employees)
-        if total_entries > ASYNC_BULK_THRESHOLD:
+        if len(employees) > ASYNC_BULK_THRESHOLD:
             task = schedule_range_bulk.delay(
                 [e.id for e in employees],
                 data["shift"].id,

@@ -53,6 +53,17 @@ class RosterEntryAdminTests(TestCase):
         setattr(req, "_messages", FallbackStorage(req))
         return req
 
+    def test_get_form_scopes_employees(self):
+        req = self._make_request({})
+        with patch("pagasys.admin.scope_queryset") as mock_scope:
+            mock_scope.return_value = Employee.objects.filter(id=self.admin_user.id)
+            form_class = self.admin.get_form(req)
+            mock_scope.assert_called_once_with(Employee.objects.all(), req.user)
+            self.assertEqual(
+                list(form_class.base_fields["employees"].queryset),
+                [self.admin_user],
+            )
+
     @patch("pagasys.admin.schedule_range_bulk.delay")
     def test_admin_async_queue(self, mock_delay):
         e2 = Employee.objects.create_user(

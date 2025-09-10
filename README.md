@@ -340,18 +340,19 @@ parameter. Additional paths include:
 ### Roster schedule-range
 
 `POST /api/companies/{company_id}/roster/schedule-range/` creates or updates
-consecutive roster entries starting at `start_date`. Supply either `days` (count
-of days) or `until` (inclusive end date). Optional `rest_weekdays` accepts
-three-letter weekday codes to mark as rest days. Dates that coincide with
-calendar holidays are flagged automatically so later payroll calculations can
-distinguish holiday work.
+consecutive roster entries starting at `start_date`. Supply either `days`
+(count of days) or `until` (inclusive end date) and provide either a single
+`employee` or an `employees` list. Optional `rest_weekdays` accepts three-letter
+weekday codes to mark rest days. Dates that coincide with calendar holidays are
+flagged automatically so later payroll calculations can distinguish holiday
+work.
 
-Example by number of days:
+Example by number of days for multiple employees:
 
 ```http
 POST /api/companies/1/roster/schedule-range/
 {
-  "employee": 1,
+  "employees": [1, 2],
   "shift": 3,
   "start_date": "2024-07-01",
   "days": 7,
@@ -359,7 +360,7 @@ POST /api/companies/1/roster/schedule-range/
 }
 ```
 
-Example until a date:
+Example until a date for a single employee:
 
 ```http
 POST /api/companies/1/roster/schedule-range/
@@ -377,7 +378,17 @@ Response:
 {"count": 31}
 ```
 
-The `count` equals the number of roster entries created or updated.
+Large batches (more than 50 employees) are queued for asynchronous processing
+and return:
+
+```http
+HTTP/1.1 202 Accepted
+{"task_id": "uuid"}
+```
+
+Run a Celery worker and broker (e.g. Redis) to handle queued jobs. The
+`ASYNC_BULK_THRESHOLD` setting can be adjusted or set high to effectively
+disable background processing for smaller deployments.
 
 ## Admin Interface
 
