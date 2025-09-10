@@ -54,7 +54,12 @@ services:
       context: .
       dockerfile: Dockerfile
       target: runtime
-    command: celery -A config.celery worker --loglevel=info
+    command: >
+      sh -lc '
+      celery -A config.celery worker --loglevel=info
+      --concurrency=${CELERY_CONCURRENCY:-2}
+      -Q ${CELERY_QUEUES:-celery,compute}
+      '
     environment:
       - DATABASE_URL
       - DB_HOST
@@ -69,6 +74,8 @@ services:
       - RDS_PASSWORD
       - DJANGO_SETTINGS_MODULE
       - ENV
+      - CELERY_QUEUES=celery,compute
+      - CELERY_CONCURRENCY=2
     depends_on:
       - redis
 
