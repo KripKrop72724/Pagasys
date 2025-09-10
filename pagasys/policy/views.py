@@ -52,6 +52,9 @@ from .filters import (
 from .permissions import IsCompanyMember, CompanyScopedQuerysetMixin, ActionRolePermission
 from pagasys.openapi_utils import document_filters, _generate_parameters
 from pagasys.utils import scope_queryset
+from pagasys.tasks import schedule_range_bulk
+
+ASYNC_BULK_THRESHOLD = 50
 
 import django_filters.rest_framework as drf_filters
 from rest_framework import filters as rest_filters
@@ -334,6 +337,15 @@ class RosterViewSet(BasePolicyViewSet):
                 },
             ),
             OpenApiExample(
+                "Multiple employees",
+                value={
+                    "employees": [1, 2],
+                    "shift": 1,
+                    "start_date": "2024-07-01",
+                    "days": 3,
+                },
+            ),
+            OpenApiExample(
                 "Until date",
                 value={
                     "employee": 1,
@@ -347,6 +359,11 @@ class RosterViewSet(BasePolicyViewSet):
                 value={"count": 31},
                 response_only=True,
             ),
+            OpenApiExample(
+                "Accepted response",
+                value={"task_id": "uuid"},
+                response_only=True,
+            ),
         ],
         request=RosterRangeSerializer,
         responses={
@@ -356,41 +373,88 @@ class RosterViewSet(BasePolicyViewSet):
                     name="RosterRangeResult",
                     fields={"count": serializers.IntegerField()},
                 ),
-            )
+            ),
+            202: OpenApiResponse(
+                description="Task enqueued for asynchronous processing",
+                response=inline_serializer(
+                    name="RosterRangeTask",
+                    fields={"task_id": serializers.CharField()},
+                ),
+            ),
         },
     )
     @action(detail=False, methods=["post"], url_path="schedule-range")
     def schedule_range(self, request, company_id=None):
-        params = RosterRangeSerializer(data=request.data, context=self.get_serializer_context())
+        params = RosterRangeSerializer(
+            data=request.data, context=self.get_serializer_context()
+        )
         params.is_valid(raise_exception=True)
         data = params.validated_data
-        allowed_emp_ids = set(scope_queryset(Employee.objects.all(), request.user).values_list("id", flat=True))
-        allowed_shift_ids = set(scope_queryset(ShiftTemplate.objects.all(), request.user).values_list("id", flat=True))
-        if data["employee"].id not in allowed_emp_ids or data["shift"].id not in allowed_shift_ids:
-            return Response({"detail": "Target employee/shift outside your scope", "errors": {}}, status=403)
-        start = data["start_date"]
-        end = start + timedelta(days=data["days"] - 1) if data.get("days") else data["until"]
-        rest_weekdays = set(data.get("rest_weekdays", []))
-        entries = []
-        for i in range((end - start).days + 1):
-            current = start + timedelta(days=i)
-            weekday_code = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"][current.weekday()]
-            item = {
-                "employee": data["employee"].id,
-                "date": current,
-                "shift": data["shift"].id,
-                "is_rest_day": weekday_code in rest_weekdays,
-            }
-            existing = RosterEntry.objects.filter(
-                employee=data["employee"], date=current
-            ).first()
-            ser = self.get_serializer(instance=existing, data=item)
-            ser.is_valid(raise_exception=True)
-            v = ser.validated_data
-            v["is_holiday"], v["was_holiday"] = holiday_flags(
-                v["employee"], v["date"], v.get("is_holiday")
+        employees = [data["employee"]] if data.get("employee") else list(data["employees"])
+
+        allowed_emp_ids = set(
+            scope_queryset(Employee.objects.all(), request.user).values_list("id", flat=True)
+        )
+        allowed_shift_ids = set(
+            scope_queryset(ShiftTemplate.objects.all(), request.user).values_list("id", flat=True)
+        )
+        if (
+            data["shift"].id not in allowed_shift_ids
+            or any(e.id not in allowed_emp_ids for e in employees)
+        ):
+            return Response(
+                {"detail": "Target employee/shift outside your scope", "errors": {}},
+                status=403,
             )
-            entries.append(RosterEntry(**v))
+
+        start = data["start_date"]
+        end = (
+            start + timedelta(days=data["days"] - 1)
+            if data.get("days")
+            else data["until"]
+        )
+        rest_weekdays = set(data.get("rest_weekdays", []))
+        num_days = (end - start).days + 1
+        total_entries = num_days * len(employees)
+        if total_entries > ASYNC_BULK_THRESHOLD:
+            task = schedule_range_bulk.delay(
+                [e.id for e in employees],
+                data["shift"].id,
+                start.isoformat(),
+                end.isoformat(),
+                list(rest_weekdays),
+            )
+            return Response({"task_id": task.id}, status=202)
+
+        entries = []
+        for emp in employees:
+            for i in range(num_days):
+                current = start + timedelta(days=i)
+                weekday_code = [
+                    "MON",
+                    "TUE",
+                    "WED",
+                    "THU",
+                    "FRI",
+                    "SAT",
+                    "SUN",
+                ][current.weekday()]
+                item = {
+                    "employee": emp.id,
+                    "date": current,
+                    "shift": data["shift"].id,
+                    "is_rest_day": weekday_code in rest_weekdays,
+                }
+                existing = RosterEntry.objects.filter(
+                    employee=emp, date=current
+                ).first()
+                ser = self.get_serializer(instance=existing, data=item)
+                ser.is_valid(raise_exception=True)
+                v = ser.validated_data
+                v["is_holiday"], v["was_holiday"] = holiday_flags(
+                    v["employee"], v["date"], v.get("is_holiday")
+                )
+                entries.append(RosterEntry(**v))
         with transaction.atomic():
             RosterEntry.objects.bulk_create(
                 entries,

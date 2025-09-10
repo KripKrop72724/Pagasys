@@ -47,6 +47,8 @@ comprehensive automated test suite.
   0 and 100. Codes are unique per company regardless of case.
 * **Rostering safety** – Employees must have a trade license, department or
   project before they can be assigned to a shift.
+* **Async roster scheduling** – `schedule-range` accepts multiple `employees`.
+  Large batches queue a Celery task and return `202` with a task ID.
 * **Archiving over deletion** – Branches, departments and projects linked to
   employees are protected from hard deletion. Mark them inactive to archive
   instead of deleting.
@@ -54,6 +56,24 @@ comprehensive automated test suite.
   enrollment with Amazon Rekognition, and raw punch ingestion with geofence and
   scope validation. Raw events are stored for later summarization by the policy
   layer.
+
+### Roster scheduling
+
+Use `/api/companies/{cid}/roster/schedule-range/` to assign shifts to multiple
+employees at once:
+
+```json
+{
+  "employees": [1, 2],
+  "shift": 5,
+  "start_date": "2024-07-01",
+  "days": 7
+}
+```
+
+If the batch is large, the API responds with `202 Accepted` and a `task_id`
+handled by Celery. Run a worker with a broker such as Redis to process queued
+jobs.
 
 ### Capture layer
 
@@ -149,6 +169,10 @@ Face enrollment and image storage rely on `boto3` and valid AWS credentials.
 6. Start the development server:
    ```bash
    python manage.py runserver
+   ```
+7. Run the Celery worker for asynchronous tasks:
+   ```bash
+   celery -A config worker -l info
    ```
 
 The API is served under `/api/` and the admin is served under `/admin/`.

@@ -2,6 +2,7 @@ from rest_framework.test import APIClient
 from django.contrib.auth.models import Group
 from django.core.management import call_command
 from django.test import TestCase
+from unittest.mock import patch
 from pagasys.models import (
     Company,
     WorkCalendar,
@@ -455,6 +456,102 @@ class PolicyApiTests(TestCase):
             format="json",
         )
         assert resp.status_code == 400
+
+    def test_roster_schedule_range_multiple_employees(self):
+        st = ShiftTemplate.objects.create(
+            company=self.company,
+            name="Shift",
+            start_time="09:00",
+            end_time="17:00",
+        )
+        other = Employee.objects.create_user(
+            username="u2",
+            password="pass",
+            department=self.department,
+            trade_license=self.license,
+            hire_date="2024-01-01",
+            employment_type="permanent",
+            visa_type="company",
+        )
+        payload = {
+            "employees": [self.user.id, other.id],
+            "shift": st.id,
+            "start_date": "2024-07-01",
+            "days": 2,
+        }
+        resp = self.client.post(
+            f"/api/companies/{self.company.id}/roster/schedule-range/",
+            payload,
+            format="json",
+        )
+        assert resp.status_code == 200 and resp.data["count"] == 4
+        assert RosterEntry.objects.filter(employee=self.user).count() == 2
+        assert RosterEntry.objects.filter(employee=other).count() == 2
+
+    def test_roster_schedule_range_requires_employee_or_employees(self):
+        st = ShiftTemplate.objects.create(
+            company=self.company,
+            name="Shift",
+            start_time="09:00",
+            end_time="17:00",
+        )
+        payload_missing = {
+            "shift": st.id,
+            "start_date": "2024-07-01",
+            "days": 1,
+        }
+        resp1 = self.client.post(
+            f"/api/companies/{self.company.id}/roster/schedule-range/",
+            payload_missing,
+            format="json",
+        )
+        assert resp1.status_code == 400
+        payload_both = {
+            "employee": self.user.id,
+            "employees": [self.user.id],
+            "shift": st.id,
+            "start_date": "2024-07-01",
+            "days": 1,
+        }
+        resp2 = self.client.post(
+            f"/api/companies/{self.company.id}/roster/schedule-range/",
+            payload_both,
+            format="json",
+        )
+        assert resp2.status_code == 400
+
+    @patch("pagasys.policy.views.schedule_range_bulk.delay")
+    def test_roster_schedule_range_bulk_async(self, mock_delay):
+        st = ShiftTemplate.objects.create(
+            company=self.company,
+            name="Shift",
+            start_time="09:00",
+            end_time="17:00",
+        )
+        other = Employee.objects.create_user(
+            username="u2",
+            password="pass",
+            department=self.department,
+            trade_license=self.license,
+            hire_date="2024-01-01",
+            employment_type="permanent",
+            visa_type="company",
+        )
+        payload = {
+            "employees": [self.user.id, other.id],
+            "shift": st.id,
+            "start_date": "2024-07-01",
+            "days": 1,
+        }
+        with patch("pagasys.policy.views.ASYNC_BULK_THRESHOLD", 1):
+            resp = self.client.post(
+                f"/api/companies/{self.company.id}/roster/schedule-range/",
+                payload,
+                format="json",
+            )
+        assert resp.status_code == 202
+        mock_delay.assert_called_once()
+        assert RosterEntry.objects.count() == 0
 
     def test_roster_schedule_range_requires_days_or_until(self):
         st = ShiftTemplate.objects.create(

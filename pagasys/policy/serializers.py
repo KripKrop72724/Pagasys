@@ -126,9 +126,8 @@ class RosterEntrySerializer(CleanModelMixin, serializers.ModelSerializer):
         super().__init__(*args, **kwargs)
         req = self.context.get("request")
         if req:
-            self.fields["employee"].queryset = scope_queryset(
-                Employee.objects.all(), req.user
-            )
+            emp_qs = scope_queryset(Employee.objects.all(), req.user)
+            self.fields["employee"].queryset = emp_qs
             self.fields["shift"].queryset = scope_queryset(
                 ShiftTemplate.objects.all(), req.user
             )
@@ -162,7 +161,15 @@ class RosterRangeSerializer(serializers.Serializer):
     """Serialize parameters for creating roster entries across a date range."""
 
     employee = serializers.PrimaryKeyRelatedField(
-        queryset=Employee.objects.all(), help_text="Employee ID to schedule"
+        queryset=Employee.objects.all(),
+        required=False,
+        help_text="Employee ID to schedule",
+    )
+    employees = serializers.PrimaryKeyRelatedField(
+        many=True,
+        queryset=Employee.objects.all(),
+        required=False,
+        help_text="Employee IDs to schedule",
     )
     shift = serializers.PrimaryKeyRelatedField(
         queryset=ShiftTemplate.objects.all(), help_text="Shift template to assign"
@@ -202,8 +209,17 @@ class RosterRangeSerializer(serializers.Serializer):
         until = attrs.get("until")
         if (days and until) or (not days and not until):
             raise serializers.ValidationError("Provide either 'days' or 'until'")
+
+        employee = attrs.get("employee")
+        employees = attrs.get("employees")
+        if bool(employee) == bool(employees):
+            raise serializers.ValidationError(
+                "Provide either 'employee' or 'employees'"
+            )
         if until and until < attrs["start_date"]:
-            raise serializers.ValidationError({"until": "must be on or after start_date"})
+            raise serializers.ValidationError(
+                {"until": "must be on or after start_date"}
+            )
         return attrs
 
 

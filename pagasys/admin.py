@@ -15,6 +15,7 @@ from copy import deepcopy
 from .excel_import import import_employee_workbook, import_company_visa_workbook
 
 from .utils import scope_queryset
+from .tasks import schedule_range_bulk
 
 from .models import (
     Company,
@@ -33,6 +34,8 @@ from .models import (
     LeaveType,
     holiday_flags,
 )
+
+ASYNC_BULK_THRESHOLD = 50
 
 
 class ScopedAdminMixin:
@@ -719,9 +722,14 @@ class RosterEntryRangeForm(forms.ModelForm):
         help_text="Weekdays to mark as rest days (e.g. select Sat/Sun for weekends)",
     )
 
+    employees = forms.ModelMultipleChoiceField(
+        queryset=Employee.objects.all(),
+        help_text="Employees to schedule",
+    )
+
     class Meta:
         model = RosterEntry
-        fields = "__all__"
+        exclude = ("employee",)
 
     def clean(self):
         cleaned = super().clean()
@@ -807,32 +815,66 @@ class RosterEntryAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
         )
 
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
-        """Ensure employee and shift dropdowns only show in-scope objects."""
-        if db_field.name == "employee":
-            kwargs["queryset"] = scope_queryset(Employee.objects.all(), request.user)
-        elif db_field.name == "shift":
-            kwargs["queryset"] = scope_queryset(ShiftTemplate.objects.all(), request.user)
+        """Ensure shift dropdown only shows in-scope objects."""
+        if db_field.name == "shift":
+            kwargs["queryset"] = scope_queryset(
+                ShiftTemplate.objects.all(), request.user
+            )
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
+    def get_form(self, request, obj=None, **kwargs):
+        form = super().get_form(request, obj, **kwargs)
+        form.base_fields["employees"].queryset = scope_queryset(
+            Employee.objects.all(), request.user
+        )
+        return form
+
     def save_model(self, request, obj, form, change):
+        employees = form.cleaned_data.get("employees")
         repeat_days = form.cleaned_data.get("repeat_days")
         repeat_until = form.cleaned_data.get("repeat_until")
-        name_to_idx = {"mon": 0, "tue": 1, "wed": 2, "thu": 3, "fri": 4, "sat": 5, "sun": 6}
-        rest_weekdays = {name_to_idx[w] for w in (form.cleaned_data.get("rest_weekdays") or [])}
+        name_to_idx = {
+            "mon": 0,
+            "tue": 1,
+            "wed": 2,
+            "thu": 3,
+            "fri": 4,
+            "sat": 5,
+            "sun": 6,
+        }
+        rest_weekdays = {
+            name_to_idx[w] for w in (form.cleaned_data.get("rest_weekdays") or [])
+        }
         override = obj.is_holiday if "is_holiday" in form.changed_data else None
 
-        if repeat_days or repeat_until:
-            start = obj.date
-            end = (
-                start + timedelta(days=repeat_days - 1)
-                if repeat_days
-                else repeat_until
+        start = obj.date
+        end = (
+            start + timedelta(days=repeat_days - 1)
+            if repeat_days
+            else repeat_until
+            if repeat_until
+            else start
+        )
+        num_days = (end - start).days + 1
+        total_entries = num_days * len(employees)
+        if total_entries > ASYNC_BULK_THRESHOLD:
+            codes = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]
+            schedule_range_bulk.delay(
+                [e.id for e in employees],
+                obj.shift_id,
+                start.isoformat(),
+                end.isoformat(),
+                [codes[i] for i in rest_weekdays],
             )
-            entries = []
+            messages.info(request, "Roster scheduling queued for processing")
+            return
+
+        entries = []
+        for emp in employees:
             current = start
             while current <= end:
                 entry = RosterEntry(
-                    employee=obj.employee,
+                    employee=emp,
                     date=current,
                     shift=obj.shift,
                     override_start=obj.override_start,
@@ -845,27 +887,20 @@ class RosterEntryAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
                 entry.full_clean(validate_unique=False)
                 entries.append(entry)
                 current += timedelta(days=1)
-            with transaction.atomic():
-                RosterEntry.objects.bulk_create(
-                    entries,
-                    update_conflicts=True,
-                    update_fields=[
-                        "shift",
-                        "override_start",
-                        "override_end",
-                        "is_rest_day",
-                        "is_holiday",
-                        "was_holiday",
-                    ],
-                    unique_fields=["employee", "date"],
-                )
-        else:
-            if obj.date.weekday() in rest_weekdays:
-                obj.is_rest_day = True
-            obj.is_holiday, obj.was_holiday = holiday_flags(
-                obj.employee, obj.date, override
+        with transaction.atomic():
+            RosterEntry.objects.bulk_create(
+                entries,
+                update_conflicts=True,
+                update_fields=[
+                    "shift",
+                    "override_start",
+                    "override_end",
+                    "is_rest_day",
+                    "is_holiday",
+                    "was_holiday",
+                ],
+                unique_fields=["employee", "date"],
             )
-            super().save_model(request, obj, form, change)
 
 
 @admin.register(LeaveType)
