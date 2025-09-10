@@ -56,5 +56,19 @@ services:
       - redis
       - postgres
 
+  beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    command: celery -A config.celery beat --loglevel=info
+    volumes:
+      - .:/app
+    env_file:
+      - .env
+    depends_on:
+      - redis
+      - postgres
+
 volumes:
   postgres_data:
