@@ -20,10 +20,18 @@ PAIR_ANOMALY_KEYS = {
 }
 
 
-def _close_open_pairs_with_shift(pairs: List[AttPair], shift) -> Tuple[List[AttPair], int, dict]:
-    """If the last pair is open and a shift is provided, close at shift end."""
+def _close_open_pairs_with_shift(
+    pairs: List[AttPair], shift
+) -> Tuple[List[AttPair], int, Optional[dict]]:
+    """If the last pair is open and a shift is provided, compute closure data.
+
+    Returns the original list of pairs, the number of minutes auto-closed,
+    and an anomaly override for the final pair if one is applied. The
+    ``AttPair`` instances themselves are not mutated or saved.
+    """
+
     auto_closed = 0
-    anomalies = {}
+    anomaly_override = None
     if shift and pairs:
         last = pairs[-1]
         if last.out_ts is None and last.in_ts and shift.end_time:
@@ -33,14 +41,18 @@ def _close_open_pairs_with_shift(pairs: List[AttPair], shift) -> Tuple[List[AttP
             )
             if shift.cross_midnight and end_dt <= last.in_ts:
                 end_dt += timedelta(days=1)
-            if end_dt > last.in_ts:
-                minutes = int((end_dt - last.in_ts).total_seconds() // 60)
-                last.out_ts = end_dt
-                last.duration_min = minutes
-                auto_closed = minutes
-                last.anomaly = {**last.anomaly, "auto_closed": True}
-                anomalies["auto_closed"] = True
-    return pairs, auto_closed, anomalies
+            if last.in_ts > end_dt:
+                anomaly_override = {
+                    **{k: v for k, v in (last.anomaly or {}).items() if k != "missing_out"},
+                    "unpaired_out": True,
+                }
+            elif end_dt > last.in_ts:
+                auto_closed = int((end_dt - last.in_ts).total_seconds() // 60)
+                anomaly_override = {
+                    **{k: v for k, v in (last.anomaly or {}).items() if k != "missing_out"},
+                    "auto_closed": True,
+                }
+    return pairs, auto_closed, anomaly_override
 
 
 def _collect_pair_anomalies(pairs: List[AttPair]) -> dict:

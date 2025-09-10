@@ -16,7 +16,7 @@ from pagasys.models import (
     RosterEntry,
     ShiftRule,
 )
-from attendance.models import AttAdjustment, AttDay
+from attendance.models import AttAdjustment, AttDay, AttPair
 
 
 class AttendanceBase(TestCase):
@@ -90,6 +90,56 @@ class AutoEventSequenceAnomalyTests(AttendanceBase):
         self.punch(time(17, 0), "out")
         day = self.compute()
         self.assertEqual(day.anomalies.get("unpaired_out"), 1)
+
+
+class AutoClosureRegressionTests(AttendanceBase):
+    def test_auto_closed_missing_out_exclusive_and_no_work(self):
+        self.punch(time(16, 50), "in")
+        build_pairs_for(self.employee.id, self.day, self.shift)
+        compute_att_day(self.employee.id, self.day)
+        day = self.employee.att_days.get(date=self.day)
+        self.assertEqual(day.work_min, 0)
+        self.assertEqual(day.anomalies.get("auto_close_min"), 10)
+        self.assertNotIn("missing_out", day.anomalies)
+
+        compute_att_day(self.employee.id, self.day)
+        day.refresh_from_db()
+        self.assertEqual(day.work_min, 0)
+        self.assertEqual(day.anomalies.get("auto_close_min"), 10)
+        self.assertNotIn("missing_out", day.anomalies)
+
+
+class AbsentDayCreationTests(AttendanceBase):
+    def test_no_roster_no_punches_creates_no_day(self):
+        RosterEntry.objects.filter(employee=self.employee, date=self.day).delete()
+        compute_att_day(self.employee.id, self.day)
+        self.assertFalse(
+            AttDay.objects.filter(employee=self.employee, date=self.day).exists()
+        )
+
+    def test_rostered_no_punches_mark_absent(self):
+        compute_att_day(self.employee.id, self.day)
+        day = AttDay.objects.get(employee=self.employee, date=self.day)
+        self.assertEqual(day.status, "absent")
+
+
+class AfterShiftPunchTests(AttendanceBase):
+    def test_post_shift_in_is_unpaired_out(self):
+        self.punch(time(9, 0), "in")
+        self.punch(time(17, 0), "out")
+        self.punch(time(19, 0), "in")
+        build_pairs_for(self.employee.id, self.day, self.shift)
+        compute_att_day(self.employee.id, self.day)
+        day = self.employee.att_days.get(date=self.day)
+        self.assertEqual(day.work_min, 8 * 60)
+        self.assertEqual(day.anomalies.get("unpaired_out"), 1)
+        self.assertNotIn("auto_close_min", day.anomalies)
+        self.assertEqual(
+            AttPair.objects.filter(
+                employee=self.employee, date=self.day, out_ts__isnull=True
+            ).count(),
+            0,
+        )
 
 
 class ActiveRuleResolutionTests(AttendanceBase):
@@ -482,6 +532,7 @@ class ManualPairApiTests(TestCase):
         from django.contrib.auth.models import Group
         from rest_framework.test import APIClient
 
+        active_rules.cache_clear()
         call_command("initgroups", verbosity=0)
         self.client = APIClient()
         self.day = date(2024, 1, 1)
