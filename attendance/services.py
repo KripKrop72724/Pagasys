@@ -17,6 +17,7 @@ from .services_helpers import (
     scheduled_required_minutes,
     ramadan_reduction_minutes,
     apply_att_adjustments,
+    PAIR_ANOMALY_KEYS,
 )
 
 BLOCKING_KINDS = {"geofence_rule"}
@@ -46,7 +47,7 @@ def _eligible(ev: PunchEvent):
 
 
 @transaction.atomic
-def build_pairs_for(employee_id: int, day: date) -> int:
+def build_pairs_for(employee_id: int, day: date, shift=None) -> int:
     """Construct AttPair records for an employee/day if not locked."""
     if AttDay.objects.filter(employee_id=employee_id, date=day, locked=True).exists():
         return 0
@@ -55,7 +56,8 @@ def build_pairs_for(employee_id: int, day: date) -> int:
         .filter(employee_id=employee_id, date=day)
         .first()
     )
-    shift = roster.shift if roster else None
+    if shift is None:
+        shift = roster.shift if roster else None
     rules = active_rules(shift, day)
     min_conf = None
     conf_rules = rules.get(ShiftRule.Kind.FACE_MIN_CONF) if shift else None
@@ -88,30 +90,40 @@ def build_pairs_for(employee_id: int, day: date) -> int:
             PunchException.objects.get_or_create(
                 event=ev, defaults={"kind": reason, "details": {}}
             )
+    shift_end_dt = None
+    if shift and shift.end_time:
+        tz = timezone.get_current_timezone()
+        shift_end_dt = timezone.make_aware(datetime.combine(day, shift.end_time), tz)
+        if shift.cross_midnight:
+            shift_end_dt += timezone.timedelta(days=1)
+
     pairs = []
     open_in = None
     for ev, warn in events:
-            if open_in:
-                if ev.action in {"out", "auto"}:
-                    duration = int((ev.device_ts - open_in.device_ts).total_seconds() // 60)
-                    if 0 < duration <= MAX_PAIR_MIN:
-                        pairs.append((open_in, ev, duration, warn))
-                    else:
-                        duration = max(0, min(duration, MAX_PAIR_MIN))
-                        pairs.append((open_in, ev, duration, {"capped": True, **warn}))
-                    open_in = None
-                elif ev.action == "in":
-                    duration = int((ev.device_ts - open_in.device_ts).total_seconds() // 60)
+        if shift_end_dt and ev.action == "in" and ev.device_ts > shift_end_dt:
+            pairs.append((ev, ev, 0, {"unpaired_out": True, **warn}))
+            continue
+        if open_in:
+            if ev.action in {"out", "auto"}:
+                duration = int((ev.device_ts - open_in.device_ts).total_seconds() // 60)
+                if 0 < duration <= MAX_PAIR_MIN:
+                    pairs.append((open_in, ev, duration, warn))
+                else:
                     duration = max(0, min(duration, MAX_PAIR_MIN))
-                    pairs.append(
-                        (open_in, None, duration, {"missing_out_closed_at_next_in": True})
-                    )
-                    open_in = ev
-            else:
-                if ev.action == "out":
-                    pairs.append((ev, ev, 0, {"unpaired_out": True, **warn}))
-                else:  # in or auto
-                    open_in = ev
+                    pairs.append((open_in, ev, duration, {"capped": True, **warn}))
+                open_in = None
+            elif ev.action == "in":
+                duration = int((ev.device_ts - open_in.device_ts).total_seconds() // 60)
+                duration = max(0, min(duration, MAX_PAIR_MIN))
+                pairs.append(
+                    (open_in, None, duration, {"missing_out_closed_at_next_in": True})
+                )
+                open_in = ev
+        else:
+            if ev.action == "out":
+                pairs.append((ev, ev, 0, {"unpaired_out": True, **warn}))
+            else:  # in or auto
+                open_in = ev
     if open_in:
         pairs.append((open_in, None, 0, {"missing_out": True}))
 
@@ -141,12 +153,6 @@ def build_pairs_for(employee_id: int, day: date) -> int:
 @transaction.atomic
 def compute_att_day(employee_id: int, day: date) -> int:
     """Compute the canonical AttDay, skipping locked records."""
-    obj, _ = AttDay.objects.select_for_update().get_or_create(
-        employee_id=employee_id, date=day, defaults={"locked": False}
-    )
-    if obj.locked:
-        return 0
-
     roster = (
         RosterEntry.objects.select_related(
             "shift",
@@ -157,20 +163,46 @@ def compute_att_day(employee_id: int, day: date) -> int:
         .filter(employee_id=employee_id, date=day)
         .first()
     )
+    pairs = list(
+        AttPair.objects.filter(employee_id=employee_id, date=day).order_by("in_ts")
+    )
+    if not roster and not pairs:
+        AttDay.objects.filter(employee_id=employee_id, date=day).delete()
+        return 0
+
+    obj, _ = AttDay.objects.select_for_update().get_or_create(
+        employee_id=employee_id, date=day, defaults={"locked": False}
+    )
+    if obj.locked:
+        return 0
+
     shift = roster.shift if roster else None
     is_rest = bool(roster and roster.is_rest_day)
     is_hol = bool(roster and roster.is_holiday)
 
     rules_by_kind = active_rules(shift, day)
 
-    pairs = list(AttPair.objects.filter(employee_id=employee_id, date=day).order_by("in_ts"))
-    pairs, auto_closed_min, anomalies = _close_open_pairs_with_shift(pairs, shift)
+    pairs, auto_closed_min, anomaly_override = _close_open_pairs_with_shift(
+        pairs, shift
+    )
 
     gross = sum(max(0, p.duration_min) for p in pairs)
     unpaid_break = 0
     paid_break = 0
     late_min = early_min = 0
-    anomalies_all = _collect_pair_anomalies(pairs)
+    anomalies_all = _collect_pair_anomalies(pairs[:-1] if anomaly_override else pairs)
+    if anomaly_override:
+        for key, val in anomaly_override.items():
+            if key not in PAIR_ANOMALY_KEYS:
+                continue
+            if isinstance(val, bool):
+                if val:
+                    anomalies_all[key] = anomalies_all.get(key, 0) + 1
+            else:
+                try:
+                    anomalies_all[key] = anomalies_all.get(key, 0) + int(val)
+                except (TypeError, ValueError):
+                    anomalies_all[key] = val
     if auto_closed_min:
         anomalies_all["auto_close_min"] = auto_closed_min
 
@@ -254,7 +286,7 @@ def compute_att_day(employee_id: int, day: date) -> int:
         status = "holiday"
     elif is_rest and total_work == 0:
         status = "rest"
-    elif total_work >= sched_req:
+    elif sched_req > 0 and total_work >= sched_req:
         status = "present" if not on_leave else "partial"
     elif total_work > 0 or (on_leave and leave_portion > 0):
         status = "partial"
