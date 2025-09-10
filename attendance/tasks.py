@@ -1,5 +1,6 @@
 from celery import shared_task
 from datetime import date, timedelta
+from django.utils import timezone
 from django.utils.timezone import localdate
 
 from .services import build_pairs_for, compute_att_day
@@ -68,3 +69,24 @@ def recompute_yesterday_task():
     return recompute_range_task(
         eids, yesterday.isoformat(), yesterday.isoformat()
     )
+
+
+@shared_task(queue="compute")
+def recompute_recent_task(minutes: int = 5) -> int:
+    """Process punches from the last ``minutes`` and recompute affected days."""
+    from capture.models import PunchEvent
+
+    cutoff = timezone.now() - timedelta(minutes=minutes)
+    qs = (
+        PunchEvent.objects.filter(
+            device_ts__gte=cutoff, matched_employee_id__isnull=False
+        )
+        .values_list("matched_employee_id", "roster_date")
+        .distinct()
+    )
+    total = 0
+    for eid, day in qs:
+        day = day or localdate()
+        build_pairs_for(eid, day)
+        total += compute_att_day(eid, day)
+    return total

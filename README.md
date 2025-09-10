@@ -174,6 +174,11 @@ Face enrollment and image storage rely on `boto3` and valid AWS credentials.
    ```bash
    celery -A config worker -l info
    ```
+8. Run the Celery beat scheduler for periodic tasks:
+   ```bash
+   celery -A config.celery beat -l info
+   ```
+   (Alternatively run the worker with `-B` to embed the scheduler.)
 
 The API is served under `/api/` and the admin is served under `/admin/`.
 

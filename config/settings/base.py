@@ -304,7 +304,11 @@ CELERY_BEAT_SCHEDULE = {
     "attendance-nightly-recompute": {
         "task": "attendance.tasks.recompute_yesterday_task",
         "schedule": crontab(hour=2, minute=0),
-    }
+    },
+    "attendance-minutely-recompute": {
+        "task": "attendance.tasks.recompute_recent_task",
+        "schedule": 60.0,
+    },
 }
 
 SILENCED_SYSTEM_CHECKS = [
