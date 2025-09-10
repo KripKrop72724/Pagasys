@@ -41,7 +41,7 @@ DEBUG = env("DEBUG", default=True)
 
 # Allow localhost by default and permit Elastic Beanstalk domains in production
 ALLOWED_HOSTS = env.list(
-    "ALLOWED_HOSTS", default=["localhost", ".elasticbeanstalk.com", "127.0.0.1", "0.0.0.0", "api.pagasys.pro", "pagasysv1.vercel.app", "prodapi.pagasys.pro", "ats.pagasys.pro"]
+    "ALLOWED_HOSTS", default=["*"]
 )
 
 CORS_ALLOW_ALL_ORIGINS = False
