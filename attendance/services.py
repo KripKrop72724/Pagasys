@@ -88,6 +88,7 @@ def build_pairs_for(employee_id: int, day: date, shift=None, tz=None) -> int:
     )
     events = []
     for ev in qs:
+        ev.local_ts = ev.device_ts.astimezone(tz)
         if (
             min_conf is not None
             and ev.face_confidence is not None
@@ -113,12 +114,12 @@ def build_pairs_for(employee_id: int, day: date, shift=None, tz=None) -> int:
     pairs = []
     open_in = None
     for ev, warn in events:
-        if shift_end_dt and ev.action == "in" and ev.device_ts > shift_end_dt:
+        if shift_end_dt and ev.action == "in" and ev.local_ts > shift_end_dt:
             pairs.append((ev, ev, 0, {"unpaired_out": True, **warn}))
             continue
         if open_in:
             if ev.action in {"out", "auto"}:
-                duration = int((ev.device_ts - open_in.device_ts).total_seconds() // 60)
+                duration = int((ev.local_ts - open_in.local_ts).total_seconds() // 60)
                 if 0 < duration <= MAX_PAIR_MIN:
                     pairs.append((open_in, ev, duration, warn))
                 else:
@@ -126,7 +127,7 @@ def build_pairs_for(employee_id: int, day: date, shift=None, tz=None) -> int:
                     pairs.append((open_in, ev, duration, {"capped": True, **warn}))
                 open_in = None
             elif ev.action == "in":
-                duration = int((ev.device_ts - open_in.device_ts).total_seconds() // 60)
+                duration = int((ev.local_ts - open_in.local_ts).total_seconds() // 60)
                 duration = max(0, min(duration, MAX_PAIR_MIN))
                 pairs.append(
                     (open_in, None, duration, {"missing_out_closed_at_next_in": True})
@@ -149,11 +150,11 @@ def build_pairs_for(employee_id: int, day: date, shift=None, tz=None) -> int:
             defaults=dict(
                 date=day,
                 out_event_id=pout.id if pout else None,
-                in_ts=pin.device_ts if pin else None,
-                out_ts=pout.device_ts if pout else None,
+                in_ts=pin.local_ts if pin else None,
+                out_ts=pout.local_ts if pout else None,
                 duration_min=dur,
                 cross_midnight=bool(
-                    pin and pout and (pout.device_ts.date() != pin.device_ts.date())
+                    pin and pout and (pout.local_ts.date() != pin.local_ts.date())
                 ),
                 anomaly=anomaly,
             ),
