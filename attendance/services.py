@@ -1,4 +1,5 @@
 from datetime import datetime, date, time
+from zoneinfo import ZoneInfo
 
 from django.db import transaction
 from django.utils import timezone
@@ -47,17 +48,30 @@ def _eligible(ev: PunchEvent):
 
 
 @transaction.atomic
-def build_pairs_for(employee_id: int, day: date, shift=None) -> int:
+def build_pairs_for(employee_id: int, day: date, shift=None, tz=None) -> int:
     """Construct AttPair records for an employee/day if not locked."""
     if AttDay.objects.filter(employee_id=employee_id, date=day, locked=True).exists():
         return 0
     roster = (
-        RosterEntry.objects.select_related("shift")
+        RosterEntry.objects.select_related(
+            "shift__company", "employee__trade_license__company"
+        )
         .filter(employee_id=employee_id, date=day)
         .first()
     )
     if shift is None:
         shift = roster.shift if roster else None
+    if tz is None:
+        if shift and getattr(shift, "company", None):
+            tz_str = shift.company.timezone
+        else:
+            company = (
+                roster.employee.trade_license.company
+                if roster and getattr(roster.employee, "trade_license", None)
+                else None
+            )
+            tz_str = company.timezone if company else None
+        tz = ZoneInfo(tz_str) if tz_str else timezone.get_default_timezone()
     rules = active_rules(shift, day)
     min_conf = None
     conf_rules = rules.get(ShiftRule.Kind.FACE_MIN_CONF) if shift else None
@@ -92,7 +106,6 @@ def build_pairs_for(employee_id: int, day: date, shift=None) -> int:
             )
     shift_end_dt = None
     if shift and shift.end_time:
-        tz = timezone.get_current_timezone()
         shift_end_dt = timezone.make_aware(datetime.combine(day, shift.end_time), tz)
         if shift.cross_midnight:
             shift_end_dt += timezone.timedelta(days=1)
@@ -177,13 +190,24 @@ def compute_att_day(employee_id: int, day: date) -> int:
         return 0
 
     shift = roster.shift if roster else None
+    company = (
+        roster.employee.trade_license.company
+        if roster and getattr(roster.employee, "trade_license", None)
+        else None
+    )
+    if shift and getattr(shift, "company", None):
+        tz_str = shift.company.timezone
+    else:
+        tz_str = company.timezone if company else None
+    tz = ZoneInfo(tz_str) if tz_str else timezone.get_default_timezone()
+
     is_rest = bool(roster and roster.is_rest_day)
     is_hol = bool(roster and roster.is_holiday)
 
     rules_by_kind = active_rules(shift, day)
 
     pairs, auto_closed_min, anomaly_override = _close_open_pairs_with_shift(
-        pairs, shift
+        pairs, shift, tz
     )
 
     gross = sum(max(0, p.duration_min) for p in pairs)
@@ -216,7 +240,9 @@ def compute_att_day(employee_id: int, day: date) -> int:
         if v:
             anomalies_all[k] = v
 
-    work_timeline = pairs_to_timeline(pairs)
+    work_timeline = [
+        (s.astimezone(tz), e.astimezone(tz)) for s, e in pairs_to_timeline(pairs)
+    ]
 
     ld = LeaveDay.objects.filter(employee_id=employee_id, date=day).first()
     on_leave = bool(ld)
@@ -235,13 +261,14 @@ def compute_att_day(employee_id: int, day: date) -> int:
         unpaid_break,
         paid_break,
         anomalies_all,
+        tz,
     )
 
     if shift and not on_leave:
         first_in = next((p.in_ts for p in pairs if p.in_ts), None)
         last_out = next((p.out_ts for p in reversed(pairs) if p.out_ts), None)
-        tz = timezone.get_current_timezone()
         if first_in:
+            first_in = first_in.astimezone(tz)
             sched_start = timezone.make_aware(datetime.combine(day, shift.start_time), tz)
             grace = timezone.timedelta(minutes=shift.grace_in_min or 0)
             late = (first_in - sched_start - grace).total_seconds() // 60
@@ -249,6 +276,7 @@ def compute_att_day(employee_id: int, day: date) -> int:
             if shift.late_after_min:
                 late_min = max(0, late_min - max(0, shift.late_after_min - shift.grace_in_min))
         if last_out:
+            last_out = last_out.astimezone(tz)
             sched_end = timezone.make_aware(datetime.combine(day, shift.end_time), tz)
             if shift.cross_midnight:
                 sched_end += timezone.timedelta(days=1)
