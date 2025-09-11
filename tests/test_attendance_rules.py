@@ -3,6 +3,7 @@ from datetime import date, datetime, time, timedelta
 from django.test import TestCase
 from django.utils import timezone
 from django.core.exceptions import ValidationError
+from zoneinfo import ZoneInfo
 
 from attendance.services import build_pairs_for, compute_att_day
 from attendance.services_helpers import active_rules
@@ -52,8 +53,8 @@ class AttendanceBase(TestCase):
         )
 
     def punch(self, t: time, action="in"):
-        tz = timezone.get_current_timezone()
-        ts = timezone.make_aware(datetime.combine(self.day, t), tz)
+        tz = ZoneInfo(self.company.timezone)
+        ts = datetime.combine(self.day, t, tzinfo=tz)
         return PunchEvent.objects.create(
             device=self.device,
             company=self.company,
