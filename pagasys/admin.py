@@ -146,6 +146,24 @@ class BranchSelectMultiple(FilteredSelectMultiple):
         return option
 
 
+class EmployeeSelectMultiple(FilteredSelectMultiple):
+    """Select box that annotates options with the employee branch."""
+
+    def create_option(
+        self, name, value, label, selected, index, subindex=None, attrs=None
+    ):
+        option = super().create_option(
+            name, value, label, selected, index, subindex=subindex, attrs=attrs
+        )
+        try:
+            branch = value.instance.branch
+            if branch:
+                option["attrs"]["data-branch"] = str(branch.id)
+        except Exception:
+            pass
+        return option
+
+
 class TradeLicenseForm(forms.ModelForm):
     """Form for :class:`TradeLicense` with dynamic branch queryset.
 
@@ -723,8 +741,15 @@ class RosterEntryRangeForm(forms.ModelForm):
         help_text="Weekdays to mark as rest days (e.g. select Sat/Sun for weekends)",
     )
 
+    branch = forms.ModelChoiceField(
+        queryset=Branch.objects.all(),
+        required=False,
+        help_text="Filter employees by branch",
+    )
+
     employees = forms.ModelMultipleChoiceField(
         queryset=Employee.objects.all(),
+        widget=EmployeeSelectMultiple("employees", False),
         help_text="Employees to schedule",
     )
 
@@ -760,6 +785,9 @@ class RosterEntryAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
     date_hierarchy = "date"
     change_list_template = "admin/pagasys/rosterentry/change_list.html"
     readonly_fields = ["was_holiday"]
+
+    class Media:
+        js = ["pagasys/js/roster_admin.js"]
 
     def get_fields(self, request, obj=None):
         fields = super().get_fields(request, obj)
@@ -841,6 +869,9 @@ class RosterEntryAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
             form.base_fields.pop("employee", None)
             form.base_fields["employees"].queryset = scope_queryset(
                 Employee.objects.all(), request.user
+            )
+            form.base_fields["branch"].queryset = scope_queryset(
+                Branch.objects.all(), request.user
             )
         return form
 
