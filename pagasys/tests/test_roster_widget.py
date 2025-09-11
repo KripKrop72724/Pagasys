@@ -49,3 +49,4 @@ class RosterWidgetTests(ModelFactoryMixin, TestCase):
             content = fh.read()
         self.assertIn("window.addEventListener('load'", content)
         self.assertIn("Select all", content)
+        self.assertNotIn("DOMContentLoaded", content)

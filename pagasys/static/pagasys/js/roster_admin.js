@@ -25,7 +25,11 @@ function initRosterAdmin() {
     });
   }
 
-  if (sourceEl && sourceEl !== employeesEl) {
+  if (
+    sourceEl &&
+    sourceEl !== employeesEl &&
+    sourceEl.options.length > 0
+  ) {
     const branchMap = new Map();
     Array.from(sourceEl.options).forEach((opt) => {
       branchMap.set(opt.value, opt.dataset.branch);
@@ -43,4 +47,3 @@ function initRosterAdmin() {
 }
 
 window.addEventListener('load', initRosterAdmin);
-window.addEventListener('DOMContentLoaded', initRosterAdmin);
