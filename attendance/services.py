@@ -269,16 +269,16 @@ def compute_att_day(employee_id: int, day: date) -> int:
         first_in = next((p.in_ts for p in pairs if p.in_ts), None)
         last_out = next((p.out_ts for p in reversed(pairs) if p.out_ts), None)
         if first_in:
-            first_in = first_in.astimezone(tz)
-            sched_start = timezone.make_aware(datetime.combine(day, shift.start_time), tz)
+            first_in = timezone.localtime(first_in, tz)
+            sched_start = datetime.combine(day, shift.start_time, tzinfo=tz)
             grace = timezone.timedelta(minutes=shift.grace_in_min or 0)
             late = (first_in - sched_start - grace).total_seconds() // 60
             late_min = max(0, int(late))
             if shift.late_after_min:
                 late_min = max(0, late_min - max(0, shift.late_after_min - shift.grace_in_min))
         if last_out:
-            last_out = last_out.astimezone(tz)
-            sched_end = timezone.make_aware(datetime.combine(day, shift.end_time), tz)
+            last_out = timezone.localtime(last_out, tz)
+            sched_end = datetime.combine(day, shift.end_time, tzinfo=tz)
             if shift.cross_midnight:
                 sched_end += timezone.timedelta(days=1)
             if reduction_min:
