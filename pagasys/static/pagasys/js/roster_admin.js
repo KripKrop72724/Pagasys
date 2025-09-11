@@ -1,6 +1,8 @@
 function initRosterAdmin() {
   const branchEl = document.getElementById('id_branch');
-  const employeesEl = document.getElementById('id_employees');
+  const employeesEl =
+    document.getElementById('id_employees_from') ||
+    document.getElementById('id_employees');
   if (!employeesEl) return;
 
   const selectAllBtn = document.createElement('button');
