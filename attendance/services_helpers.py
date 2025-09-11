@@ -21,7 +21,7 @@ PAIR_ANOMALY_KEYS = {
 
 
 def _close_open_pairs_with_shift(
-    pairs: List[AttPair], shift
+    pairs: List[AttPair], shift, tz
 ) -> Tuple[List[AttPair], int, Optional[dict]]:
     """If the last pair is open and a shift is provided, compute closure data.
 
@@ -35,19 +35,19 @@ def _close_open_pairs_with_shift(
     if shift and pairs:
         last = pairs[-1]
         if last.out_ts is None and last.in_ts and shift.end_time:
-            tz = timezone.get_current_timezone()
+            last_in_ts = last.in_ts.astimezone(tz)
             end_dt = timezone.make_aware(
-                datetime.combine(last.in_ts.date(), shift.end_time), tz
+                datetime.combine(last_in_ts.date(), shift.end_time), tz
             )
-            if shift.cross_midnight and end_dt <= last.in_ts:
+            if shift.cross_midnight and end_dt <= last_in_ts:
                 end_dt += timedelta(days=1)
-            if last.in_ts > end_dt:
+            if last_in_ts > end_dt:
                 anomaly_override = {
                     **{k: v for k, v in (last.anomaly or {}).items() if k != "missing_out"},
                     "unpaired_out": True,
                 }
-            elif end_dt > last.in_ts:
-                auto_closed = int((end_dt - last.in_ts).total_seconds() // 60)
+            elif end_dt > last_in_ts:
+                auto_closed = int((end_dt - last_in_ts).total_seconds() // 60)
                 anomaly_override = {
                     **{k: v for k, v in (last.anomaly or {}).items() if k != "missing_out"},
                     "auto_closed": True,
@@ -109,11 +109,14 @@ def active_rules(shift, day: datetime.date) -> dict:
 active_rules.cache_clear = _active_rules_cached.cache_clear
 
 
-def _window_range(day: datetime, window: str):
-    tz = timezone.get_current_timezone()
+def _window_range(day: datetime, window: str, tz):
     start_s, end_s = window.split("-")
-    start = timezone.make_aware(datetime.combine(day.date(), time.fromisoformat(start_s)), tz)
-    end = timezone.make_aware(datetime.combine(day.date(), time.fromisoformat(end_s)), tz)
+    start = timezone.make_aware(
+        datetime.combine(day.date(), time.fromisoformat(start_s)), tz
+    )
+    end = timezone.make_aware(
+        datetime.combine(day.date(), time.fromisoformat(end_s)), tz
+    )
     if end <= start:
         end += timedelta(days=1)
     return start, end
@@ -136,12 +139,13 @@ def apply_break_rules(
     unpaid_break: int,
     paid_break: int,
     anomalies: dict,
+    tz,
 ):
     """Apply break-related ShiftRules to work timeline."""
     for rule in rules_by_kind.get(ShiftRule.Kind.FIXED_BREAK_WINDOW, []):
         window = rule.value
         params = rule.params or {}
-        start, end = _window_range(day, window)
+        start, end = _window_range(day, window, tz)
         window_len = int((end - start).total_seconds() // 60)
         worked = _worked_in_range(work_timeline, start, end)
         actual_break = max(0, window_len - worked)
@@ -199,7 +203,7 @@ def apply_break_rules(
 
     paid_windows = []
     for rule in rules_by_kind.get(ShiftRule.Kind.PAID_BREAK_WINDOW, []):
-        paid_windows.append(_window_range(day, rule.value))
+        paid_windows.append(_window_range(day, rule.value, tz))
     if paid_windows:
         paid_windows.sort()
         merged = []

@@ -3,6 +3,8 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 
 from django.core.management.base import BaseCommand, CommandError
+from django.utils import timezone
+from zoneinfo import ZoneInfo
 
 from attendance.scenarios import ScenarioLibrary
 from attendance.services import build_pairs_for, compute_att_day
@@ -30,37 +32,39 @@ class Command(BaseCommand):
         company = employee.department.branch.company
         device, _ = AttendanceDevice.objects.get_or_create(company=company, name="sim", defaults={"api_key": "sim-key"})
 
-        for day_offset in range(days):
-            day = start + timedelta(days=day_offset)
-            for name in scenarios:
-                try:
-                    generator = ScenarioLibrary.get(name)
-                except KeyError:
-                    raise CommandError(f"Unknown scenario '{name}'")
-                plan = generator(employee, device, day)
-                if opts["dry_run"]:
-                    self.stdout.write(
-                        f"[DRY RUN] {day} {name}: {len(plan.events)} events"
-                    )
-                    for ev in plan.events:
+        tz = ZoneInfo(company.timezone)
+        with timezone.override(tz):
+            for day_offset in range(days):
+                day = start + timedelta(days=day_offset)
+                for name in scenarios:
+                    try:
+                        generator = ScenarioLibrary.get(name)
+                    except KeyError:
+                        raise CommandError(f"Unknown scenario '{name}'")
+                    plan = generator(employee, device, day)
+                    if opts["dry_run"]:
                         self.stdout.write(
-                            f"  {ev.action} @ {ev.device_ts.isoformat()}"
+                            f"[DRY RUN] {day} {name}: {len(plan.events)} events"
                         )
-                    continue
+                        for ev in plan.events:
+                            self.stdout.write(
+                                f"  {ev.action} @ {ev.device_ts.isoformat()}"
+                            )
+                        continue
 
-                shift = ShiftTemplate.objects.create(**plan.shift_kwargs)
-                for kind, value in plan.rules:
-                    ShiftRule.objects.create(shift=shift, kind=kind, value=value)
-                RosterEntry.objects.update_or_create(
-                    employee=employee, date=day, defaults={"shift": shift}
-                )
-                PunchEvent.objects.filter(
-                    matched_employee=employee, roster_date=day
-                ).delete()
-                PunchEvent.objects.bulk_create(plan.events)
-                build_pairs_for(employee.id, day)
-                compute_att_day(employee.id, day)
-                day_obj = employee.att_days.get(date=day)
-                self.stdout.write(
-                    f"{day} {name}: anomalies={day_obj.anomalies} work={day_obj.work_min} late={day_obj.late_min}"
-                )
+                    shift = ShiftTemplate.objects.create(**plan.shift_kwargs)
+                    for kind, value in plan.rules:
+                        ShiftRule.objects.create(shift=shift, kind=kind, value=value)
+                    RosterEntry.objects.update_or_create(
+                        employee=employee, date=day, defaults={"shift": shift}
+                    )
+                    PunchEvent.objects.filter(
+                        matched_employee=employee, roster_date=day
+                    ).delete()
+                    PunchEvent.objects.bulk_create(plan.events)
+                    build_pairs_for(employee.id, day, shift=shift, tz=tz)
+                    compute_att_day(employee.id, day)
+                    day_obj = employee.att_days.get(date=day)
+                    self.stdout.write(
+                        f"{day} {name}: anomalies={day_obj.anomalies} work={day_obj.work_min} late={day_obj.late_min}"
+                    )
