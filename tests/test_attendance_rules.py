@@ -23,7 +23,9 @@ class AttendanceBase(TestCase):
     def setUp(self):
         active_rules.cache_clear()
         self.day = date(2024, 1, 1)
-        self.company = Company.objects.create(name="C1")
+        self.company = Company.objects.create(
+            name="C1", timezone=timezone.get_current_timezone_name()
+        )
         self.branch = Branch.objects.create(company=self.company, name="B1")
         self.dept = Department.objects.create(branch=self.branch, name="D1")
         self.employee = Employee.objects.create(
