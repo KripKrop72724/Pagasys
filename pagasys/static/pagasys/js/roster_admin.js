@@ -3,6 +3,7 @@ function initRosterAdmin() {
   const employeesEl =
     document.getElementById('id_employees_from') ||
     document.getElementById('id_employees');
+  const sourceEl = document.getElementById('id_employees');
   if (!employeesEl) return;
 
   const selectAllBtn = document.createElement('button');
@@ -21,6 +22,17 @@ function initRosterAdmin() {
       const match = !branchId || opt.dataset.branch === branchId;
       opt.hidden = !match;
       if (!match) opt.selected = false;
+    });
+  }
+
+  if (sourceEl && sourceEl !== employeesEl) {
+    const branchMap = new Map();
+    Array.from(sourceEl.options).forEach((opt) => {
+      branchMap.set(opt.value, opt.dataset.branch);
+    });
+    Array.from(employeesEl.options).forEach((opt) => {
+      const branchId = branchMap.get(opt.value);
+      if (branchId !== undefined) opt.dataset.branch = branchId;
     });
   }
 
