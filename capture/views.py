@@ -440,7 +440,7 @@ class CapturePunchView(generics.GenericAPIView):
                     employee=employee,
                     matched_employee=matched_emp,
                     action=data["action"],
-                    device_ts=data["timestamp"],
+                    device_ts=company_local_dt,
                     s3_key=s3_key,
                     image_bytes_sha256=sha256,
                     face_matched=bool(face_ok),
