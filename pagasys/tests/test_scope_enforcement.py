@@ -1,3 +1,5 @@
+import json
+
 from django.test import TestCase
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
@@ -107,15 +109,24 @@ class AdminDropdownScopeTests(TestCase):
         html = res.content.decode()
         import re
 
-        emp_block = re.search(
-            r'<select[^>]*id="id_employees"[^>]*>(.*?)</select>', html, re.S
-        ).group(1)
-        self.assertIn(f'value="{self.emp_c1.pk}"', emp_block)
-        self.assertNotIn(f'value="{self.emp_c2.pk}"', emp_block)
-
         shift_block = re.search(r'<select[^>]*id="id_shift"[^>]*>(.*?)</select>', html, re.S).group(1)
         self.assertIn(f'value="{self.shift1.pk}"', shift_block)
         self.assertNotIn(f'value="{self.shift2.pk}"', shift_block)
+
+        url = reverse("admin:pagasys_employee_autocomplete")
+        params = {
+            "term": "",
+            "app_label": "pagasys",
+            "model_name": "rosterentry",
+            "field_name": "employee",
+            "forward": "branch",
+            "branch": self.b1.pk,
+        }
+        res = self.client.get(url, params)
+        data = json.loads(res.content)
+        ids = [int(r["id"]) for r in data["results"]]
+        self.assertIn(self.emp_c1.pk, ids)
+        self.assertNotIn(self.emp_c2.pk, ids)
 
     def test_holiday_add_form_scopes_calendar(self):
         self.client.force_login(self.company_admin)
