@@ -731,6 +731,13 @@ class RosterEntryRangeForm(forms.ModelForm):
         help_text="Branch whose employees will be scheduled",
     )
 
+    employees = forms.ModelMultipleChoiceField(
+        queryset=Employee.objects.none(),
+        required=False,
+        widget=forms.CheckboxSelectMultiple,
+        help_text="Employees to schedule within the branch",
+    )
+
     class Meta:
         model = RosterEntry
         exclude = ("employee",)
@@ -855,7 +862,45 @@ class RosterEntryAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
             form.base_fields["branch"].queryset = scope_queryset(
                 Branch.objects.all(), request.user
             )
+            show_employees = "employees" in request.POST or (
+                request.method == "GET" and request.GET.get("stage2")
+            )
+            if show_employees:
+                branch_id = request.POST.get("branch") or request.GET.get("branch")
+                if branch_id:
+                    form.base_fields["employees"].queryset = scope_queryset(
+                        Employee.objects.filter(department__branch_id=branch_id),
+                        request.user,
+                    )
+            else:
+                form.base_fields.pop("employees", None)
         return form
+
+    def add_view(self, request, form_url="", extra_context=None):
+        if request.method == "POST" and "employees" not in request.POST:
+            form = RosterEntryRangeForm(request.POST)
+            if form.is_valid():
+                params = request.POST.copy()
+                params.pop("csrfmiddlewaretoken", None)
+                params["stage2"] = "1"
+                return redirect(f"{request.path}?{params.urlencode()}")
+        return super().add_view(request, form_url, extra_context)
+
+    def get_changeform_initial_data(self, request):
+        initial = super().get_changeform_initial_data(request)
+        if request.GET.get("stage2"):
+            for field in [
+                "branch",
+                "date",
+                "shift",
+                "repeat_days",
+                "repeat_until",
+            ]:
+                if field in request.GET:
+                    initial[field] = request.GET[field]
+            if "rest_weekdays" in request.GET:
+                initial["rest_weekdays"] = request.GET.getlist("rest_weekdays")
+        return initial
 
     def save_model(self, request, obj, form, change):
         repeat_days = form.cleaned_data.get("repeat_days")
@@ -883,12 +928,15 @@ class RosterEntryAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
                 super().save_model(request, obj, form, change)
                 return
         else:
-            employees = list(
-                scope_queryset(
-                    Employee.objects.filter(department__branch=branch),
-                    request.user,
+            if form.cleaned_data.get("employees"):
+                employees = list(form.cleaned_data["employees"])
+            else:
+                employees = list(
+                    scope_queryset(
+                        Employee.objects.filter(department__branch=branch),
+                        request.user,
+                    )
                 )
-            )
             if not employees:
                 return
             obj.employee = employees[0]
@@ -915,14 +963,14 @@ class RosterEntryAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
         num_days = (end - start).days + 1
         if len(employees) > ASYNC_BULK_THRESHOLD:
             codes = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]
-            schedule_range_bulk.delay(
+            task = schedule_range_bulk.delay(
                 [e.id for e in employees],
                 obj.shift_id,
                 start.isoformat(),
                 end.isoformat(),
                 [codes[i] for i in rest_weekdays],
             )
-            messages.info(request, "Roster scheduling queued for processing")
+            messages.info(request, f"Roster scheduling queued (task {task.id})")
             return
 
         entries = []
