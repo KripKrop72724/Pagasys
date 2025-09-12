@@ -53,26 +53,24 @@ class RosterEntryAdminTests(TestCase):
         setattr(req, "_messages", FallbackStorage(req))
         return req
 
-    def test_get_form_scopes_employees(self):
+    def test_get_form_scopes_branch(self):
         req = self._make_request({})
         with patch("pagasys.admin.scope_queryset") as mock_scope:
-            # Return model-specific querysets depending on the queryset's model
             def side_effect(qs, user):
-                if qs.model is Employee:
-                    return Employee.objects.filter(id=self.admin_user.id)
+                if qs.model is Branch:
+                    return Branch.objects.filter(id=self.branch.id)
                 return qs
 
             mock_scope.side_effect = side_effect
             form_class = self.admin.get_form(req)
 
-            # Ensure Employee queryset was scoped
             mock_scope.assert_any_call(ANY, req.user)
-            emp_calls = [c for c in mock_scope.call_args_list if c.args[0].model is Employee]
-            self.assertGreaterEqual(len(emp_calls), 1)
+            branch_calls = [c for c in mock_scope.call_args_list if c.args[0].model is Branch]
+            self.assertGreaterEqual(len(branch_calls), 1)
 
             self.assertEqual(
-                list(form_class.base_fields["employees"].queryset),
-                [self.admin_user],
+                list(form_class.base_fields["branch"].queryset),
+                [self.branch],
             )
 
     @patch("pagasys.admin.schedule_range_bulk.delay")
@@ -89,12 +87,10 @@ class RosterEntryAdminTests(TestCase):
         form_data = {
             "date": "2024-07-01",
             "shift": self.shift.id,
-            "employees": [self.admin_user.id, e2.id],
+            "branch": self.branch.id,
             "repeat_days": 1,
         }
-        form = RosterEntryRangeForm(
-            data=form_data, instance=RosterEntry(employee=self.admin_user)
-        )
+        form = RosterEntryRangeForm(data=form_data, instance=RosterEntry())
         assert form.is_valid()
         obj = form.save(commit=False)
         req = self._make_request(form_data)
@@ -117,12 +113,10 @@ class RosterEntryAdminTests(TestCase):
         form_data = {
             "date": "2024-07-01",
             "shift": self.shift.id,
-            "employees": [self.admin_user.id, e2.id],
+            "branch": self.branch.id,
             "repeat_days": 1,
         }
-        form = RosterEntryRangeForm(
-            data=form_data, instance=RosterEntry(employee=self.admin_user)
-        )
+        form = RosterEntryRangeForm(data=form_data, instance=RosterEntry())
         assert form.is_valid()
         obj = form.save(commit=False)
         req = self._make_request(form_data)
@@ -130,3 +124,7 @@ class RosterEntryAdminTests(TestCase):
             self.admin.save_model(req, obj, form, False)
         mock_delay.assert_not_called()
         self.assertEqual(RosterEntry.objects.count(), 2)
+        for emp in [self.admin_user, e2]:
+            self.assertTrue(
+                RosterEntry.objects.filter(employee=emp, date="2024-07-01").exists()
+            )
