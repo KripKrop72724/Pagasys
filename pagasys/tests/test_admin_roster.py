@@ -1,4 +1,5 @@
 from django.contrib import admin
+from django.contrib.messages import get_messages
 from django.test import TestCase, RequestFactory
 from unittest.mock import patch, ANY
 
@@ -84,6 +85,7 @@ class RosterEntryAdminTests(TestCase):
             employment_type="permanent",
             visa_type="company",
         )
+        mock_delay.return_value.id = "t1"
         form_data = {
             "date": "2024-07-01",
             "shift": self.shift.id,
@@ -97,6 +99,8 @@ class RosterEntryAdminTests(TestCase):
         with patch("pagasys.admin.ASYNC_BULK_THRESHOLD", 1):
             self.admin.save_model(req, obj, form, False)
         mock_delay.assert_called_once()
+        messages = [m.message for m in get_messages(req)]
+        self.assertIn("task t1", messages[0])
         self.assertEqual(RosterEntry.objects.count(), 0)
 
     @patch("pagasys.admin.schedule_range_bulk.delay")
