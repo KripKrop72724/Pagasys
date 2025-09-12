@@ -67,11 +67,9 @@ class Command(BaseCommand):
             try:
                 tz = ZoneInfo(punch.company.timezone)
                 dt = punch.device_ts
-                if dt.tzinfo is None or dt.tzinfo.key != tz.key:
-                    if dt.tzinfo is None:
-                        dt = dt.replace(tzinfo=tz)
-                    else:
-                        dt = dt.astimezone(tz)
+                current_key = getattr(dt.tzinfo, "key", None)
+                if dt.tzinfo is None or current_key != tz.key:
+                    dt = dt.replace(tzinfo=tz) if dt.tzinfo is None else dt.astimezone(tz)
                     punch.device_ts = dt
                     if not dry_run:
                         punch.save(update_fields=["device_ts"])
