@@ -5,3 +5,5 @@ pytest-docker
 flake8
 pytest-xdist
 pytest-cov
+pytest-split
+pytest-testmon
