@@ -1,9 +1,19 @@
+const branchMap = new Map();
+
+document.addEventListener('DOMContentLoaded', () => {
+  const sourceEl = document.getElementById('id_employees');
+  if (sourceEl) {
+    Array.from(sourceEl.options).forEach((opt) => {
+      branchMap.set(opt.value, opt.dataset.branch);
+    });
+  }
+});
+
 function initRosterAdmin() {
   const branchEl = document.getElementById('id_branch');
   const employeesEl =
     document.getElementById('id_employees_from') ||
     document.getElementById('id_employees');
-  const sourceEl = document.getElementById('id_employees');
   if (!employeesEl) return;
 
   const selectAllBtn = document.createElement('button');
@@ -25,15 +35,7 @@ function initRosterAdmin() {
     });
   }
 
-  if (
-    sourceEl &&
-    sourceEl !== employeesEl &&
-    sourceEl.options.length > 0
-  ) {
-    const branchMap = new Map();
-    Array.from(sourceEl.options).forEach((opt) => {
-      branchMap.set(opt.value, opt.dataset.branch);
-    });
+  if (branchMap.size > 0) {
     Array.from(employeesEl.options).forEach((opt) => {
       const branchId = branchMap.get(opt.value);
       if (branchId !== undefined) opt.dataset.branch = branchId;

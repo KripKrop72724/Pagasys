@@ -1,3 +1,7 @@
+import json
+import subprocess
+import textwrap
+
 from django.core.management import call_command
 from django.urls import reverse
 from django.test import TestCase
@@ -49,4 +53,85 @@ class RosterWidgetTests(ModelFactoryMixin, TestCase):
             content = fh.read()
         self.assertIn("window.addEventListener('load'", content)
         self.assertIn("Select all", content)
-        self.assertNotIn("DOMContentLoaded", content)
+        self.assertIn("DOMContentLoaded", content)
+
+    def test_branch_filter_applies_visibility(self):
+        script = textwrap.dedent(
+            f"""
+            const fs = require('fs');
+            const vm = require('vm');
+
+            const domReadyHandlers = [];
+            let loadHandler = null;
+
+            function Option(value, branch) {{
+              this.value = value;
+              this.dataset = branch ? {{ branch: String(branch) }} : {{}};
+              this.hidden = false;
+              this.selected = false;
+            }}
+
+            const branchEl = {{
+              value: '',
+              _handlers: {{}},
+              addEventListener(event, fn) {{ this._handlers[event] = fn; }},
+              parentNode: {{ insertBefore(){{}} }},
+            }};
+
+            function createSelect(options) {{
+              return {{
+                options,
+                parentNode: {{ insertBefore(){{}} }},
+                addEventListener() {{}},
+              }};
+            }}
+
+            const sourceOptions = [
+              new Option('emp1', '{self.branch.id}'),
+              new Option('emp2', '999'),
+            ];
+
+            const elements = {{
+              'id_branch': branchEl,
+              'id_employees': createSelect(sourceOptions),
+            }};
+
+            const document = {{
+              getElementById(id) {{ return elements[id]; }},
+              createElement(tag) {{ return {{ type: tag, parentNode: {{ insertBefore(){{}} }}, addEventListener(){{}}, textContent:'' }}; }},
+              addEventListener(evt, fn) {{ if (evt === 'DOMContentLoaded') domReadyHandlers.push(fn); }},
+            }};
+
+            const window = {{
+              addEventListener(evt, fn) {{ if (evt === 'load') loadHandler = fn; }},
+            }};
+
+            const code = fs.readFileSync('pagasys/static/pagasys/js/roster_admin.js', 'utf8');
+            vm.runInNewContext(code, {{ document, window }});
+
+            domReadyHandlers.forEach(fn => fn());
+
+            elements['id_employees_from'] = createSelect(
+              sourceOptions.map(opt => new Option(opt.value))
+            );
+            elements['id_employees'].options = [];
+
+            loadHandler();
+
+            branchEl.value = '{self.branch.id}';
+            branchEl._handlers.change();
+
+            const result = elements['id_employees_from'].options.map(opt => ({{
+              value: opt.value,
+              hidden: opt.hidden,
+              branch: opt.dataset.branch,
+            }}));
+            console.log(JSON.stringify(result));
+            """
+        )
+        res = subprocess.run(
+            ["node", "-e", script], capture_output=True, text=True, check=True
+        )
+        data = json.loads(res.stdout)
+        visible = [opt["value"] for opt in data if not opt["hidden"]]
+        assert visible == ["emp1"]
