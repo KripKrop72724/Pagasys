@@ -33,7 +33,8 @@ class AttDayAdmin(ScopedAdminMixin, admin.ModelAdmin):
     """Admin interface for computed daily attendance results."""
 
     list_display = ("employee", "date", "status", "work_min", "locked")
-    list_filter = ("status", "is_holiday", "is_rest_day", "locked")
+    list_filter = ("date", "status", "is_holiday", "is_rest_day", "locked")
+    date_hierarchy = "date"
     search_fields = ("employee__first_name", "employee__last_name")
     readonly_fields = ("computed_at",)
     change_list_template = "admin/attendance/attday/change_list.html"
