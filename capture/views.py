@@ -1,5 +1,7 @@
 import logging
 import secrets
+import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 
 from django.conf import settings
@@ -328,10 +330,6 @@ class CapturePunchView(generics.GenericAPIView):
         if data.get("employee_id"):
             hinted_emp = Employee.objects.filter(pk=data["employee_id"]).first()
 
-        s3_key, sha256 = ("", "")
-        if image_bytes:
-            s3_key, sha256 = put_capture_to_s3(company.id, device.id, image_bytes)
-
         company_local_dt = localize_to_company(company, data["timestamp"])
         roster_date, roster_entry, roster_fallback = (None, None, False)
         matched_emp = None
@@ -342,24 +340,65 @@ class CapturePunchView(generics.GenericAPIView):
         geofence_rule = None
 
         if hinted_emp:
-            roster_date, roster_entry, roster_fallback = compute_roster_date(hinted_emp, company_local_dt)
+            roster_date, roster_entry, roster_fallback = compute_roster_date(
+                hinted_emp, company_local_dt
+            )
 
+        s3_key, sha256 = ("", "")
+        search_res = None
         if image_bytes:
             threshold = float(settings.FACE_MATCH_DEFAULT_MIN_CONF)
             if roster_entry:
                 threshold = get_face_threshold(roster_entry.shift, roster_date)
                 requires_face = roster_entry.shift.requires_face
                 geofence_rule = get_geofence_requirement(roster_entry.shift, roster_date)
-            try:
-                res = search_face_by_image(company.id, image_bytes, threshold)
-                matches = res.get("FaceMatches", []) or []
-            except ClientError as e:
-                if e.response.get("Error", {}).get("Code") == "InvalidParameterException":
-                    logger.exception("search_face_by_image invalid parameter")
-                    face_mismatch = True
-                    matches = []
-                else:
-                    raise
+
+            timings: dict[str, float] = {}
+
+            def _upload():
+                start = time.monotonic()
+                try:
+                    return put_capture_to_s3(company.id, device.id, image_bytes)
+                finally:
+                    timings["upload"] = time.monotonic() - start
+
+            def _search():
+                start = time.monotonic()
+                try:
+                    return search_face_by_image(company.id, image_bytes, threshold)
+                finally:
+                    timings["search"] = time.monotonic() - start
+
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                up_fut = executor.submit(_upload)
+                search_fut = executor.submit(_search)
+                try:
+                    s3_key, sha256 = up_fut.result()
+                except Exception:
+                    logger.exception("put_capture_to_s3 failed")
+                    return Response({"detail": "image_upload_failed"}, status=400)
+                try:
+                    search_res = search_fut.result()
+                except ClientError as e:
+                    if e.response.get("Error", {}).get("Code") == "InvalidParameterException":
+                        logger.exception("search_face_by_image invalid parameter")
+                        face_mismatch = True
+                        search_res = {"FaceMatches": []}
+                    else:
+                        logger.exception("search_face_by_image failed")
+                        return Response({"detail": "face_search_failed"}, status=400)
+                except Exception:
+                    logger.exception("search_face_by_image failed")
+                    return Response({"detail": "face_search_failed"}, status=400)
+
+            logger.info(
+                "capture.timings upload=%.3f search=%.3f",
+                timings.get("upload", 0.0),
+                timings.get("search", 0.0),
+            )
+
+        if search_res is not None:
+            matches = search_res.get("FaceMatches", []) or []
             if matches:
                 top = max(matches, key=lambda m: m.get("Similarity", 0))
                 sim = float(top.get("Similarity", 0))
@@ -456,6 +495,10 @@ class CapturePunchView(generics.GenericAPIView):
                 )
         except IntegrityError:
             ev = PunchEvent.objects.filter(device=device, external_id=ext_id).first()
+
+        from .tasks import finalize_punch
+
+        finalize_punch.delay(ev.id)
 
         if reason == "face_required_no_match":
             PunchException.objects.get_or_create(

@@ -93,6 +93,17 @@ Faces are indexed into Amazon Rekognition collections named
 shift rule `FACE_MIN_CONF` or the default setting
 `FACE_MATCH_DEFAULT_MIN_CONF` (0.90).
 
+Rekognition and S3 clients are cached via a shared boto3 session to avoid
+expensive re‑initialisation on every request. Capture uploads and face searches
+run concurrently so latency is dominated by the slower of the two calls.
+Captured punches queue a background Celery task (`capture.tasks.finalize_punch`)
+which performs final validation and updates the record when complete. Run a
+worker with:
+
+```bash
+celery -A config.celery worker
+```
+
 The `rebuild_face_enrollments` management command scans S3 for enrollment
 images, reindexes them into Rekognition and writes an Excel report while
 logging progress and summarizing any employees with insufficient images.
