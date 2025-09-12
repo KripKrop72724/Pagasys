@@ -360,24 +360,46 @@ class AdminCRUDTests(ModelFactoryMixin, TestCase):
         self._assert_deleted(ShiftRule, rule.id)
 
     def test_rosterentry_crud(self):
-        emp = get_user_model().objects.create_user(
-            username="r1",
-            password="pass",
-            trade_license=self.license,
-            department=self.department,
-            hire_date="2024-01-01",
-            employment_type="permanent",
-            visa_type="company",
-        )
+        User = get_user_model()
+        employees = [
+            User.objects.create_user(
+                username="r1",
+                password="pass",
+                trade_license=self.license,
+                department=self.department,
+                hire_date="2024-01-01",
+                employment_type="permanent",
+                visa_type="company",
+            ),
+            User.objects.create_user(
+                username="r2",
+                password="pass",
+                trade_license=self.license,
+                department=self.department,
+                hire_date="2024-01-01",
+                employment_type="permanent",
+                visa_type="company",
+            ),
+        ]
         shift = self.create_shift_template(self.company, name="RST")
         add_url = reverse("admin:pagasys_rosterentry_add")
-        data = {"employees": [emp.id], "date": "2024-07-01", "shift": shift.id}
+        data = {"branch": self.branch.id, "date": "2024-07-01", "shift": shift.id}
         res = self.client.post(add_url, data)
         self.assertEqual(res.status_code, 302)
-        entry = RosterEntry.objects.get(employee=emp, date="2024-07-01")
+
+        branch_emps = Employee.objects.filter(department__branch=self.branch)
+        self.assertEqual(
+            RosterEntry.objects.filter(date="2024-07-01", employee__in=branch_emps).count(),
+            branch_emps.count(),
+        )
+        entry = RosterEntry.objects.get(employee=employees[0], date="2024-07-01")
 
         change_url = reverse("admin:pagasys_rosterentry_change", args=[entry.id])
-        change_data = {"employee": emp.id, "date": "2024-07-02", "shift": shift.id}
+        change_data = {
+            "employee": entry.employee.id,
+            "date": "2024-07-02",
+            "shift": shift.id,
+        }
         res = self.client.post(change_url, change_data)
         self.assertEqual(res.status_code, 302)
         entry.refresh_from_db()
