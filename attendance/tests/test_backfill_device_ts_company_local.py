@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
 from django.core.management import call_command
@@ -86,5 +86,22 @@ class BackfillDeviceTsCompanyLocalTests(TestCase):
         self.assertEqual(
             str(exc.exception),
             "Invalid company timezone(s): <missing>, Mars/Phobos",
+        )
+
+    def test_handles_stdlib_timezone_utc(self) -> None:
+        punch = PunchEvent.objects.create(
+            device=self.device_naive,
+            company=self.company_naive,
+            device_ts=self.naive_ts.replace(tzinfo=timezone.utc),
+        )
+
+        call_command("backfill_device_ts_company_local", no_input=True)
+
+        punch.refresh_from_db()
+        self.assertEqual(
+            punch.device_ts,
+            self.naive_ts.replace(tzinfo=timezone.utc).astimezone(
+                ZoneInfo(self.company_naive.timezone)
+            ),
         )
 
