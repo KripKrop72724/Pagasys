@@ -3,20 +3,15 @@ from django.contrib.auth.admin import UserAdmin
 from django.contrib.auth.forms import AdminUserCreationForm, UserChangeForm
 from django.core.exceptions import ValidationError
 from django import forms
-from django.contrib.admin.widgets import (
-    FilteredSelectMultiple,
-    AutocompleteSelectMultiple,
-)
-from django.contrib.admin.views.autocomplete import AutocompleteJsonView
+from django.contrib.admin.widgets import FilteredSelectMultiple
 from django.db import connection, transaction
 from django.shortcuts import redirect
 from django.template.response import TemplateResponse
-from django.urls import path, reverse
+from django.urls import path
 from django.db.models import Max
 from datetime import timedelta, date
 from copy import deepcopy
 from django.forms.models import construct_instance
-import json
 
 from .excel_import import import_employee_workbook, import_company_visa_workbook
 
@@ -150,22 +145,6 @@ class BranchSelectMultiple(FilteredSelectMultiple):
             pass
         return option
 
-
-class EmployeeAutocompleteSelectMultiple(AutocompleteSelectMultiple):
-    """Autocomplete widget that forwards the selected branch."""
-
-    def __init__(self, rel, admin_site, forward=None, attrs=None, choices=(), using=None):
-        self.forward = forward or []
-        super().__init__(rel, admin_site, attrs, choices, using)
-
-    def build_attrs(self, base_attrs, extra_attrs=None):
-        attrs = super().build_attrs(base_attrs, extra_attrs)
-        if self.forward:
-            attrs["data-forward"] = json.dumps(self.forward)
-        return attrs
-
-    def get_url(self):
-        return reverse("admin:pagasys_employee_autocomplete")
 
 
 class TradeLicenseForm(forms.ModelForm):
@@ -718,8 +697,9 @@ class ShiftRuleAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
 class RosterEntryRangeForm(forms.ModelForm):
     """Admin form mirroring the ``schedule-range`` API action.
 
-    Example: to assign a week's shift starting on 2024‑07‑01 and rest on
-    weekends, set ``repeat_days=7`` and pick ``Sat``/``Sun`` in *rest weekdays*.
+    Select a branch to schedule all of its employees. Example: to assign a
+    week's shift starting on 2024‑07‑01 and rest on weekends, set
+    ``repeat_days=7`` and pick ``Sat``/``Sun`` in *rest weekdays*.
     """
 
     repeat_days = forms.IntegerField(
@@ -747,18 +727,8 @@ class RosterEntryRangeForm(forms.ModelForm):
 
     branch = forms.ModelChoiceField(
         queryset=Branch.objects.all(),
-        required=False,
-        help_text="Filter employees by branch",
-    )
-
-    employees = forms.ModelMultipleChoiceField(
-        queryset=Employee.objects.all(),
-        widget=EmployeeAutocompleteSelectMultiple(
-            RosterEntry._meta.get_field("employee").remote_field,
-            admin.site,
-            forward=["branch"],
-        ),
-        help_text="Employees to schedule",
+        required=True,
+        help_text="Branch whose employees will be scheduled",
     )
 
     class Meta:
@@ -775,18 +745,6 @@ class RosterEntryRangeForm(forms.ModelForm):
         """Skip model.full_clean(); validation handled per employee during save."""
         opts = self._meta
         construct_instance(self, self.instance, opts.fields, opts.exclude)
-
-
-class EmployeeAutocomplete(AutocompleteJsonView):
-    """Autocomplete view for Employee filtering by branch."""
-
-    def get_queryset(self):
-        qs = super().get_queryset()
-        branch_param = self.request.GET.get("forward")
-        branch_id = self.request.GET.get(branch_param) if branch_param else None
-        if branch_id:
-            qs = qs.filter(department__branch_id=branch_id)
-        return qs
 
 @admin.register(RosterEntry)
 class RosterEntryAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
@@ -819,21 +777,12 @@ class RosterEntryAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
         return fields
 
     def get_urls(self):
-        from django.urls import path
-
         urls = super().get_urls()
         custom = [
             path(
                 "overview/",
                 self.admin_site.admin_view(self.overview),
                 name="pagasys_rosterentry_overview",
-            ),
-            path(
-                "employee-autocomplete/",
-                self.admin_site.admin_view(
-                    EmployeeAutocomplete.as_view(admin_site=self.admin_site)
-                ),
-                name="pagasys_employee_autocomplete",
             ),
         ]
         return custom + urls
@@ -897,9 +846,6 @@ class RosterEntryAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
         form = super().get_form(request, obj, **kwargs)
         if obj is None:
             form.base_fields.pop("employee", None)
-            form.base_fields["employees"].queryset = scope_queryset(
-                Employee.objects.all(), request.user
-            )
             form.base_fields["branch"].queryset = scope_queryset(
                 Branch.objects.all(), request.user
             )
@@ -909,7 +855,7 @@ class RosterEntryAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
         repeat_days = form.cleaned_data.get("repeat_days")
         repeat_until = form.cleaned_data.get("repeat_until")
         rest_weekday_names = form.cleaned_data.get("rest_weekdays")
-        employees = form.cleaned_data.get("employees")
+        branch = form.cleaned_data.get("branch")
 
         if repeat_days is None and form.data.get("repeat_days"):
             try:
@@ -930,11 +876,16 @@ class RosterEntryAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
             else:
                 super().save_model(request, obj, form, change)
                 return
-        elif employees is None:
-            super().save_model(request, obj, form, change)
-            return
-
-        obj.employee = employees[0]
+        else:
+            employees = list(
+                scope_queryset(
+                    Employee.objects.filter(department__branch=branch),
+                    request.user,
+                )
+            )
+            if not employees:
+                return
+            obj.employee = employees[0]
         name_to_idx = {
             "mon": 0,
             "tue": 1,

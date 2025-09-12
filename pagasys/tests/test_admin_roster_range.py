@@ -42,6 +42,10 @@ class RosterEntryAdminRangeTests(ModelFactoryMixin, TestCase):
             department=self.department,
             trade_license=self.license,
         )
+        self.employee2 = self._create_employee(
+            department=self.department,
+            trade_license=self.license,
+        )
         self.shift = self.create_shift_template(self.company)
         User = get_user_model()
         self.superuser = User.objects.create_superuser(
@@ -58,40 +62,44 @@ class RosterEntryAdminRangeTests(ModelFactoryMixin, TestCase):
     def test_repeat_days_with_rest(self):
         add_url = reverse("admin:pagasys_rosterentry_add")
         data = {
-            "employee": self.employee.id,
-            "employees": [self.employee.id],
+            "branch": self.branch.id,
             "date": "2024-07-01",
             "shift": self.shift.id,
             "repeat_days": 7,
-            # Roster admin expects weekday names (e.g. "sat", "sun")
             "rest_weekdays": ["sat", "sun"],
         }
         res = self.client.post(add_url, data)
         self.assertEqual(res.status_code, 302)
-        self.assertEqual(RosterEntry.objects.filter(employee=self.employee).count(), 7)
-        self.assertTrue(RosterEntry.objects.get(date="2024-07-06").is_rest_day)
-        self.assertTrue(RosterEntry.objects.get(date="2024-07-07").is_rest_day)
+        for emp in [self.employee, self.employee2]:
+            self.assertEqual(
+                RosterEntry.objects.filter(employee=emp).count(), 7
+            )
+            self.assertTrue(
+                RosterEntry.objects.get(employee=emp, date="2024-07-06").is_rest_day
+            )
+            self.assertTrue(
+                RosterEntry.objects.get(employee=emp, date="2024-07-07").is_rest_day
+            )
 
     def test_holiday_flag_on_repeat(self):
         add_url = reverse("admin:pagasys_rosterentry_add")
         data = {
-            "employee": self.employee.id,
-            "employees": [self.employee.id],
+            "branch": self.branch.id,
             "date": "2024-07-04",
             "shift": self.shift.id,
             "repeat_days": 1,
         }
         res = self.client.post(add_url, data)
         self.assertEqual(res.status_code, 302)
-        entry = RosterEntry.objects.get(employee=self.employee, date="2024-07-04")
-        self.assertTrue(entry.is_holiday)
-        self.assertTrue(entry.was_holiday)
+        for emp in [self.employee, self.employee2]:
+            entry = RosterEntry.objects.get(employee=emp, date="2024-07-04")
+            self.assertTrue(entry.is_holiday)
+            self.assertTrue(entry.was_holiday)
 
     def test_repeat_until_with_rest(self):
         add_url = reverse("admin:pagasys_rosterentry_add")
         data = {
-            "employee": self.employee.id,
-            "employees": [self.employee.id],
+            "branch": self.branch.id,
             "date": "2024-07-01",
             "shift": self.shift.id,
             "repeat_until": "2024-07-07",
@@ -99,42 +107,50 @@ class RosterEntryAdminRangeTests(ModelFactoryMixin, TestCase):
         }
         res = self.client.post(add_url, data)
         self.assertEqual(res.status_code, 302)
-        self.assertEqual(RosterEntry.objects.filter(employee=self.employee).count(), 7)
-        self.assertTrue(RosterEntry.objects.get(date="2024-07-06").is_rest_day)
-        self.assertTrue(RosterEntry.objects.get(date="2024-07-07").is_rest_day)
+        for emp in [self.employee, self.employee2]:
+            self.assertEqual(
+                RosterEntry.objects.filter(employee=emp).count(), 7
+            )
+            self.assertTrue(
+                RosterEntry.objects.get(employee=emp, date="2024-07-06").is_rest_day
+            )
+            self.assertTrue(
+                RosterEntry.objects.get(employee=emp, date="2024-07-07").is_rest_day
+            )
 
     def test_single_entry_respects_rest_weekday(self):
         add_url = reverse("admin:pagasys_rosterentry_add")
         data = {
-            "employee": self.employee.id,
-            "employees": [self.employee.id],
+            "branch": self.branch.id,
             "date": "2024-07-06",  # Saturday
             "shift": self.shift.id,
             "rest_weekdays": ["sat"],
         }
         res = self.client.post(add_url, data)
         self.assertEqual(res.status_code, 302)
-        entry = RosterEntry.objects.get(employee=self.employee)
-        self.assertTrue(entry.is_rest_day)
+        for emp in [self.employee, self.employee2]:
+            entry = RosterEntry.objects.get(employee=emp)
+            self.assertTrue(entry.is_rest_day)
 
     def test_repeat_until(self):
         add_url = reverse("admin:pagasys_rosterentry_add")
         data = {
-            "employee": self.employee.id,
-            "employees": [self.employee.id],
+            "branch": self.branch.id,
             "date": "2024-07-01",
             "shift": self.shift.id,
             "repeat_until": "2024-07-03",
         }
         res = self.client.post(add_url, data)
         self.assertEqual(res.status_code, 302)
-        self.assertEqual(RosterEntry.objects.filter(employee=self.employee).count(), 3)
+        for emp in [self.employee, self.employee2]:
+            self.assertEqual(
+                RosterEntry.objects.filter(employee=emp).count(), 3
+            )
 
     def test_repeat_conflict(self):
         add_url = reverse("admin:pagasys_rosterentry_add")
         data = {
-            "employee": self.employee.id,
-            "employees": [self.employee.id],
+            "branch": self.branch.id,
             "date": "2024-07-01",
             "shift": self.shift.id,
             "repeat_days": 2,

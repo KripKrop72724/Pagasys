@@ -401,13 +401,14 @@ The admin site uses [Grappelli](https://django-grappelli.readthedocs.io/) for an
 improved UI. Querysets and foreign key widgets are restricted so users only see
 objects within their role's scope. Trade license and employee forms include
 client‑side validation via the JavaScript files in
-`pagasys/static/pagasys/js/`. Roster entries can be repeated across multiple
-days or until a target date directly from the admin by filling the *repeat* and
-*rest weekdays* fields, which automatically mark weekend days as rest days.
-For example, to schedule a week's worth of shifts starting 2024‑07‑01 and skip
-weekends, set **Repeat days** to `7` and select **Sat** and **Sun** in *Rest
-weekdays*. The admin will create entries for the range and flag those days as
-rest, mirroring the behaviour of the `schedule-range` API.
+`pagasys/static/pagasys/js/`. To roster multiple workers at once, select a
+branch, choose the date and shift, then optionally fill the *repeat* and *rest
+weekdays* fields. The admin will create entries for every employee in that
+branch, automatically marking weekends as rest days. For example, to schedule a
+week's worth of shifts starting 2024‑07‑01 and skip weekends, set **Repeat
+days** to `7` and select **Sat** and **Sun** in *Rest weekdays*. The admin will
+create entries for the range and flag those days as rest, mirroring the
+behaviour of the `schedule-range` API.
 
 ## Attendance Policy Layer
 
