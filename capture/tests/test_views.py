@@ -4,6 +4,8 @@ from django.utils import timezone
 from decimal import Decimal
 
 import pytest
+import base64
+
 from rest_framework.test import APIClient
 from botocore.exceptions import ClientError
 
@@ -832,3 +834,54 @@ def test_create_enrollment_link_ensures_collection(
     resp = client.post(url, {"expires_in_hours": 1})
     assert resp.status_code == 200
     assert called["cid"] == company_collection_id(company.id)
+
+
+def test_parallel_upload_and_search_success(monkeypatch, client, device):
+    img_b64 = base64.b64encode(b"img").decode()
+    called = {"put": False, "search": False, "task": False}
+
+    def fake_put(*a, **k):
+        called["put"] = True
+        return ("k", "sha")
+
+    def fake_search(*a, **k):
+        called["search"] = True
+        return {"FaceMatches": []}
+
+    monkeypatch.setattr("capture.views.put_capture_to_s3", fake_put)
+    monkeypatch.setattr("capture.views.search_face_by_image", fake_search)
+    monkeypatch.setattr(
+        "capture.tasks.finalize_punch.delay", lambda pid: called.update({"task": pid})
+    )
+
+    ts = timezone.now()
+    resp = client.post(
+        "/api/capture/punch",
+        {"action": "in", "timestamp": ts.isoformat(), "image_b64": img_b64},
+        **auth_headers(device),
+    )
+    assert resp.status_code == 200
+    assert called["put"] and called["search"] and called["task"]
+    assert PunchEvent.objects.count() == 1
+
+
+def test_parallel_face_failure_rolls_back(monkeypatch, client, device):
+    img_b64 = base64.b64encode(b"img").decode()
+
+    monkeypatch.setattr(
+        "capture.views.put_capture_to_s3", lambda *a, **k: ("k", "sha")
+    )
+
+    def bad_search(*a, **k):
+        raise ClientError({"Error": {"Code": "ThrottlingException"}}, "SearchFacesByImage")
+
+    monkeypatch.setattr("capture.views.search_face_by_image", bad_search)
+
+    ts = timezone.now()
+    resp = client.post(
+        "/api/capture/punch",
+        {"action": "in", "timestamp": ts.isoformat(), "image_b64": img_b64},
+        **auth_headers(device),
+    )
+    assert resp.status_code == 400
+    assert PunchEvent.objects.count() == 0

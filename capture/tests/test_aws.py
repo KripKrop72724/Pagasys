@@ -5,7 +5,10 @@ import uuid
 
 import pytest
 
+import types
+
 from capture import aws
+from botocore.exceptions import ClientError, NoCredentialsError
 
 
 class DummyS3:
@@ -140,3 +143,58 @@ def test_search_face_by_image_no_retry_when_collection_exists(monkeypatch, setti
     assert client.calls == 1
     assert "cid" not in called
     assert resp["args"]["CollectionId"] == "pref-3"
+
+
+def test_clients_singleton(monkeypatch):
+    class DummySession:
+        def __init__(self):
+            self.calls = []
+
+        def client(self, name, region_name=None):
+            obj = object()
+            self.calls.append((name, region_name, obj))
+            return obj
+
+    sess = DummySession()
+
+    class DummyBoto3:
+        class session:
+            @staticmethod
+            def Session():
+                return sess
+
+    monkeypatch.setattr(aws, "boto3", DummyBoto3)
+    aws.reset_clients()
+    rk1 = aws.get_rk_client()
+    rk2 = aws.get_rk_client()
+    s31 = aws.get_s3_client()
+    s32 = aws.get_s3_client()
+    assert rk1 is rk2
+    assert s31 is s32
+    assert len(sess.calls) == 2  # rekognition + s3
+
+
+def test_put_to_s3_missing_credentials(monkeypatch):
+    class DummyS3:
+        def put_object(self, **kwargs):
+            raise NoCredentialsError()
+
+    monkeypatch.setattr(aws, "get_s3_client", lambda: DummyS3())
+    with pytest.raises(NoCredentialsError):
+        aws._put_to_s3("b", "k", b"d")
+
+
+def test_search_face_by_image_throttling(monkeypatch, settings):
+    settings.AWS_REKOGNITION_COLLECTION_PREFIX = "pref"
+
+    class DummyClient:
+        class exceptions:
+            class ResourceNotFoundException(Exception):
+                pass
+
+        def search_faces_by_image(self, **kwargs):
+            raise ClientError({"Error": {"Code": "ThrottlingException"}}, "SearchFacesByImage")
+
+    monkeypatch.setattr(aws, "get_rk_client", lambda: DummyClient())
+    with pytest.raises(ClientError):
+        aws.search_face_by_image(1, b"img", 0.5)

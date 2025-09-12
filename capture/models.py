@@ -293,11 +293,20 @@ class PunchEvent(models.Model):
         max_length=255, blank=True, help_text="Reason punch was not accepted"
     )
 
+    processed = models.BooleanField(
+        default=False, help_text="Final validation completed"
+    )
+    processed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Timestamp when background validation finished",
+    )
+
     external_id = models.CharField(
         max_length=64,
         blank=True,
         help_text="Optional client supplied identifier to deduplicate events",
-    )
+        )
 
     class Meta:
         indexes = [
