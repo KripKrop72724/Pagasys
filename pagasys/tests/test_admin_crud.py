@@ -388,11 +388,12 @@ class AdminCRUDTests(ModelFactoryMixin, TestCase):
         self.assertEqual(res1.status_code, 302)
         stage2_url = res1["Location"]
         branch_emps = Employee.objects.filter(department__branch=self.branch)
-        res2 = self.client.post(
-            stage2_url,
-            {**data, "stage2": "1", "employees": [e.id for e in branch_emps]},
-        )
-        self.assertEqual(res2.status_code, 302)
+        for emp in branch_emps:
+            res2 = self.client.post(
+                stage2_url,
+                {**data, "stage2": "1", "employee": emp.id},
+            )
+            self.assertEqual(res2.status_code, 302)
 
         self.assertEqual(
             RosterEntry.objects.filter(date="2024-07-01", employee__in=branch_emps).count(),
