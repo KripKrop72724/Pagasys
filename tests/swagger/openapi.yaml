@@ -3160,10 +3160,11 @@ paths:
     post:
       operationId: companies_roster_schedule_range_create
       description: Create or update consecutive roster entries starting from `start_date`.
-        Provide either `days` (number of days) or `until` (inclusive end date). `rest_weekdays`
-        may list weekday codes such as ['SAT','SUN'] to mark rest days automatically.
-        Entries on calendar holidays are flagged with `is_holiday`, and `was_holiday`
-        records that a holiday was originally scheduled.
+        Provide either `days` (number of days) or `until` (inclusive end date). Specify
+        `branch` to schedule every employee in that branch. `rest_weekdays` may list
+        weekday codes such as ['SAT','SUN'] to mark rest days automatically. Entries on
+        calendar holidays are flagged with `is_holiday`, and `was_holiday` records that a
+        holiday was originally scheduled.
       parameters:
       - in: path
         name: company_id
@@ -3181,7 +3182,7 @@ paths:
             examples:
               ByDaysWithWeekendRest:
                 value:
-                  employee: 1
+                  branch: 1
                   shift: 1
                   start_date: '2024-07-01'
                   days: 7
@@ -3189,18 +3190,9 @@ paths:
                   - SAT
                   - SUN
                 summary: By days with weekend rest
-              MultipleEmployees:
-                value:
-                  employees:
-                  - 1
-                  - 2
-                  shift: 1
-                  start_date: '2024-07-01'
-                  days: 3
-                summary: Multiple employees
               UntilDate:
                 value:
-                  employee: 1
+                  branch: 1
                   shift: 1
                   start_date: '2024-07-01'
                   until: '2024-07-31'
@@ -3223,7 +3215,7 @@ paths:
               examples:
                 ByDaysWithWeekendRest:
                   value:
-                    employee: 1
+                    branch: 1
                     shift: 1
                     start_date: '2024-07-01'
                     days: 7
@@ -3231,18 +3223,9 @@ paths:
                     - SAT
                     - SUN
                   summary: By days with weekend rest
-                MultipleEmployees:
-                  value:
-                    employees:
-                    - 1
-                    - 2
-                    shift: 1
-                    start_date: '2024-07-01'
-                    days: 3
-                  summary: Multiple employees
                 UntilDate:
                   value:
-                    employee: 1
+                    branch: 1
                     shift: 1
                     start_date: '2024-07-01'
                     until: '2024-07-31'
@@ -13316,14 +13299,9 @@ components:
       description: Serialize parameters for creating roster entries across a date
         range.
       properties:
-        employee:
+        branch:
           type: integer
-          description: Employee ID to schedule
-        employees:
-          type: array
-          items:
-            type: integer
-          description: Employee IDs to schedule
+          description: Branch ID whose employees will be scheduled
         shift:
           type: integer
           description: Shift template to assign
@@ -13345,6 +13323,7 @@ components:
             $ref: '#/components/schemas/RestWeekdaysEnum'
           description: Weekday codes to mark as rest days, e.g. ['SAT','SUN']
       required:
+      - branch
       - shift
       - start_date
     RosterRangeResult:

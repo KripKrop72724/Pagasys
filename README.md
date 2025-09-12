@@ -47,8 +47,9 @@ comprehensive automated test suite.
   0 and 100. Codes are unique per company regardless of case.
 * **Rostering safety** – Employees must have a trade license, department or
   project before they can be assigned to a shift.
-* **Async roster scheduling** – `schedule-range` accepts multiple `employees`.
-  Large batches queue a Celery task and return `202` with a task ID.
+* **Async roster scheduling** – `schedule-range` accepts a `branch` ID and
+  schedules every employee in that branch. Large batches queue a Celery task
+  and return `202` with a task ID.
 * **Archiving over deletion** – Branches, departments and projects linked to
   employees are protected from hard deletion. Mark them inactive to archive
   instead of deleting.
@@ -59,12 +60,12 @@ comprehensive automated test suite.
 
 ### Roster scheduling
 
-Use `/api/companies/{cid}/roster/schedule-range/` to assign shifts to multiple
-employees at once:
+Use `/api/companies/{cid}/roster/schedule-range/` to assign shifts to an entire
+branch at once:
 
 ```json
 {
-  "employees": [1, 2],
+  "branch": 1,
   "shift": 5,
   "start_date": "2024-07-01",
   "days": 7
@@ -346,18 +347,18 @@ parameter. Additional paths include:
 
 `POST /api/companies/{company_id}/roster/schedule-range/` creates or updates
 consecutive roster entries starting at `start_date`. Supply either `days`
-(count of days) or `until` (inclusive end date) and provide either a single
-`employee` or an `employees` list. Optional `rest_weekdays` accepts three-letter
+(count of days) or `until` (inclusive end date) and provide a `branch` whose
+employees will be scheduled. Optional `rest_weekdays` accepts three-letter
 weekday codes to mark rest days. Dates that coincide with calendar holidays are
 flagged automatically so later payroll calculations can distinguish holiday
 work.
 
-Example by number of days for multiple employees:
+Example by number of days for a branch:
 
 ```http
 POST /api/companies/1/roster/schedule-range/
 {
-  "employees": [1, 2],
+  "branch": 1,
   "shift": 3,
   "start_date": "2024-07-01",
   "days": 7,
@@ -365,12 +366,12 @@ POST /api/companies/1/roster/schedule-range/
 }
 ```
 
-Example until a date for a single employee:
+Example until a date for a branch:
 
 ```http
 POST /api/companies/1/roster/schedule-range/
 {
-  "employee": 1,
+  "branch": 1,
   "shift": 3,
   "start_date": "2024-07-01",
   "until": "2024-07-31"
