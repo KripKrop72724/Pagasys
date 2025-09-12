@@ -1,12 +1,10 @@
-import types
-
 import pytest
 from django.urls import reverse
 from django.utils import timezone
 
 from pagasys.models import Employee
-
 from capture.aws import count_all_faces, delete_all_faces, company_collection_id
+import capture.aws as aws
 from capture.models import FaceEnrollment
 from .test_views import company, branch, department, client  # reuse fixtures
 
@@ -43,6 +41,7 @@ class FakeRekognitionClient:
 
 @pytest.mark.django_db
 def test_count_all_faces(monkeypatch, settings):
+    aws.reset_clients()
     c1 = company_collection_id(1)
     c2 = company_collection_id(2)
     collections = [
@@ -55,15 +54,19 @@ def test_count_all_faces(monkeypatch, settings):
         "other": [{"Faces": [{"FaceId": "ignored"}]}],
     }
     client = FakeRekognitionClient(collections, faces)
-    monkeypatch.setattr(
-        "capture.aws.boto3",
-        types.SimpleNamespace(client=lambda service, region_name=None: client),
-    )
+
+    class DummySession:
+        def client(self, service, region_name=None):
+            assert service == "rekognition"
+            return client
+
+    monkeypatch.setattr(aws, "_get_session", lambda: DummySession())
     assert count_all_faces() == 4
 
 
 @pytest.mark.django_db
 def test_delete_all_faces(monkeypatch, settings):
+    aws.reset_clients()
     c1 = company_collection_id(1)
     c2 = company_collection_id(2)
     c3 = company_collection_id(3)
@@ -74,10 +77,13 @@ def test_delete_all_faces(monkeypatch, settings):
         c3: [{"Faces": []}],
     }
     client = FakeRekognitionClient(collections, faces)
-    monkeypatch.setattr(
-        "capture.aws.boto3",
-        types.SimpleNamespace(client=lambda service, region_name=None: client),
-    )
+
+    class DummySession:
+        def client(self, service, region_name=None):
+            assert service == "rekognition"
+            return client
+
+    monkeypatch.setattr(aws, "_get_session", lambda: DummySession())
     delete_all_faces()
     assert (c1, ["a", "b"]) in client.deleted
     assert (c2, ["c"]) in client.deleted

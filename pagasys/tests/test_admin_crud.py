@@ -384,10 +384,16 @@ class AdminCRUDTests(ModelFactoryMixin, TestCase):
         shift = self.create_shift_template(self.company, name="RST")
         add_url = reverse("admin:pagasys_rosterentry_add")
         data = {"branch": self.branch.id, "date": "2024-07-01", "shift": shift.id}
-        res = self.client.post(add_url, data)
-        self.assertEqual(res.status_code, 302)
-
+        res1 = self.client.post(add_url, data)
+        self.assertEqual(res1.status_code, 302)
+        stage2_url = res1["Location"]
         branch_emps = Employee.objects.filter(department__branch=self.branch)
+        res2 = self.client.post(
+            stage2_url,
+            {**data, "stage2": "1", "employees": [e.id for e in branch_emps]},
+        )
+        self.assertEqual(res2.status_code, 302)
+
         self.assertEqual(
             RosterEntry.objects.filter(date="2024-07-01", employee__in=branch_emps).count(),
             branch_emps.count(),
