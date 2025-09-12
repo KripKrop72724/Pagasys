@@ -8,7 +8,6 @@ Usage::
 """
 
 from django.core.management.base import BaseCommand, CommandError
-from django.db.models import Count
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from capture.models import PunchEvent
@@ -33,24 +32,23 @@ class Command(BaseCommand):
         no_input: bool = options["no_input"]
 
         # Validate company timezones upfront
-        invalid_tzs: list[str] = []
-        for entry in Company.objects.values("timezone").annotate(count=Count("id")):
-            tz = entry["timezone"]
+        invalid_tzs: set[str] = set()
+        for tz in Company.objects.values_list("timezone", flat=True).distinct():
             if not tz:
-                invalid_tzs.append("<missing>")
+                invalid_tzs.add("<missing>")
                 continue
             try:
                 ZoneInfo(tz)
             except ZoneInfoNotFoundError:
-                invalid_tzs.append(tz)
+                invalid_tzs.add(tz)
 
         if invalid_tzs:
-            tz_list = ", ".join(invalid_tzs)
+            tz_list = ", ".join(sorted(invalid_tzs))
             raise CommandError(f"Invalid company timezone(s): {tz_list}")
 
         qs = (
             PunchEvent.objects.select_related("company")
-            .filter(device_ts__tzinfo__isnull=True)
+            .filter(device_ts__isnull=False)
             .order_by("id")
         )
         total = qs.count()
