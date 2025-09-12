@@ -3,15 +3,20 @@ from django.contrib.auth.admin import UserAdmin
 from django.contrib.auth.forms import AdminUserCreationForm, UserChangeForm
 from django.core.exceptions import ValidationError
 from django import forms
-from django.contrib.admin.widgets import FilteredSelectMultiple
+from django.contrib.admin.widgets import (
+    FilteredSelectMultiple,
+    AutocompleteSelectMultiple,
+)
+from django.contrib.admin.views.autocomplete import AutocompleteJsonView
 from django.db import connection, transaction
 from django.shortcuts import redirect
 from django.template.response import TemplateResponse
-from django.urls import path
+from django.urls import path, reverse
 from django.db.models import Max
 from datetime import timedelta, date
 from copy import deepcopy
 from django.forms.models import construct_instance
+import json
 
 from .excel_import import import_employee_workbook, import_company_visa_workbook
 
@@ -146,22 +151,21 @@ class BranchSelectMultiple(FilteredSelectMultiple):
         return option
 
 
-class EmployeeSelectMultiple(FilteredSelectMultiple):
-    """Select box that annotates options with the employee branch."""
+class EmployeeAutocompleteSelectMultiple(AutocompleteSelectMultiple):
+    """Autocomplete widget that forwards the selected branch."""
 
-    def create_option(
-        self, name, value, label, selected, index, subindex=None, attrs=None
-    ):
-        option = super().create_option(
-            name, value, label, selected, index, subindex=subindex, attrs=attrs
-        )
-        try:
-            branch = value.instance.branch
-            if branch:
-                option["attrs"]["data-branch"] = str(branch.id)
-        except Exception:
-            pass
-        return option
+    def __init__(self, rel, admin_site, forward=None, attrs=None, choices=(), using=None):
+        self.forward = forward or []
+        super().__init__(rel, admin_site, attrs, choices, using)
+
+    def build_attrs(self, base_attrs, extra_attrs=None):
+        attrs = super().build_attrs(base_attrs, extra_attrs)
+        if self.forward:
+            attrs["data-forward"] = json.dumps(self.forward)
+        return attrs
+
+    def get_url(self):
+        return reverse("admin:pagasys_employee_autocomplete")
 
 
 class TradeLicenseForm(forms.ModelForm):
@@ -749,7 +753,11 @@ class RosterEntryRangeForm(forms.ModelForm):
 
     employees = forms.ModelMultipleChoiceField(
         queryset=Employee.objects.all(),
-        widget=EmployeeSelectMultiple("employees", False),
+        widget=EmployeeAutocompleteSelectMultiple(
+            RosterEntry._meta.get_field("employee").remote_field,
+            admin.site,
+            forward=["branch"],
+        ),
         help_text="Employees to schedule",
     )
 
@@ -769,6 +777,17 @@ class RosterEntryRangeForm(forms.ModelForm):
         construct_instance(self, self.instance, opts.fields, opts.exclude)
 
 
+class EmployeeAutocomplete(AutocompleteJsonView):
+    """Autocomplete view for Employee filtering by branch."""
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        branch_param = self.request.GET.get("forward")
+        branch_id = self.request.GET.get(branch_param) if branch_param else None
+        if branch_id:
+            qs = qs.filter(department__branch_id=branch_id)
+        return qs
+
 @admin.register(RosterEntry)
 class RosterEntryAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
     """Admin configuration for roster entries."""
@@ -785,9 +804,13 @@ class RosterEntryAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
     date_hierarchy = "date"
     change_list_template = "admin/pagasys/rosterentry/change_list.html"
     readonly_fields = ["was_holiday"]
+    autocomplete_fields = ["employee"]
 
     class Media:
-        js = ["pagasys/js/roster_admin.js"]
+        js = (
+            "grappelli/js/jquery.grp_autocomplete_generic.js",
+            "grappelli/js/jquery.grp_autocomplete_m2m.js",
+        )
 
     def get_fields(self, request, obj=None):
         fields = super().get_fields(request, obj)
@@ -804,6 +827,13 @@ class RosterEntryAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
                 "overview/",
                 self.admin_site.admin_view(self.overview),
                 name="pagasys_rosterentry_overview",
+            ),
+            path(
+                "employee-autocomplete/",
+                self.admin_site.admin_view(
+                    EmployeeAutocomplete.as_view(admin_site=self.admin_site)
+                ),
+                name="pagasys_employee_autocomplete",
             ),
         ]
         return custom + urls

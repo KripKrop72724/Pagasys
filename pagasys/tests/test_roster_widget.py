@@ -1,6 +1,4 @@
 import json
-import subprocess
-import textwrap
 
 from django.core.management import call_command
 from django.urls import reverse
@@ -41,97 +39,35 @@ class RosterWidgetTests(ModelFactoryMixin, TestCase):
         )
         self.client.force_login(self.admin_user)
 
-    def test_add_form_includes_branch_filter_and_script(self):
+    def test_add_form_uses_autocomplete_widget(self):
         url = reverse("admin:pagasys_rosterentry_add")
         res = self.client.get(url)
         self.assertContains(res, 'id="id_branch"')
-        self.assertContains(res, f'data-branch="{self.branch.id}"')
-        self.assertContains(res, "pagasys/js/roster_admin.js")
+        self.assertContains(res, "data-forward")
+        self.assertNotContains(res, "pagasys/js/roster_admin.js")
 
-    def test_script_has_select_all_and_load_event(self):
-        with open("pagasys/static/pagasys/js/roster_admin.js") as fh:
-            content = fh.read()
-        self.assertIn("window.addEventListener('load'", content)
-        self.assertIn("Select all", content)
-        self.assertIn("DOMContentLoaded", content)
-
-    def test_branch_filter_applies_visibility(self):
-        script = textwrap.dedent(
-            f"""
-            const fs = require('fs');
-            const vm = require('vm');
-
-            const domReadyHandlers = [];
-            let loadHandler = null;
-
-            function Option(value, branch) {{
-              this.value = value;
-              this.dataset = branch ? {{ branch: String(branch) }} : {{}};
-              this.hidden = false;
-              this.selected = false;
-            }}
-
-            const branchEl = {{
-              value: '',
-              _handlers: {{}},
-              addEventListener(event, fn) {{ this._handlers[event] = fn; }},
-              parentNode: {{ insertBefore(){{}} }},
-            }};
-
-            function createSelect(options) {{
-              return {{
-                options,
-                parentNode: {{ insertBefore(){{}} }},
-                addEventListener() {{}},
-              }};
-            }}
-
-            const sourceOptions = [
-              new Option('emp1', '{self.branch.id}'),
-              new Option('emp2', '999'),
-            ];
-
-            const elements = {{
-              'id_branch': branchEl,
-              'id_employees': createSelect(sourceOptions),
-            }};
-
-            const document = {{
-              getElementById(id) {{ return elements[id]; }},
-              createElement(tag) {{ return {{ type: tag, parentNode: {{ insertBefore(){{}} }}, addEventListener(){{}}, textContent:'' }}; }},
-              addEventListener(evt, fn) {{ if (evt === 'DOMContentLoaded') domReadyHandlers.push(fn); }},
-            }};
-
-            const window = {{
-              addEventListener(evt, fn) {{ if (evt === 'load') loadHandler = fn; }},
-            }};
-
-            const code = fs.readFileSync('pagasys/static/pagasys/js/roster_admin.js', 'utf8');
-            vm.runInNewContext(code, {{ document, window }});
-
-            domReadyHandlers.forEach(fn => fn());
-
-            elements['id_employees_from'] = createSelect(
-              sourceOptions.map(opt => new Option(opt.value))
-            );
-            elements['id_employees'].options = [];
-
-            loadHandler();
-
-            branchEl.value = '{self.branch.id}';
-            branchEl._handlers.change();
-
-            const result = elements['id_employees_from'].options.map(opt => ({{
-              value: opt.value,
-              hidden: opt.hidden,
-              branch: opt.dataset.branch,
-            }}));
-            console.log(JSON.stringify(result));
-            """
+    def test_employee_autocomplete_filters_by_branch(self):
+        branch2 = self.create_branch(self.company, name="B2")
+        dept2 = self.create_department(branch2)
+        Employee.objects.create_user(
+            username="emp2",
+            password="pass",
+            department=dept2,
+            trade_license=self.license,
+            hire_date="2024-01-01",
+            employment_type="permanent",
+            visa_type="company",
         )
-        res = subprocess.run(
-            ["node", "-e", script], capture_output=True, text=True, check=True
-        )
-        data = json.loads(res.stdout)
-        visible = [opt["value"] for opt in data if not opt["hidden"]]
-        assert visible == ["emp1"]
+        url = reverse("admin:pagasys_employee_autocomplete")
+        params = {
+            "term": "",
+            "app_label": "pagasys",
+            "model_name": "rosterentry",
+            "field_name": "employee",
+            "forward": "branch",
+            "branch": self.branch.id,
+        }
+        res = self.client.get(url, params)
+        data = json.loads(res.content)
+        ids = [int(r["id"]) for r in data["results"]]
+        self.assertIn(self.employee.id, ids)
