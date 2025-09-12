@@ -20,13 +20,18 @@ class DummyS3:
 
 
 def test_put_capture_to_s3_uploads_and_hashes(monkeypatch, settings):
+    aws.reset_clients()
+    monkeypatch.setattr(aws, "_session", None)
+    monkeypatch.setattr(aws, "_rk_client", None)
+    monkeypatch.setattr(aws, "_s3_client", None)
     settings.AWS_S3_BUCKET_CAPTURE = "capturebucket"
     dummy_s3 = DummyS3()
-    monkeypatch.setattr(
-        aws,
-        "boto3",
-        types.SimpleNamespace(client=lambda name, region_name=None: dummy_s3),
-    )
+
+    class DummySession:
+        def client(self, name, region_name=None):
+            return dummy_s3
+
+    monkeypatch.setattr(aws, "_get_session", lambda: DummySession())
     fake_uuid = uuid.UUID("01234567-89ab-cdef-0123-456789abcdef")
     monkeypatch.setattr(aws.uuid, "uuid4", lambda: fake_uuid)
     monkeypatch.setattr(aws.timezone, "localdate", lambda: date(2023, 3, 4))
@@ -78,6 +83,10 @@ def test_company_collection_id_respects_prefix(settings):
 
 
 def test_search_face_by_image_retries_missing_collection(monkeypatch, settings):
+    aws.reset_clients()
+    monkeypatch.setattr(aws, "_session", None)
+    monkeypatch.setattr(aws, "_rk_client", None)
+    monkeypatch.setattr(aws, "_s3_client", None)
     settings.AWS_REKOGNITION_COLLECTION_PREFIX = "pref"
 
     class FakeClient:
@@ -95,11 +104,12 @@ def test_search_face_by_image_retries_missing_collection(monkeypatch, settings):
             return {"args": kwargs}
 
     client = FakeClient()
-    monkeypatch.setattr(
-        aws,
-        "boto3",
-        types.SimpleNamespace(client=lambda name, region_name=None: client),
-    )
+
+    class DummySession:
+        def client(self, name, region_name=None):
+            return client
+
+    monkeypatch.setattr(aws, "_get_session", lambda: DummySession())
     called = {}
 
     def fake_ensure(cid):
