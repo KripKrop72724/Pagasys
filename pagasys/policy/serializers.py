@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from drf_spectacular.utils import extend_schema_field
+from django.db import models
 from pagasys.models import (
     WorkCalendar,
     Holiday,
@@ -8,6 +9,7 @@ from pagasys.models import (
     RosterEntry,
     LeaveType,
     Employee,
+    Branch,
 )
 from pagasys.utils import scope_queryset
 
@@ -171,6 +173,11 @@ class RosterRangeSerializer(serializers.Serializer):
         required=False,
         help_text="Employee IDs to schedule",
     )
+    branch = serializers.PrimaryKeyRelatedField(
+        queryset=Branch.objects.all(),
+        required=False,
+        help_text="Branch ID whose employees to schedule",
+    )
     shift = serializers.PrimaryKeyRelatedField(
         queryset=ShiftTemplate.objects.all(), help_text="Shift template to assign"
     )
@@ -200,6 +207,9 @@ class RosterRangeSerializer(serializers.Serializer):
             emp_qs = scope_queryset(Employee.objects.all(), req.user)
             self.fields["employee"].queryset = emp_qs
             self.fields["employees"].queryset = emp_qs
+            self.fields["branch"].queryset = scope_queryset(
+                Branch.objects.all(), req.user
+            )
             self.fields["shift"].queryset = scope_queryset(
                 ShiftTemplate.objects.all(), req.user
             )
@@ -212,13 +222,24 @@ class RosterRangeSerializer(serializers.Serializer):
         if (days and until) or (not days and not until):
             raise serializers.ValidationError("Provide either 'days' or 'until'")
 
+        branch = attrs.pop("branch", None)
         employee = attrs.pop("employee", None)
         employees = list(attrs.get("employees") or [])
-        if bool(employee) == bool(employees):
+        provided = [bool(branch), bool(employee), bool(employees)]
+        if sum(provided) != 1:
             raise serializers.ValidationError(
-                "Provide either 'employee' or 'employees'",
+                "Provide exactly one of 'branch', 'employee', or 'employees'",
             )
-        if employee:
+        if branch:
+            req = self.context.get("request")
+            emp_qs = Employee.objects.filter(
+                models.Q(department__branch=branch)
+                | models.Q(project__branch=branch)
+            ).distinct()
+            if req:
+                emp_qs = scope_queryset(emp_qs, req.user)
+            attrs["employees"] = list(emp_qs)
+        elif employee:
             attrs["employees"] = [employee]
         else:
             attrs["employees"] = employees
