@@ -1,11 +1,8 @@
 import hashlib
 from datetime import date
-import types
 import uuid
 
 import pytest
-
-import types
 
 from capture import aws
 from botocore.exceptions import ClientError, NoCredentialsError
@@ -50,13 +47,16 @@ def test_put_capture_to_s3_uploads_and_hashes(monkeypatch, settings):
 
 
 def test_put_enroll_to_s3_uploads_and_hashes(monkeypatch, settings):
+    aws.reset_clients()
     settings.AWS_S3_BUCKET_ENROLL = "enrollbucket"
     dummy_s3 = DummyS3()
-    monkeypatch.setattr(
-        aws,
-        "boto3",
-        types.SimpleNamespace(client=lambda name, region_name=None: dummy_s3),
-    )
+
+    class DummySession:
+        def client(self, name, region_name=None):
+            assert name == "s3"
+            return dummy_s3
+
+    monkeypatch.setattr(aws, "_get_session", lambda: DummySession())
     fake_uuid = uuid.UUID("fedcba98-7654-3210-fedc-ba9876543210")
     monkeypatch.setattr(aws.uuid, "uuid4", lambda: fake_uuid)
     data = b"enroll image"
@@ -123,6 +123,7 @@ def test_search_face_by_image_retries_missing_collection(monkeypatch, settings):
 
 
 def test_search_face_by_image_no_retry_when_collection_exists(monkeypatch, settings):
+    aws.reset_clients()
     settings.AWS_REKOGNITION_COLLECTION_PREFIX = "pref"
 
     class FakeClient:
@@ -138,11 +139,13 @@ def test_search_face_by_image_no_retry_when_collection_exists(monkeypatch, setti
             return {"args": kwargs}
 
     client = FakeClient()
-    monkeypatch.setattr(
-        aws,
-        "boto3",
-        types.SimpleNamespace(client=lambda name, region_name=None: client),
-    )
+
+    class DummySession:
+        def client(self, name, region_name=None):
+            assert name == "rekognition"
+            return client
+
+    monkeypatch.setattr(aws, "_get_session", lambda: DummySession())
     called = {}
 
     def fake_ensure(cid):

@@ -56,8 +56,8 @@ def test_count_all_faces(monkeypatch, settings):
     client = FakeRekognitionClient(collections, faces)
 
     class DummySession:
-        def client(self, service, region_name=None):
-            assert service == "rekognition"
+        def client(self, name, region_name=None):
+            assert name == "rekognition"
             return client
 
     monkeypatch.setattr(aws, "_get_session", lambda: DummySession())
@@ -79,8 +79,8 @@ def test_delete_all_faces(monkeypatch, settings):
     client = FakeRekognitionClient(collections, faces)
 
     class DummySession:
-        def client(self, service, region_name=None):
-            assert service == "rekognition"
+        def client(self, name, region_name=None):
+            assert name == "rekognition"
             return client
 
     monkeypatch.setattr(aws, "_get_session", lambda: DummySession())

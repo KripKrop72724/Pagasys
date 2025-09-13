@@ -731,11 +731,10 @@ class RosterEntryRangeForm(forms.ModelForm):
         help_text="Branch whose employees will be scheduled",
     )
 
-    employees = forms.ModelMultipleChoiceField(
+    employee = forms.ModelChoiceField(
         queryset=Employee.objects.none(),
         required=False,
-        widget=forms.CheckboxSelectMultiple,
-        help_text="Employees to schedule within the branch",
+        help_text="Employee to schedule within the branch",
     )
 
     class Meta:
@@ -766,6 +765,7 @@ class RosterEntryAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
     ]
     list_filter = [
         "employee__department__branch",
+        "employee",
         "shift",
         "is_rest_day",
         "is_holiday",
@@ -858,26 +858,25 @@ class RosterEntryAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
             kwargs["form"] = RosterEntryRangeForm
         form = super().get_form(request, obj, **kwargs)
         if obj is None:
-            form.base_fields.pop("employee", None)
             form.base_fields["branch"].queryset = scope_queryset(
                 Branch.objects.all(), request.user
             )
-            show_employees = "employees" in request.POST or (
+            show_employee = "employee" in request.POST or (
                 request.method == "GET" and request.GET.get("stage2")
             )
-            if show_employees:
+            if show_employee:
                 branch_id = request.POST.get("branch") or request.GET.get("branch")
                 if branch_id:
-                    form.base_fields["employees"].queryset = scope_queryset(
+                    form.base_fields["employee"].queryset = scope_queryset(
                         Employee.objects.filter(department__branch_id=branch_id),
                         request.user,
                     )
             else:
-                form.base_fields.pop("employees", None)
+                form.base_fields.pop("employee", None)
         return form
 
     def add_view(self, request, form_url="", extra_context=None):
-        if request.method == "POST" and "employees" not in request.POST:
+        if request.method == "POST" and "employee" not in request.POST:
             form = RosterEntryRangeForm(request.POST)
             if form.is_valid():
                 params = request.POST.copy()
@@ -928,8 +927,9 @@ class RosterEntryAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
                 super().save_model(request, obj, form, change)
                 return
         else:
-            if form.cleaned_data.get("employees"):
-                employees = list(form.cleaned_data["employees"])
+            selected = form.cleaned_data.get("employee")
+            if selected:
+                employees = [selected]
             else:
                 employees = list(
                     scope_queryset(
