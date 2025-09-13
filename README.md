@@ -637,6 +637,7 @@ override the final status.
 
 1. Visit the [`AttAdjustment` admin](/admin/attendance/attadjustment/add/)
    and fill the minute deltas plus an optional `override_status` and reason.
+   The `created_by_id` field is set automatically to the logged-in user.
 2. Or call `POST /companies/{cid}/att-adjustments/` with a payload such as:
 
 ```json
@@ -647,6 +648,9 @@ override the final status.
   "reason": "handover"
 }
 ```
+
+   The API derives `created_by_id` from the authenticated user,
+   so it need not be supplied in the request.
 
 Saving either form recomputes the day and records a
 `manual_adjustments_applied` anomaly.

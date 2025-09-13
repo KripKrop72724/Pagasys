@@ -8847,7 +8847,8 @@ components:
         created_by_id:
           type: integer
           readOnly: true
-          description: Identifier of the user who created the adjustment
+          description: Identifier of the user who created the adjustment. Set automatically
+            from the authenticated user.
         created_at:
           type: string
           format: date-time
@@ -11414,7 +11415,8 @@ components:
         created_by_id:
           type: integer
           readOnly: true
-          description: Identifier of the user who created the adjustment
+          description: Identifier of the user who created the adjustment. Set automatically
+            from the authenticated user.
         created_at:
           type: string
           format: date-time

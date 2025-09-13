@@ -297,7 +297,10 @@ class AttAdjustment(models.Model):
         help_text="Human-readable reason for the adjustment",
     )
     created_by_id = models.IntegerField(
-        help_text="Identifier of the user who created the adjustment",
+        help_text=(
+            "Identifier of the user who created the adjustment. "
+            "Set automatically from the authenticated user."
+        ),
     )
     created_at = models.DateTimeField(auto_now_add=True)
 
