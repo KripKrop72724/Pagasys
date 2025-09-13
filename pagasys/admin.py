@@ -751,7 +751,10 @@ class RosterEntryRangeForm(forms.ModelForm):
     def _post_clean(self):
         """Skip model.full_clean(); validation handled per employee during save."""
         opts = self._meta
+        employees = self.cleaned_data.pop("employee", None)
         construct_instance(self, self.instance, opts.fields, opts.exclude)
+        if employees is not None:
+            self.cleaned_data["employee"] = employees
 
 @admin.register(RosterEntry)
 class RosterEntryAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
@@ -776,7 +779,6 @@ class RosterEntryAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
     date_hierarchy = "date"
     change_list_template = "admin/pagasys/rosterentry/change_list.html"
     readonly_fields = ["was_holiday"]
-    autocomplete_fields = ["employee"]
 
     class Media:
         js = (
@@ -786,7 +788,7 @@ class RosterEntryAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
 
     def get_fields(self, request, obj=None):
         fields = super().get_fields(request, obj)
-        if obj is None:
+        if obj is None and "stage2" not in request.GET:
             fields = [f for f in fields if f != "employee"]
         return fields
 

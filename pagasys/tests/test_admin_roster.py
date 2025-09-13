@@ -1,6 +1,7 @@
 from django.contrib import admin
 from django.contrib.messages import get_messages
 from django.test import TestCase, RequestFactory
+from django import forms
 from unittest.mock import patch, ANY
 
 from pagasys.admin import RosterEntryAdmin, RosterEntryRangeForm
@@ -132,3 +133,12 @@ class RosterEntryAdminTests(TestCase):
             self.assertTrue(
                 RosterEntry.objects.filter(employee=emp, date="2024-07-01").exists()
             )
+
+    def test_add_form_uses_checkbox_widget(self):
+        req = self.factory.get("/admin/", {"stage2": "1"})
+        req.user = self.admin_user
+        req.session = {}
+        form_class = self.admin.get_form(req)
+        self.assertIsInstance(
+            form_class.base_fields["employee"].widget, forms.CheckboxSelectMultiple
+        )
