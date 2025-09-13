@@ -4,7 +4,7 @@ from unittest.mock import patch
 from django.test import TransactionTestCase
 from django.utils import timezone
 
-from attendance.models import LeaveRequest, LeaveDay
+from attendance.models import LeaveRequest, LeaveDay, AttAdjustment
 from pagasys.models import (
     Company,
     Branch,
@@ -77,6 +77,43 @@ class AttendanceSignalTests(TransactionTestCase):
             portion=1,
             request=req,
         )
+        mock_delay.assert_called_once_with(self.employee.id, self.day.isoformat())
+
+    @patch("attendance.signals.compute_employee_day_task.delay")
+    def test_att_adjustment_save_triggers_compute(self, mock_delay):
+        AttAdjustment.objects.create(
+            employee=self.employee,
+            date=self.day,
+            reason="Manual fix",
+            created_by_id=1,
+        )
+        mock_delay.assert_called_once_with(self.employee.id, self.day.isoformat())
+
+    @patch("attendance.signals.compute_employee_day_task.delay")
+    def test_att_adjustment_delete_triggers_compute(self, mock_delay):
+        adj = AttAdjustment.objects.create(
+            employee=self.employee,
+            date=self.day,
+            reason="Manual fix",
+            created_by_id=1,
+        )
+        mock_delay.assert_called_once_with(self.employee.id, self.day.isoformat())
+        mock_delay.reset_mock()
+        adj.delete()
+        mock_delay.assert_called_once_with(self.employee.id, self.day.isoformat())
+
+    @patch("attendance.signals.compute_employee_day_task.delay")
+    def test_att_adjustment_update_triggers_compute(self, mock_delay):
+        adj = AttAdjustment.objects.create(
+            employee=self.employee,
+            date=self.day,
+            reason="Manual fix",
+            created_by_id=1,
+        )
+        mock_delay.assert_called_once_with(self.employee.id, self.day.isoformat())
+        mock_delay.reset_mock()
+        adj.delta_work_min = 5
+        adj.save()
         mock_delay.assert_called_once_with(self.employee.id, self.day.isoformat())
 
     def test_punch_event_save_triggers_pair_and_compute(self):

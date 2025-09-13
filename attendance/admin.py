@@ -16,7 +16,7 @@ from .tasks import compute_employee_day_task, recompute_range_task
 class AttAdjustmentForm(forms.ModelForm):
     class Meta:
         model = AttAdjustment
-        fields = "__all__"
+        exclude = ["created_by_id"]
         help_texts = {
             "delta_work_min": "Additive minutes applied to work_min",
             "delta_unpaid_break_min": "Additive minutes applied to unpaid_break_min",
@@ -241,3 +241,8 @@ class AttAdjustmentAdmin(ScopedAdminMixin, admin.ModelAdmin):
             level=messages.INFO,
         )
         return super().changelist_view(request, extra_context)
+
+    def save_model(self, request, obj, form, change):
+        if not change:
+            obj.created_by_id = request.user.id
+        super().save_model(request, obj, form, change)
