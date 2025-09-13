@@ -1,7 +1,6 @@
 import logging
 import secrets
 import time
-from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 
 from django.conf import settings
@@ -355,50 +354,43 @@ class CapturePunchView(generics.GenericAPIView):
 
             timings: dict[str, float] = {}
 
-            def _upload():
-                start = time.monotonic()
-                logger.debug("capture.upload.start")
-                try:
-                    return put_capture_to_s3(company.id, device.id, image_bytes)
-                finally:
-                    elapsed = time.monotonic() - start
-                    timings["upload"] = elapsed
-                    logger.debug("capture.upload.end %.3f", elapsed)
-
-            def _search():
-                start = time.monotonic()
-                logger.debug("capture.search.start")
-                try:
-                    return search_face_by_image(company.id, image_bytes, threshold)
-                finally:
-                    elapsed = time.monotonic() - start
-                    timings["search"] = elapsed
-                    logger.debug("capture.search.end %.3f", elapsed)
-
             start_all = time.monotonic()
-            with ThreadPoolExecutor(max_workers=2) as executor:
-                up_fut = executor.submit(_upload)
-                search_fut = executor.submit(_search)
-                try:
-                    s3_key, sha256 = up_fut.result()
-                except Exception:
-                    logger.exception("put_capture_to_s3 failed")
-                    return Response({"detail": "image_upload_failed"}, status=400)
-                try:
-                    search_res = search_fut.result()
-                except ClientError:
-                    logger.exception("search_face_by_image failed")
-                    return Response({"detail": "face_search_failed"}, status=400)
-                except Exception:
-                    logger.exception("search_face_by_image failed")
-                    return Response({"detail": "face_search_failed"}, status=400)
-            total_parallel = time.monotonic() - start_all
+
+            # Upload image to S3 first
+            start = time.monotonic()
+            logger.debug("capture.upload.start")
+            try:
+                s3_key, sha256 = put_capture_to_s3(company.id, device.id, image_bytes)
+            except Exception:
+                logger.exception("put_capture_to_s3 failed")
+                return Response({"detail": "image_upload_failed"}, status=400)
+            finally:
+                elapsed = time.monotonic() - start
+                timings["upload"] = elapsed
+                logger.debug("capture.upload.end %.3f", elapsed)
+
+            # Then search face by image
+            start = time.monotonic()
+            logger.debug("capture.search.start")
+            try:
+                search_res = search_face_by_image(company.id, image_bytes, threshold)
+            except ClientError:
+                logger.exception("search_face_by_image failed")
+                return Response({"detail": "face_search_failed"}, status=400)
+            except Exception:
+                logger.exception("search_face_by_image failed")
+                return Response({"detail": "face_search_failed"}, status=400)
+            finally:
+                elapsed = time.monotonic() - start
+                timings["search"] = elapsed
+                logger.debug("capture.search.end %.3f", elapsed)
+
+            total = time.monotonic() - start_all
             logger.info(
-                "capture.timings upload=%.3f search=%.3f parallel=%.3f sequential=%.3f",
+                "capture.timings upload=%.3f search=%.3f total=%.3f",
                 timings.get("upload", 0.0),
                 timings.get("search", 0.0),
-                total_parallel,
-                timings.get("upload", 0.0) + timings.get("search", 0.0),
+                total,
             )
 
         if search_res is not None:
