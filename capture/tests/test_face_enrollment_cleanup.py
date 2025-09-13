@@ -1,7 +1,5 @@
-import types
-
 import pytest
-
+import capture.aws as aws
 from capture.aws import delete_all_employee_faces, company_collection_id
 from capture.models import FaceEnrollment
 from pagasys.models import Employee
@@ -46,12 +44,14 @@ def test_delete_all_employee_faces_deletes_all(monkeypatch, settings):
         ]},
     ]
     called = {}
+    aws.reset_clients()
 
-    def fake_client(service, region_name=None):
-        assert service == "rekognition"
-        return FakeRekognitionClient(pages, called)
+    class DummySession:
+        def client(self, name, region_name=None):
+            assert name == "rekognition"
+            return FakeRekognitionClient(pages, called)
 
-    monkeypatch.setattr("capture.aws.boto3", types.SimpleNamespace(client=fake_client))
+    monkeypatch.setattr(aws, "_get_session", lambda: DummySession())
     delete_all_employee_faces(5, 1)
     assert called["CollectionId"] == company_collection_id(5)
     assert called["FaceIds"] == ["f1", "f2"]
@@ -72,10 +72,14 @@ def test_delete_all_employee_faces_missing_collection(monkeypatch):
         def delete_faces(self, *a, **k):  # pragma: no cover - should not run
             called["delete"] = True
 
-    def fake_client(service, region_name=None):
-        return FakeClient()
+    aws.reset_clients()
 
-    monkeypatch.setattr("capture.aws.boto3", types.SimpleNamespace(client=fake_client))
+    class DummySession:
+        def client(self, name, region_name=None):
+            assert name == "rekognition"
+            return FakeClient()
+
+    monkeypatch.setattr(aws, "_get_session", lambda: DummySession())
     delete_all_employee_faces(5, 1)
     assert called["delete"] is False
 

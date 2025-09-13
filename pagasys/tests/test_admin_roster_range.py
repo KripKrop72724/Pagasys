@@ -61,14 +61,16 @@ class RosterEntryAdminRangeTests(ModelFactoryMixin, TestCase):
 
     def _add_range(self, data, employees=None):
         add_url = reverse("admin:pagasys_rosterentry_add")
-        res1 = self.client.post(add_url, data, follow=True)
-        self.assertEqual(res1.status_code, 200)
+        res1 = self.client.post(add_url, data)
+        self.assertEqual(res1.status_code, 302)
+        url = res1["Location"]
         if employees is None:
             employees = [self.employee, self.employee2]
-        data2 = data.copy()
-        data2["employees"] = [e.id for e in employees]
-        res2 = self.client.post(add_url, data2)
-        self.assertEqual(res2.status_code, 302)
+        for emp in employees:
+            data2 = data.copy()
+            data2.update({"stage2": "1", "employee": emp.id})
+            res2 = self.client.post(url, data2)
+            self.assertEqual(res2.status_code, 302)
         return res1, res2
 
     def test_repeat_days_with_rest(self):
@@ -170,13 +172,15 @@ class RosterEntryAdminRangeTests(ModelFactoryMixin, TestCase):
             "shift": self.shift.id,
             "repeat_days": 1,
         }
-        res1 = self.client.post(add_url, data, follow=True)
-        self.assertEqual(res1.status_code, 200)
-        self.assertContains(res1, "Employees to schedule within the branch")
+        res1 = self.client.post(add_url, data)
+        self.assertEqual(res1.status_code, 302)
+        url = res1["Location"]
+        res_page = self.client.get(url, follow=True)
+        self.assertEqual(res_page.status_code, 200)
         self.assertEqual(RosterEntry.objects.count(), 0)
         data2 = data.copy()
-        data2["employees"] = [self.employee.id]
-        res2 = self.client.post(add_url, data2)
+        data2.update({"stage2": "1", "employee": self.employee.id})
+        res2 = self.client.post(url, data2)
         self.assertEqual(res2.status_code, 302)
         self.assertEqual(
             RosterEntry.objects.filter(employee=self.employee).count(), 1

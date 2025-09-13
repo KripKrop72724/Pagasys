@@ -765,6 +765,7 @@ class RosterEntryAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
     ]
     list_filter = [
         "employee__department__branch",
+        "employee",
         "shift",
         "is_rest_day",
         "is_holiday",
