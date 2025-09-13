@@ -357,18 +357,25 @@ class CapturePunchView(generics.GenericAPIView):
 
             def _upload():
                 start = time.monotonic()
+                logger.debug("capture.upload.start")
                 try:
                     return put_capture_to_s3(company.id, device.id, image_bytes)
                 finally:
-                    timings["upload"] = time.monotonic() - start
+                    elapsed = time.monotonic() - start
+                    timings["upload"] = elapsed
+                    logger.debug("capture.upload.end %.3f", elapsed)
 
             def _search():
                 start = time.monotonic()
+                logger.debug("capture.search.start")
                 try:
                     return search_face_by_image(company.id, image_bytes, threshold)
                 finally:
-                    timings["search"] = time.monotonic() - start
+                    elapsed = time.monotonic() - start
+                    timings["search"] = elapsed
+                    logger.debug("capture.search.end %.3f", elapsed)
 
+            start_all = time.monotonic()
             with ThreadPoolExecutor(max_workers=2) as executor:
                 up_fut = executor.submit(_upload)
                 search_fut = executor.submit(_search)
@@ -379,22 +386,19 @@ class CapturePunchView(generics.GenericAPIView):
                     return Response({"detail": "image_upload_failed"}, status=400)
                 try:
                     search_res = search_fut.result()
-                except ClientError as e:
-                    if e.response.get("Error", {}).get("Code") == "InvalidParameterException":
-                        logger.exception("search_face_by_image invalid parameter")
-                        face_mismatch = True
-                        search_res = {"FaceMatches": []}
-                    else:
-                        logger.exception("search_face_by_image failed")
-                        return Response({"detail": "face_search_failed"}, status=400)
+                except ClientError:
+                    logger.exception("search_face_by_image failed")
+                    return Response({"detail": "face_search_failed"}, status=400)
                 except Exception:
                     logger.exception("search_face_by_image failed")
                     return Response({"detail": "face_search_failed"}, status=400)
-
+            total_parallel = time.monotonic() - start_all
             logger.info(
-                "capture.timings upload=%.3f search=%.3f",
+                "capture.timings upload=%.3f search=%.3f parallel=%.3f sequential=%.3f",
                 timings.get("upload", 0.0),
                 timings.get("search", 0.0),
+                total_parallel,
+                timings.get("upload", 0.0) + timings.get("search", 0.0),
             )
 
         if search_res is not None:

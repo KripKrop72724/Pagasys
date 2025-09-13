@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import uuid
+import threading
 
 from django.conf import settings
 from django.utils import timezone
@@ -23,42 +24,44 @@ except ModuleNotFoundError:  # pragma: no cover
 
 logger = logging.getLogger(__name__)
 
-_session: "boto3.session.Session | None" = None
-_rk_client = None
-_s3_client = None
+_local = threading.local()
 
 
 def _get_session():
-    """Return a cached boto3 session."""
-    global _session
-    if _session is None:  # pragma: no branch - simple cache
+    """Return a thread-local boto3 session."""
+    sess = getattr(_local, "session", None)
+    if sess is None:  # pragma: no branch - simple cache
         if boto3 is None:  # pragma: no cover
             raise RuntimeError("boto3 is required for AWS operations")
-        _session = boto3.session.Session()
-    return _session
+        sess = boto3.session.Session()
+        _local.session = sess
+    return sess
 
 
 def get_rk_client():
-    """Return a cached Rekognition client."""
-    global _rk_client
-    if _rk_client is None:
-        _rk_client = _get_session().client(
+    """Return a thread-local Rekognition client."""
+    rk = getattr(_local, "rk_client", None)
+    if rk is None:
+        rk = _get_session().client(
             "rekognition", region_name=settings.AWS_REKOGNITION_REGION
         )
-    return _rk_client
+        _local.rk_client = rk
+    return rk
 
 
 def get_s3_client():
-    """Return a cached S3 client."""
-    global _s3_client
-    if _s3_client is None:
-        _s3_client = _get_session().client("s3")
-    return _s3_client
+    """Return a thread-local S3 client."""
+    s3 = getattr(_local, "s3_client", None)
+    if s3 is None:
+        s3 = _get_session().client("s3")
+        _local.s3_client = s3
+    return s3
 
 
 def reset_clients():  # pragma: no cover - used in tests
-    global _session, _rk_client, _s3_client
-    _session = _rk_client = _s3_client = None
+    for attr in ("session", "rk_client", "s3_client"):
+        if hasattr(_local, attr):
+            delattr(_local, attr)
 
 
 def _aws_call(func, *args, **kwargs):
