@@ -293,6 +293,18 @@ class ProjectAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
 
 
 class EmployeeAdminForm(UserChangeForm):
+    """Form for editing :class:`Employee` in the Django admin."""
+
+    # ``payment_status`` has a model default ("cash"), but the field is marked
+    # as required on the model (``blank=False``).  When the field is disabled in
+    # the admin UI (for example when the employee has a visit visa), the value
+    # is not submitted with the form.  Declare the field explicitly and mark it
+    # optional so that the model default is used if no value is provided.
+    payment_status = forms.ChoiceField(
+        choices=Employee.PAYMENT_STATUS_CHOICES,
+        required=False,
+    )
+
     class Meta(UserChangeForm.Meta):
         model = Employee
         fields = "__all__"
