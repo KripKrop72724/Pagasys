@@ -416,14 +416,34 @@ class CapturePunchView(generics.GenericAPIView):
         elif roster_entry:
             geofence_rule = get_geofence_requirement(roster_entry.shift, roster_date)
 
-        employee = hinted_emp or matched_emp
-        if employee:
+        employee = hinted_emp
+        unrostered_face_match = False
+        if hinted_emp:
             if roster_entry is None:
-                roster_date, roster_entry, roster_fallback = compute_roster_date(employee, company_local_dt)
+                roster_date, roster_entry, roster_fallback = compute_roster_date(
+                    employee, company_local_dt
+                )
             if roster_entry:
                 requires_face = roster_entry.shift.requires_face
                 if geofence_rule is None:
-                    geofence_rule = get_geofence_requirement(roster_entry.shift, roster_date)
+                    geofence_rule = get_geofence_requirement(
+                        roster_entry.shift, roster_date
+                    )
+        elif matched_emp:
+            roster_date, roster_entry, roster_fallback = compute_roster_date(
+                matched_emp, company_local_dt
+            )
+            if roster_entry:
+                employee = matched_emp
+                requires_face = roster_entry.shift.requires_face
+                if geofence_rule is None:
+                    geofence_rule = get_geofence_requirement(
+                        roster_entry.shift, roster_date
+                    )
+            else:
+                face_mismatch = True
+                unrostered_face_match = True
+
 
         out_scope = False
         if employee:
@@ -463,6 +483,10 @@ class CapturePunchView(generics.GenericAPIView):
         if out_scope and getattr(settings, "CAPTURE_BLOCK_OUT_OF_SCOPE", False):
             accepted = False
             reason = reason or "outside_scope"
+
+        if unrostered_face_match:
+            accepted = False
+            reason = "unrostered_face_match"
 
         if face_mismatch and reason is None:
             reason = "face_mismatch"
@@ -505,6 +529,11 @@ class CapturePunchView(generics.GenericAPIView):
             PunchException.objects.get_or_create(
                 event=ev,
                 defaults={"kind": "no_enrollment", "details": {}},
+            )
+        elif reason == "unrostered_face_match":
+            PunchException.objects.get_or_create(
+                event=ev,
+                defaults={"kind": "unrostered_face_match", "details": {}},
             )
         elif out_scope and not settings.CAPTURE_BLOCK_OUT_OF_SCOPE:
             PunchException.objects.get_or_create(

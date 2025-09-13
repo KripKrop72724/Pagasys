@@ -437,6 +437,40 @@ def test_face_match_multiple_results(client, company, device, employee, roster, 
     assert data["face_mismatch"] is False
 
 
+def test_unrostered_face_match_requires_review(
+    client, company, device, employee, monkeypatch
+):
+    def fake_put_capture_to_s3(company_id, device_id, bytes_):
+        return ("k", "h")
+
+    def fake_search(company_id, image_bytes, threshold):
+        return {
+            "FaceMatches": [
+                {"Similarity": 99.0, "Face": {"ExternalImageId": str(employee.id)}}
+            ]
+        }
+
+    monkeypatch.setattr("capture.views.put_capture_to_s3", fake_put_capture_to_s3)
+    monkeypatch.setattr("capture.views.search_face_by_image", fake_search)
+
+    img_b64 = base64.b64encode(b"img").decode()
+    ts = datetime(2024, 7, 1, 9, 0, tzinfo=dt_timezone.utc)
+    resp = client.post(
+        "/api/capture/punch",
+        {"action": "in", "timestamp": ts.isoformat(), "image_b64": img_b64},
+        **auth_headers(device),
+    )
+    assert resp.status_code == 403
+    data = resp.json()
+    assert data["accepted"] is False
+    assert data["face_mismatch"] is True
+    assert data["matched_employee"] == employee.id
+    ev = PunchEvent.objects.get(id=data["event_id"])
+    assert ev.employee is None
+    assert ev.matched_employee_id == employee.id
+    assert ev.exception.kind == "unrostered_face_match"
+
+
 def test_face_low_confidence_rejected(client, company, device, employee, face_roster, monkeypatch):
     """Reject when similarity is below FACE_MIN_CONF rule."""
 
