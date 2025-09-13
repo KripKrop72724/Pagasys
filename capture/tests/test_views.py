@@ -832,7 +832,7 @@ def test_create_enrollment_link_ensures_collection(
     assert called["cid"] == company_collection_id(company.id)
 
 
-def test_parallel_upload_and_search_success(monkeypatch, client, device):
+def test_upload_and_search_success(monkeypatch, client, device):
     img_b64 = base64.b64encode(b"img").decode()
     called = {"put": False, "search": False, "task": False}
 
@@ -861,7 +861,7 @@ def test_parallel_upload_and_search_success(monkeypatch, client, device):
     assert PunchEvent.objects.count() == 1
 
 
-def test_parallel_face_failure_rolls_back(monkeypatch, client, device):
+def test_face_failure_rolls_back(monkeypatch, client, device):
     img_b64 = base64.b64encode(b"img").decode()
 
     monkeypatch.setattr(
