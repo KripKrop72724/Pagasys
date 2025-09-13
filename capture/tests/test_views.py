@@ -480,10 +480,10 @@ def test_face_low_confidence_rejected(client, company, device, employee, face_ro
     assert ev.exception.kind == "face_required_no_match"
 
 
-def test_face_invalid_parameter_exception_treated_as_no_match(
+def test_face_invalid_parameter_exception_returns_error(
     client, company, device, employee, face_roster, monkeypatch
 ):
-    """Handle Rekognition errors when no faces are present."""
+    """Treat Rekognition ClientError as request failure."""
 
     FaceEnrollment.objects.create(
         employee=employee, collection_id="c1", face_ids=["f1"], status="active"
@@ -516,13 +516,9 @@ def test_face_invalid_parameter_exception_treated_as_no_match(
         },
         **auth_headers(device),
     )
-    assert resp.status_code == 403
-    data = resp.json()
-    assert data["accepted"] is False
-    assert data["notes"] == "face_required_no_match"
-    assert data["face_mismatch"] is True
-    ev = PunchEvent.objects.get(id=data["event_id"])
-    assert ev.exception.kind == "face_required_no_match"
+    assert resp.status_code == 400
+    assert resp.json() == {"detail": "face_search_failed"}
+    assert PunchEvent.objects.count() == 0
 
 
 def _mismatch_setup(monkeypatch, employee_other):

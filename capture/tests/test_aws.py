@@ -18,9 +18,6 @@ class DummyS3:
 
 def test_put_capture_to_s3_uploads_and_hashes(monkeypatch, settings):
     aws.reset_clients()
-    monkeypatch.setattr(aws, "_session", None)
-    monkeypatch.setattr(aws, "_rk_client", None)
-    monkeypatch.setattr(aws, "_s3_client", None)
     settings.AWS_S3_BUCKET_CAPTURE = "capturebucket"
     dummy_s3 = DummyS3()
 
@@ -84,9 +81,6 @@ def test_company_collection_id_respects_prefix(settings):
 
 def test_search_face_by_image_retries_missing_collection(monkeypatch, settings):
     aws.reset_clients()
-    monkeypatch.setattr(aws, "_session", None)
-    monkeypatch.setattr(aws, "_rk_client", None)
-    monkeypatch.setattr(aws, "_s3_client", None)
     settings.AWS_REKOGNITION_COLLECTION_PREFIX = "pref"
 
     class FakeClient:
