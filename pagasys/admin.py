@@ -731,10 +731,11 @@ class RosterEntryRangeForm(forms.ModelForm):
         help_text="Branch whose employees will be scheduled",
     )
 
-    employee = forms.ModelChoiceField(
+    employee = forms.ModelMultipleChoiceField(
         queryset=Employee.objects.none(),
         required=False,
-        help_text="Employee to schedule within the branch",
+        widget=forms.CheckboxSelectMultiple,
+        help_text="Employees to schedule within the branch",
     )
 
     class Meta:
@@ -861,18 +862,14 @@ class RosterEntryAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
             form.base_fields["branch"].queryset = scope_queryset(
                 Branch.objects.all(), request.user
             )
-            show_employee = "employee" in request.POST or (
-                request.method == "GET" and request.GET.get("stage2")
-            )
-            if show_employee:
-                branch_id = request.POST.get("branch") or request.GET.get("branch")
-                if branch_id:
-                    form.base_fields["employee"].queryset = scope_queryset(
-                        Employee.objects.filter(department__branch_id=branch_id),
-                        request.user,
-                    )
+            branch_id = request.POST.get("branch") or request.GET.get("branch")
+            if branch_id:
+                form.base_fields["employee"].queryset = scope_queryset(
+                    Employee.objects.filter(department__branch_id=branch_id),
+                    request.user,
+                )
             else:
-                form.base_fields.pop("employee", None)
+                form.base_fields["employee"].queryset = Employee.objects.none()
         return form
 
     def add_view(self, request, form_url="", extra_context=None):
@@ -929,7 +926,7 @@ class RosterEntryAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
         else:
             selected = form.cleaned_data.get("employee")
             if selected:
-                employees = [selected]
+                employees = list(selected)
             else:
                 employees = list(
                     scope_queryset(
@@ -960,7 +957,6 @@ class RosterEntryAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
             if repeat_until
             else start
         )
-        num_days = (end - start).days + 1
         if len(employees) > ASYNC_BULK_THRESHOLD:
             codes = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]
             task = schedule_range_bulk.delay(
