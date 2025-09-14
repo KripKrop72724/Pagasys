@@ -525,3 +525,4 @@ jobs:
           aws elasticbeanstalk update-environment --environment-name pagasys-prod --version-label "${{ steps.prev-version.outputs.version }}"
           aws elasticbeanstalk wait environment-updated --environment-name pagasys-prod
           exit 1
+          
