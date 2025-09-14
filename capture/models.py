@@ -86,7 +86,9 @@ class AttendanceDevice(models.Model):
     def clean(self):
         targets = [self.branch, self.department, self.project]
         if sum(bool(x) for x in targets) > 1:
-            raise ValidationError("Attach device to at most one of branch/department/project")
+            raise ValidationError(
+                "Attach device to at most one of branch/department/project"
+            )
         if any([self.latitude, self.longitude, self.radius_m]) and not all(
             [self.latitude, self.longitude, self.radius_m]
         ):
@@ -112,7 +114,11 @@ class FaceEnrollment(models.Model):
     face_ids = models.JSONField(
         default=list, help_text="List of Rekognition face IDs for the employee"
     )
-    STATUS_CHOICES = [("active", "active"), ("revoked", "revoked"), ("pending", "pending")]
+    STATUS_CHOICES = [
+        ("active", "active"),
+        ("revoked", "revoked"),
+        ("pending", "pending"),
+    ]
     status = models.CharField(
         max_length=20,
         choices=STATUS_CHOICES,
@@ -200,7 +206,11 @@ class EnrollmentLink(models.Model):
     @property
     def is_valid(self):
         now = timezone.now()
-        return (self.used_at is None) and (self.expires_at >= now) and (self.uses < self.max_uses)
+        return (
+            (self.used_at is None)
+            and (self.expires_at >= now)
+            and (self.uses < self.max_uses)
+        )
 
     def mark_used(self):
         self.uses += 1
@@ -242,9 +252,7 @@ class PunchEvent(models.Model):
         help_text="Punch direction supplied by the device",
     )
 
-    device_ts = models.DateTimeField(
-        help_text="Timestamp reported by the device"
-    )
+    device_ts = models.DateTimeField(help_text="Timestamp reported by the device")
     server_ts = models.DateTimeField(
         auto_now_add=True, help_text="Timestamp recorded by the server"
     )
@@ -306,7 +314,7 @@ class PunchEvent(models.Model):
         max_length=64,
         blank=True,
         help_text="Optional client supplied identifier to deduplicate events",
-        )
+    )
 
     class Meta:
         indexes = [
@@ -344,6 +352,7 @@ class PunchException(models.Model):
             ("outside_scope", "outside scope"),
             ("geofence", "geofence violation"),
             ("geofence_rule", "geofence rule violation"),
+            ("duplicate", "duplicate punch"),
         ],
         help_text="Type of exception encountered",
     )

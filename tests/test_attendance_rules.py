@@ -84,10 +84,30 @@ class AutoEventSequenceAnomalyTests(AttendanceBase):
         self.punch(time(10, 0), "in")
         self.punch(time(17, 0), "out")
         day = self.compute()
-        self.assertEqual(
-            day.anomalies.get("missing_out_closed_at_next_in"), 1
-        )
+        self.assertEqual(day.anomalies.get("missing_out_closed_at_next_in"), 1)
         self.assertNotIn("unpaired_out", day.anomalies)
+
+    def test_quick_duplicate_in_punch_creates_exception(self):
+        first = self.punch(time(9, 0, 0), "in")
+        dup = self.punch(time(9, 0, 30), "in")
+        self.punch(time(17, 0), "out")
+        day = self.compute()
+        self.assertEqual(day.anomalies, {})
+        pair = self.employee.att_pairs.get()
+        self.assertEqual(pair.in_event_id, first.id)
+        dup.refresh_from_db()
+        self.assertEqual(dup.exception.kind, "duplicate")
+
+    def test_quick_duplicate_out_punch_creates_exception(self):
+        self.punch(time(9, 0), "in")
+        out = self.punch(time(17, 0), "out")
+        dup = self.punch(time(17, 0, 30), "out")
+        day = self.compute()
+        self.assertEqual(day.anomalies, {})
+        pair = self.employee.att_pairs.get()
+        self.assertEqual(pair.out_event_id, out.id)
+        dup.refresh_from_db()
+        self.assertEqual(dup.exception.kind, "duplicate")
 
     def test_stray_out_only_sets_unpaired_out(self):
         self.punch(time(17, 0), "out")
@@ -168,6 +188,7 @@ class ActiveRuleResolutionTests(AttendanceBase):
     def test_no_shift_returns_empty(self):
         active_rules.cache_clear()
         self.assertEqual(active_rules(None, self.day), {})
+
 
 class BreakRuleTests(AttendanceBase):
     def test_fixed_break_window_auto_deduct(self):

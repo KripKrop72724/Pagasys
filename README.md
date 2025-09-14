@@ -741,6 +741,14 @@ Two custom management commands are available:
 
 They can be run with `python manage.py <command>`.
 
+## Attendance Maintenance
+
+`fix_duplicate_pairs` – backfill duplicate punch exceptions and rebuild attendance data for a date range. Run with `--dry-run` first and ensure backups before executing on production.
+
+```bash
+python manage.py fix_duplicate_pairs --start-date 2024-01-01 --end-date 2024-01-31 --dry-run
+```
+
 ## License
 
 This project is product owned by Sigmoid Solutions LLC.

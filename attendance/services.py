@@ -113,7 +113,22 @@ def build_pairs_for(employee_id: int, day: date, shift=None, tz=None) -> int:
 
     pairs = []
     open_in = None
+    prev_ev = None
     for ev, warn in events:
+        if prev_ev and ev.action == prev_ev.action:
+            diff = int((ev.local_ts - prev_ev.local_ts).total_seconds())
+            if diff <= 60:
+                PunchException.objects.get_or_create(
+                    event=ev,
+                    defaults={
+                        "kind": "duplicate",
+                        "details": {
+                            "previous_event_id": prev_ev.id,
+                            "diff_seconds": diff,
+                        },
+                    },
+                )
+                continue
         if shift_end_dt and ev.action == "in" and ev.local_ts > shift_end_dt:
             pairs.append((ev, ev, 0, {"unpaired_out": True, **warn}))
             continue
@@ -138,6 +153,7 @@ def build_pairs_for(employee_id: int, day: date, shift=None, tz=None) -> int:
                 pairs.append((ev, ev, 0, {"unpaired_out": True, **warn}))
             else:  # in or auto
                 open_in = ev
+        prev_ev = ev
     if open_in:
         pairs.append((open_in, None, 0, {"missing_out": True}))
 
@@ -275,7 +291,9 @@ def compute_att_day(employee_id: int, day: date) -> int:
             late = (first_in - sched_start - grace).total_seconds() // 60
             late_min = max(0, int(late))
             if shift.late_after_min:
-                late_min = max(0, late_min - max(0, shift.late_after_min - shift.grace_in_min))
+                late_min = max(
+                    0, late_min - max(0, shift.late_after_min - shift.grace_in_min)
+                )
         if last_out:
             last_out = timezone.localtime(last_out, tz)
             sched_end = datetime.combine(day, shift.end_time, tzinfo=tz)
@@ -287,7 +305,11 @@ def compute_att_day(employee_id: int, day: date) -> int:
             early = (sched_end - last_out - grace).total_seconds() // 60
             early_min = max(0, int(early))
             if shift.early_leave_before_min:
-                early_min = max(0, early_min - max(0, shift.early_leave_before_min - shift.grace_out_min))
+                early_min = max(
+                    0,
+                    early_min
+                    - max(0, shift.early_leave_before_min - shift.grace_out_min),
+                )
 
     night_rules = rules_by_kind.get(ShiftRule.Kind.NIGHT_OT_WINDOW, [])
     max_rule = rules_by_kind.get(ShiftRule.Kind.MAX_DAILY_HOURS)
@@ -322,7 +344,16 @@ def compute_att_day(employee_id: int, day: date) -> int:
     else:
         status = "leave" if on_leave else "absent"
 
-    work_min, unpaid_break, paid_break, ot_reg, ot_night, ot_hol, status, anomalies_all = apply_att_adjustments(
+    (
+        work_min,
+        unpaid_break,
+        paid_break,
+        ot_reg,
+        ot_night,
+        ot_hol,
+        status,
+        anomalies_all,
+    ) = apply_att_adjustments(
         employee_id,
         day,
         work_min,
