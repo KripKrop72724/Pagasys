@@ -288,7 +288,7 @@ FACE_ENROLL_MIN_PHOTOS = env.int("FACE_ENROLL_MIN_PHOTOS", default=3)
 FACE_ENROLL_MAX_PHOTOS = env.int("FACE_ENROLL_MAX_PHOTOS", default=6)
 
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(seconds=int(env('SIMPLE_JWT_ACCESS_TOKEN_LIFETIME', default='3600'))),
+    'ACCESS_TOKEN_LIFETIME': timedelta(seconds=int(env('SIMPLE_JWT_ACCESS_TOKEN_LIFETIME', default='30'))),
     'REFRESH_TOKEN_LIFETIME': timedelta(seconds=int(env('SIMPLE_JWT_REFRESH_TOKEN_LIFETIME', default='86400'))),
     'SIGNING_KEY': env('SIMPLE_JWT_SIGNING_KEY', default=SECRET_KEY),
     'ALGORITHM': env('SIMPLE_JWT_ALGORITHM', default='HS256'),
