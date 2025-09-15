@@ -93,6 +93,51 @@ def test_main_format_import_creates_employee():
     assert employee.designation == designation
 
 
+def test_main_format_import_allows_space_in_first_name():
+    company = Company.objects.create(name="OMG Group")
+    Branch.objects.create(company=company, name="CAR OMG")
+    TradeLicense.objects.create(company=company, license_no="EMP-OMG", max_visas=5)
+
+    header = [
+        "FIRST NAME",
+        "MIDDLE NAME",
+        "LAST NAME",
+        "BRANCH",
+        "TRADR LICENSE",
+        "VISA TYPE",
+        "PAYMENT STATUS",
+        "WPS ACC NUMEBR",
+        "DESIGNATION",
+        "C3 NUMBER",
+        "HIRE DATE",
+        "GENDER",
+    ]
+    data = [
+        "MD MOHSIN",
+        "",
+        "",
+        "CAR OMG",
+        "EMP-OMG",
+        "COMPANY",
+        "WPS",
+        "30122109131140",
+        "SENIOR UPHOLSTERY",
+        "COAA 05",
+        "2022/06/10",
+        "MALE",
+    ]
+    stream = _build_workbook([header, data])
+
+    results = import_main_format_workbook(stream)
+
+    assert results["created"] == 1
+    assert results["errors"] == []
+
+    employee = Employee.objects.get()
+    assert employee.first_name == "Md Mohsin"
+    assert employee.username == "mdmohsin"
+
+
 def test_main_format_import_reports_unknown_branch():
     company = Company.objects.create(name="OMG Group")
     TradeLicense.objects.create(company=company, license_no="EMP-OMG", max_visas=5)

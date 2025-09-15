@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 from datetime import datetime, date
 from typing import IO, List, Dict, Tuple
 
@@ -472,8 +474,14 @@ def import_main_format_workbook(file: IO[bytes]) -> Dict[str, object]:
             if "gender" in header_index:
                 gender = _normalize_gender(row[header_index["gender"]])
 
-            username_parts = [part for part in [first, middle, last] if part]
-            username_base = "".join(part.lower() for part in username_parts)
+            raw_username_parts = [part for part in [first, middle, last] if part]
+            cleaned_username_parts = []
+            for part in raw_username_parts:
+                part_no_whitespace = "".join(part.split())
+                cleaned_part = re.sub(r"[^A-Za-z0-9@.+_-]", "", part_no_whitespace)
+                if cleaned_part:
+                    cleaned_username_parts.append(cleaned_part)
+            username_base = "".join(part.lower() for part in cleaned_username_parts)
             if not username_base:
                 username_base = f"employee{row_num}"
             username = username_base
