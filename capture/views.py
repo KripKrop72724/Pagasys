@@ -511,6 +511,7 @@ class CapturePunchView(generics.GenericAPIView):
                     geofence_rule_violation=geofence_rule_violation,
                     roster_fallback=roster_fallback,
                     external_id=ext_id,
+                    # TODO: remove notes in favor of explicit reason field
                     notes=reason or "",
                 )
         except IntegrityError:
@@ -570,7 +571,8 @@ class CapturePunchView(generics.GenericAPIView):
             "geofence_ok": ev.geofence_ok,
             "geofence_rule_violation": ev.geofence_rule_violation,
             "roster_fallback": ev.roster_fallback,
-            "notes": ev.notes,
+            "reason": reason or "",
+            "notes": ev.notes,  # Deprecated: use `reason`
             "event_id": ev.id,
         }
         status_code = 200 if accepted else 403
