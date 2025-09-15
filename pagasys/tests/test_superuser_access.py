@@ -2,7 +2,9 @@ from django.test import TestCase
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from rest_framework.test import APIClient
+from django.utils import timezone
 from pagasys.models import Company, Branch, Department, TradeLicense
+from capture.models import AttendanceDevice, PunchEvent
 
 
 class SuperUserAccessTests(TestCase):
@@ -41,4 +43,18 @@ class SuperUserAccessTests(TestCase):
     def test_superuser_can_access_admin_without_groups(self):
         self.client.force_login(self.user)
         res = self.client.get("/admin/")
+        self.assertEqual(res.status_code, 200)
+
+    def test_superuser_can_access_punch_events(self):
+        device = AttendanceDevice.objects.create(
+            company=self.company, name="dev", api_key="k1", branch=self.branch
+        )
+        PunchEvent.objects.create(
+            device=device,
+            company=self.company,
+            device_ts=timezone.now(),
+        )
+        self.client.force_authenticate(self.user)
+        url = f"/api/companies/{self.company.id}/punch-events/"
+        res = self.client.get(url)
         self.assertEqual(res.status_code, 200)

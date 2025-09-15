@@ -9,6 +9,8 @@ class IsCompanyMember(BasePermission):
         user = getattr(request, "user", None)
         if not (user and user.is_authenticated):
             return False
+        if user.is_superuser:
+            return True
         company_id = view.kwargs.get("company_id")
         if company_id is None:
             return True
@@ -111,6 +113,8 @@ class ActionRolePermission(BasePermission):
     """Check that the user role is allowed for the action or model."""
 
     def has_permission(self, request, view):
+        if request.user.is_superuser:
+            return True
         roles = user_roles(request.user)
         model = getattr(getattr(view, "queryset", None), "model", None)
         model_name = model.__name__ if model else ""
