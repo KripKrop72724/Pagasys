@@ -165,7 +165,7 @@ Face enrollment and image storage rely on `boto3` and valid AWS credentials.
    ```
 2. Install system libraries required by [WeasyPrint](https://weasyprint.org/):
    ```bash
-   sudo apt-get install libcairo2 libpango-1.0-0 libgdk-pixbuf2.0-0 libffi-dev
+   sudo apt-get install libcairo2 libpango-1.0-0 libgdk-pixbuf-2.0-0 libffi-dev
    ```
 3. Copy `.env.example` to `.env` and adjust database credentials.
 4. Add AWS Rekognition and S3 settings to `.env`:
