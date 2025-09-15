@@ -45,6 +45,20 @@ class EmployeeSerializerPasswordTests(TestCase):
         self.assertNotEqual(emp.password, "secret")
         self.assertTrue(emp.check_password("secret"))
 
+    def test_create_without_password_sets_unusable_password(self):
+        data = {
+            "username": "nopass",
+            "trade_license": self.license.id,
+            "department": self.department.id,
+            "hire_date": "2024-01-02",
+            "employment_type": "permanent",
+            "visa_type": "company",
+        }
+        ser = EmployeeSerializer(data=data)
+        self.assertTrue(ser.is_valid(), ser.errors)
+        emp = ser.save()
+        self.assertFalse(emp.has_usable_password())
+
     def test_password_hashed_on_update(self):
         emp = Employee.objects.create_user(
             username="u2",
@@ -59,6 +73,26 @@ class EmployeeSerializerPasswordTests(TestCase):
         self.assertTrue(ser.is_valid(), ser.errors)
         emp = ser.save()
         self.assertTrue(emp.check_password("new"))
+
+    def test_partial_update_without_password_keeps_unusable_password(self):
+        create_data = {
+            "username": "nopasspatch",
+            "trade_license": self.license.id,
+            "department": self.department.id,
+            "hire_date": "2024-01-02",
+            "employment_type": "permanent",
+            "visa_type": "company",
+        }
+        ser = EmployeeSerializer(data=create_data)
+        self.assertTrue(ser.is_valid(), ser.errors)
+        emp = ser.save()
+        self.assertFalse(emp.has_usable_password())
+
+        ser = EmployeeSerializer(emp, data={"first_name": "Pat"}, partial=True)
+        self.assertTrue(ser.is_valid(), ser.errors)
+        emp = ser.save()
+        self.assertEqual(emp.first_name, "Pat")
+        self.assertFalse(emp.has_usable_password())
 
     def test_profile_picture_and_hometown_serialization(self):
         with tempfile.TemporaryDirectory() as tmpdir:
