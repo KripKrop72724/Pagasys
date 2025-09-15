@@ -1,3 +1,6 @@
+import csv
+import io
+
 from django.contrib import admin, messages
 from django.contrib.auth.admin import UserAdmin
 from django.contrib.auth.forms import AdminUserCreationForm, UserChangeForm
@@ -9,9 +12,11 @@ from django.shortcuts import redirect
 from django.template.response import TemplateResponse
 from django.urls import path
 from django.db.models import Max
+from django.http import HttpResponse
 from datetime import timedelta, date
 from copy import deepcopy
 from django.forms.models import construct_instance
+from django.utils import timezone
 
 from .excel_import import (
     import_company_visa_workbook,
@@ -39,6 +44,8 @@ from .models import (
     LeaveType,
     holiday_flags,
 )
+
+from capture.models import EnrollmentLink
 
 ASYNC_BULK_THRESHOLD = 50
 
@@ -420,6 +427,10 @@ class EmployeeAdmin(CleanSaveModelMixin, ScopedAdminMixin, UserAdmin):
     class VisaUploadForm(forms.Form):
         file = forms.FileField()
 
+    list_display = ("id",) + UserAdmin.list_display
+    ordering = ("id",)
+    actions = ["delete_selected", "download_enrollment_links_csv"]
+
     list_filter = UserAdmin.list_filter + (
         "visa_type",
         "employment_type",
@@ -535,6 +546,99 @@ class EmployeeAdmin(CleanSaveModelMixin, ScopedAdminMixin, UserAdmin):
             },
         ),
     )
+
+    @admin.action(description="Download face enrollment links (CSV)")
+    def download_enrollment_links_csv(self, request, queryset):
+        employees = list(
+            queryset.select_related(
+                "trade_license__company",
+                "department__branch__company",
+                "project__branch__company",
+            )
+        )
+        if not employees:
+            self.message_user(
+                request, "No employees selected for CSV export.", level=messages.WARNING
+            )
+            return None
+
+        buffer = io.StringIO()
+        writer = csv.writer(buffer)
+        writer.writerow(
+            [
+                "Employee ID",
+                "Username",
+                "Full name",
+                "Email",
+                "Company",
+                "Enrollment URL",
+                "Token",
+                "Expires at",
+                "Max uses",
+                "Status",
+            ]
+        )
+
+        errors = []
+        for employee in employees:
+            full_name = employee.get_full_name().strip()
+            if not full_name:
+                full_name = employee.username
+            company = employee.company
+            company_name = company.name if company else ""
+            email = employee.email or ""
+            try:
+                expires_at = timezone.now() + timedelta(days=10)
+                link = EnrollmentLink.objects.create(
+                    employee=employee,
+                    expires_at=expires_at,
+                    max_uses=1,
+                )
+            except Exception as exc:  # pragma: no cover - defensive guard
+                status = f"error: {exc}"
+                errors.append(employee)
+                writer.writerow(
+                    [
+                        employee.id,
+                        employee.username,
+                        full_name,
+                        email,
+                        company_name,
+                        "",
+                        "",
+                        "",
+                        "",
+                        status,
+                    ]
+                )
+                continue
+
+            writer.writerow(
+                [
+                    employee.id,
+                    employee.username,
+                    full_name,
+                    email,
+                    company_name,
+                    link.url,
+                    link.token,
+                    link.expires_at.isoformat(),
+                    link.max_uses,
+                    "created",
+                ]
+            )
+
+        if errors:
+            self.message_user(
+                request,
+                f"Failed to create links for {len(errors)} employee(s); see CSV for details.",
+                level=messages.WARNING,
+            )
+
+        response = HttpResponse(buffer.getvalue(), content_type="text/csv")
+        filename = timezone.now().strftime("enrollment-links-%Y%m%d%H%M%S.csv")
+        response["Content-Disposition"] = f"attachment; filename={filename}"
+        return response
 
     def get_urls(self):
         urls = super().get_urls()
