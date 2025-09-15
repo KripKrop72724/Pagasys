@@ -3,6 +3,15 @@
 from django.db import migrations, models
 
 
+def rename_legacy_index(apps, schema_editor):
+    if schema_editor.connection.vendor != "postgresql":
+        return
+    schema_editor.execute(
+        'ALTER INDEX IF EXISTS "capture_punchevent_roster_idx" '
+        'RENAME TO "capture_pun_roster_idx";'
+    )
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -10,29 +19,14 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        # Make the index rename resilient: do it only if the old name exists,
-        # but still update Django's state so future migrations match.
-        migrations.SeparateDatabaseAndState(
-            database_operations=[
-                migrations.RunSQL(
-                    'ALTER INDEX IF EXISTS "capture_pun_roster_idx" RENAME TO "capture_pun_roster__1b86e9_idx";',
-                    'ALTER INDEX IF EXISTS "capture_pun_roster__1b86e9_idx" RENAME TO "capture_pun_roster_idx";',
-                ),
-                # Optional extra safety if an older name variant was used previously:
-                migrations.RunSQL(
-                    'ALTER INDEX IF EXISTS "capture_punchevent_roster_idx" RENAME TO "capture_pun_roster__1b86e9_idx";',
-                    'ALTER INDEX IF EXISTS "capture_pun_roster__1b86e9_idx" RENAME TO "capture_punchevent_roster_idx";',
-                ),
-            ],
-            state_operations=[
-                migrations.RenameIndex(
-                    model_name="punchevent",
-                    old_name="capture_pun_roster_idx",
-                    new_name="capture_pun_roster__1b86e9_idx",
-                ),
-            ],
+        migrations.RunPython(
+            rename_legacy_index, reverse_code=migrations.RunPython.noop
         ),
-
+        migrations.RenameIndex(
+            model_name="punchevent",
+            old_name="capture_pun_roster_idx",
+            new_name="capture_pun_roster__1b86e9_idx",
+        ),
         migrations.AlterField(
             model_name="enrollmentlink",
             name="token",
