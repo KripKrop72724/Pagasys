@@ -27,7 +27,9 @@ ENV PYTHONUNBUFFERED 1
 WORKDIR /app
 RUN apt-get update \
  && apt-get install -y curl dnsutils \
-    libcairo2 libpango-1.0-0 libgdk-pixbuf-2.0-0 libffi-dev \
+    libcairo2 libpango-1.0-0 libpangoft2-1.0-0 libpangocairo-1.0-0 \
+    libgdk-pixbuf-2.0-0 libffi-dev libjpeg62-turbo zlib1g fontconfig \
+    fonts-dejavu-core \
  && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /root/.local /root/.local
