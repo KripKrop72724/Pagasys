@@ -32,12 +32,16 @@ class CompanyScopedQuerysetMixin:
     company_kwarg = "company_id"
 
     def get_company(self):
-        cid = self.kwargs.get(self.company_kwarg)
-        if cid is not None:
-            from pagasys.models import Company
-            return Company.objects.get(pk=cid)
-        user = getattr(self.request, "user", None)
-        return getattr(user, "company", None)
+        if not hasattr(self, "_company_cache"):
+            cid = self.kwargs.get(self.company_kwarg)
+            if cid is not None:
+                from pagasys.models import Company
+
+                self._company_cache = Company.objects.get(pk=cid)
+            else:
+                user = getattr(self.request, "user", None)
+                self._company_cache = getattr(user, "company", None)
+        return self._company_cache
 
     def get_queryset(self):
         qs = super().get_queryset()

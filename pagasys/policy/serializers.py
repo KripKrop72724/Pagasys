@@ -224,7 +224,10 @@ class RosterRangeSerializer(serializers.Serializer):
 
         branch = attrs.pop("branch", None)
         employee = attrs.pop("employee", None)
-        employees = list(attrs.get("employees") or [])
+        provided_employees = attrs.pop("employees", None)
+        employees = list(provided_employees or [])
+        if provided_employees is not None and not employees:
+            raise serializers.ValidationError("employees must contain at least one ID")
         provided = [bool(branch), bool(employee), bool(employees)]
         if sum(provided) != 1:
             raise serializers.ValidationError(
@@ -238,11 +241,19 @@ class RosterRangeSerializer(serializers.Serializer):
             ).distinct()
             if req:
                 emp_qs = scope_queryset(emp_qs, req.user)
-            attrs["employees"] = list(emp_qs)
+            employees = list(emp_qs)
         elif employee:
-            attrs["employees"] = [employee]
-        else:
-            attrs["employees"] = employees
+            employees = [employee]
+        # else ``employees`` already populated from input
+
+        seen = set()
+        unique_employees = []
+        for emp in employees:
+            if emp.id in seen:
+                continue
+            seen.add(emp.id)
+            unique_employees.append(emp)
+        attrs["employees"] = unique_employees
         if until and until < attrs["start_date"]:
             raise serializers.ValidationError(
                 {"until": "must be on or after start_date"},

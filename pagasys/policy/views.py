@@ -398,6 +398,7 @@ class RosterViewSet(BasePolicyViewSet):
         params.is_valid(raise_exception=True)
         data = params.validated_data
         employees = list(data["employees"])
+        employee_ids = [emp.id for emp in employees]
 
         allowed_emp_ids = set(
             scope_queryset(Employee.objects.all(), request.user).values_list("id", flat=True)
@@ -407,7 +408,7 @@ class RosterViewSet(BasePolicyViewSet):
         )
         if (
             data["shift"].id not in allowed_shift_ids
-            or any(e.id not in allowed_emp_ids for e in employees)
+            or any(emp_id not in allowed_emp_ids for emp_id in employee_ids)
         ):
             return Response(
                 {"detail": "Target employee/shift outside your scope", "errors": {}},
@@ -424,7 +425,7 @@ class RosterViewSet(BasePolicyViewSet):
         num_days = (end - start).days + 1
         if len(employees) > ASYNC_BULK_THRESHOLD:
             task = schedule_range_bulk.delay(
-                [e.id for e in employees],
+                employee_ids,
                 data["shift"].id,
                 start.isoformat(),
                 end.isoformat(),
@@ -437,35 +438,38 @@ class RosterViewSet(BasePolicyViewSet):
             # production.
             return Response({"task_id": str(task.id)}, status=202)
 
+        schedule_pairs = [
+            (emp, start + timedelta(days=i))
+            for emp in employees
+            for i in range(num_days)
+        ]
+        existing_map = {}
+        if schedule_pairs:
+            existing_entries = RosterEntry.objects.filter(
+                employee_id__in=employee_ids,
+                date__range=(start, end),
+            )
+            existing_map = {
+                (entry.employee_id, entry.date): entry for entry in existing_entries
+            }
+        weekday_codes = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]
         entries = []
-        for emp in employees:
-            for i in range(num_days):
-                current = start + timedelta(days=i)
-                weekday_code = [
-                    "MON",
-                    "TUE",
-                    "WED",
-                    "THU",
-                    "FRI",
-                    "SAT",
-                    "SUN",
-                ][current.weekday()]
-                item = {
-                    "employee": emp.id,
-                    "date": current,
-                    "shift": data["shift"].id,
-                    "is_rest_day": weekday_code in rest_weekdays,
-                }
-                existing = RosterEntry.objects.filter(
-                    employee=emp, date=current
-                ).first()
-                ser = self.get_serializer(instance=existing, data=item)
-                ser.is_valid(raise_exception=True)
-                v = ser.validated_data
-                v["is_holiday"], v["was_holiday"] = holiday_flags(
-                    v["employee"], v["date"], v.get("is_holiday")
-                )
-                entries.append(RosterEntry(**v))
+        for emp, current in schedule_pairs:
+            weekday_code = weekday_codes[current.weekday()]
+            item = {
+                "employee": emp.id,
+                "date": current,
+                "shift": data["shift"].id,
+                "is_rest_day": weekday_code in rest_weekdays,
+            }
+            existing = existing_map.get((emp.id, current))
+            ser = self.get_serializer(instance=existing, data=item)
+            ser.is_valid(raise_exception=True)
+            v = ser.validated_data
+            v["is_holiday"], v["was_holiday"] = holiday_flags(
+                v["employee"], v["date"], v.get("is_holiday")
+            )
+            entries.append(RosterEntry(**v))
         with transaction.atomic():
             RosterEntry.objects.bulk_create(
                 entries,
