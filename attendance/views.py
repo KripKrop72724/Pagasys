@@ -2,12 +2,15 @@ from datetime import timedelta, date
 
 from rest_framework import viewsets, status, serializers
 from rest_framework.decorators import action
+from rest_framework.renderers import BaseRenderer
 from rest_framework.response import Response
 from rest_framework.permissions import IsAdminUser
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db import transaction
+from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import (
     OpenApiExample,
+    OpenApiParameter,
     OpenApiResponse,
     extend_schema,
     extend_schema_view,
@@ -41,6 +44,15 @@ from .tasks import (
 
 MAX_RANGE_DAYS = 31
 MAX_EMPLOYEES = 50
+
+
+class LateComersPDFRenderer(BaseRenderer):
+    media_type = "application/pdf"
+    format = "pdf"
+    charset = None
+
+    def render(self, data, accepted_media_type=None, renderer_context=None):
+        return data
 
 
 @extend_schema_view(
@@ -183,11 +195,61 @@ class AttDayViewSet(viewsets.ReadOnlyModelViewSet):
             qs.update(locked=data.get("locked", True))
         return Response({"updated": qs.count()})
 
+    @extend_schema(
+        description="Render a PDF report of late arrivals.",
+        parameters=[
+            OpenApiParameter(
+                name="start",
+                type=OpenApiTypes.STR,
+                location=OpenApiParameter.QUERY,
+                required=True,
+                description="Inclusive start date in YYYY-MM-DD.",
+            ),
+            OpenApiParameter(
+                name="end",
+                type=OpenApiTypes.STR,
+                location=OpenApiParameter.QUERY,
+                required=True,
+                description="Inclusive end date in YYYY-MM-DD.",
+            ),
+            OpenApiParameter(
+                name="branch",
+                type=OpenApiTypes.STR,
+                location=OpenApiParameter.QUERY,
+                description="Optional branch ID filter.",
+            ),
+            OpenApiParameter(
+                name="department",
+                type=OpenApiTypes.STR,
+                location=OpenApiParameter.QUERY,
+                description="Optional department ID filter.",
+            ),
+            OpenApiParameter(
+                name="project",
+                type=OpenApiTypes.STR,
+                location=OpenApiParameter.QUERY,
+                description="Optional project ID filter.",
+            ),
+            OpenApiParameter(
+                name="shift",
+                type=OpenApiTypes.STR,
+                location=OpenApiParameter.QUERY,
+                description="Optional shift template ID filter.",
+            ),
+        ],
+        responses={
+            200: OpenApiResponse(
+                response=OpenApiTypes.BINARY,
+                description="PDF report of late comers.",
+            )
+        },
+    )
     @action(
         detail=False,
         methods=["get"],
         url_path="late-comers-report",
         permission_classes=[IsAdminUser],
+        renderer_classes=[LateComersPDFRenderer],
     )
     def late_comers_report(self, request, company_id=None):
         """Render a PDF report of late arrivals."""

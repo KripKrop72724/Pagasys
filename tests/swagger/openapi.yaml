@@ -1181,13 +1181,45 @@ paths:
   /api/companies/{company_id}/att-days/late-comers-report/:
     get:
       operationId: companies_att_days_late_comers_report_retrieve
-      description: Read-only access to canonical daily attendance results.
+      description: Render a PDF report of late arrivals.
       parameters:
+      - in: query
+        name: branch
+        schema:
+          type: string
+        description: Optional branch ID filter.
       - in: path
         name: company_id
         schema:
           type: string
           pattern: ^\d+$
+        required: true
+      - in: query
+        name: department
+        schema:
+          type: string
+        description: Optional department ID filter.
+      - in: query
+        name: end
+        schema:
+          type: string
+        description: Inclusive end date in YYYY-MM-DD.
+        required: true
+      - in: query
+        name: project
+        schema:
+          type: string
+        description: Optional project ID filter.
+      - in: query
+        name: shift
+        schema:
+          type: string
+        description: Optional shift template ID filter.
+      - in: query
+        name: start
+        schema:
+          type: string
+        description: Inclusive start date in YYYY-MM-DD.
         required: true
       tags:
       - Attendance
@@ -1196,21 +1228,11 @@ paths:
       responses:
         '200':
           content:
-            application/json:
+            application/pdf:
               schema:
-                $ref: '#/components/schemas/AttDay'
-              examples:
-                DayWithAnomalies:
-                  value:
-                    id: 1
-                    employee: 1
-                    date: '2024-01-02'
-                    work_min: 450
-                    anomalies:
-                      unpaired_out: 1
-                      face_required_no_match: 2
-                  summary: Day with anomalies
-          description: ''
+                type: string
+                format: binary
+          description: PDF report of late comers.
   /api/companies/{company_id}/att-days/lock/:
     post:
       operationId: companies_att_days_lock_create
