@@ -57,6 +57,9 @@ comprehensive automated test suite.
   enrollment with Amazon Rekognition, and raw punch ingestion with geofence and
   scope validation. Raw events are stored for later summarization by the policy
   layer.
+* **Late comers reporting** – Generate PDF summaries of late arrivals via API or
+  the admin interface. See [docs/attendance_reports.md](docs/attendance_reports.md)
+  for usage and query parameters.
 
 ### Roster scheduling
 
@@ -160,8 +163,12 @@ Face enrollment and image storage rely on `boto3` and valid AWS credentials.
    ```bash
    pip install -r requirements.txt -r requirements-dev.txt
    ```
-2. Copy `.env.example` to `.env` and adjust database credentials.
-3. Add AWS Rekognition and S3 settings to `.env`:
+2. Install system libraries required by [WeasyPrint](https://weasyprint.org/):
+   ```bash
+   sudo apt-get install libcairo2 libpango-1.0-0 libgdk-pixbuf2.0-0 libffi-dev
+   ```
+3. Copy `.env.example` to `.env` and adjust database credentials.
+4. Add AWS Rekognition and S3 settings to `.env`:
    ```
    AWS_ACCESS_KEY_ID=...
    AWS_SECRET_ACCESS_KEY=...
@@ -169,24 +176,24 @@ Face enrollment and image storage rely on `boto3` and valid AWS credentials.
    AWS_S3_BUCKET_ENROLL=your-enroll-bucket
    AWS_S3_BUCKET_CAPTURE=your-capture-bucket
    ```
-4. Initialise the database and create groups:
+5. Initialise the database and create groups:
    ```bash
    python manage.py migrate
    python manage.py initgroups
    ```
-5. (Optional) Load demo data:
+6. (Optional) Load demo data:
    ```bash
    python manage.py seed
    ```
-6. Start the development server:
+7. Start the development server:
    ```bash
    python manage.py runserver
    ```
-7. Run the Celery worker for asynchronous tasks:
+8. Run the Celery worker for asynchronous tasks:
    ```bash
    celery -A config worker -l info
    ```
-8. Run the Celery beat scheduler for periodic tasks:
+9. Run the Celery beat scheduler for periodic tasks:
    ```bash
    celery -A config.celery beat -l info
    ```

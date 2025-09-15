@@ -6,11 +6,13 @@ from django import forms
 from django.template.response import TemplateResponse
 from django.shortcuts import redirect
 from django.urls import path
+from django.http import HttpResponse
 
 from pagasys.admin import ScopedAdminMixin
 from pagasys.models import Employee
 from .models import AttDay, AttPair, AttAdjustment, LeaveRequest, LeaveDay
 from .tasks import compute_employee_day_task, recompute_range_task
+from .reports import get_late_comers, group_late_comers, render_late_comers_pdf
 
 
 class AttAdjustmentForm(forms.ModelForm):
@@ -65,17 +67,6 @@ class AttDayAdmin(ScopedAdminMixin, admin.ModelAdmin):
                 except ValueError:
                     raise forms.ValidationError("Employee IDs must be integers")
             return ids
-
-    def get_urls(self):
-        urls = super().get_urls()
-        custom = [
-            path(
-                "manual-recompute/",
-                self.admin_site.admin_view(self.manual_recompute_view),
-                name="attendance_attday_manual_recompute",
-            )
-        ]
-        return custom + urls
 
     def manual_recompute_view(self, request):
         return self.manual_recompute(request, AttDay.objects.none())
@@ -153,6 +144,57 @@ class AttDayAdmin(ScopedAdminMixin, admin.ModelAdmin):
         return TemplateResponse(request, 'admin/manual_recompute.html', context)
 
     manual_recompute.short_description = "Manual recompute by date range"
+
+    class LateComersReportForm(forms.Form):
+        start = forms.DateField()
+        end = forms.DateField()
+        branch = forms.IntegerField(required=False)
+        department = forms.IntegerField(required=False)
+        project = forms.IntegerField(required=False)
+        shift = forms.IntegerField(required=False)
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom = [
+            path(
+                "manual-recompute/",
+                self.admin_site.admin_view(self.manual_recompute_view),
+                name="attendance_attday_manual_recompute",
+            ),
+            path(
+                "late-comers-report/",
+                self.admin_site.admin_view(self.late_comers_report_view),
+                name="attendance_attday_late_comers_report",
+            ),
+        ]
+        return custom + urls
+
+    def late_comers_report_view(self, request):  # pragma: no cover - admin view
+        return self.late_comers_report(request)
+
+    def late_comers_report(self, request):  # pragma: no cover - admin view
+        if request.method == "POST":
+            form = self.LateComersReportForm(request.POST)
+            if form.is_valid():
+                start = form.cleaned_data["start"]
+                end = form.cleaned_data["end"]
+                filters = {
+                    f"{k}_id": form.cleaned_data[k]
+                    for k in ["branch", "department", "project", "shift"]
+                    if form.cleaned_data.get(k)
+                }
+                records = get_late_comers(start, end, filters)
+                grouped, stats = group_late_comers(records)
+                pdf = render_late_comers_pdf(grouped, stats, start, end, request)
+                response = HttpResponse(pdf, content_type="application/pdf")
+                response["Content-Disposition"] = (
+                    f"attachment; filename=late_comers_{start}_{end}.pdf"
+                )
+                return response
+        else:
+            form = self.LateComersReportForm()
+        context = {"form": form, "title": "Late comers report"}
+        return TemplateResponse(request, "admin/late_comers_report.html", context)
 @admin.register(AttPair)
 class AttPairAdmin(ScopedAdminMixin, admin.ModelAdmin):
     """Review paired IN/OUT punch sessions."""
