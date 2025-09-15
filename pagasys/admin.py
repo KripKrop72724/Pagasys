@@ -13,7 +13,11 @@ from datetime import timedelta, date
 from copy import deepcopy
 from django.forms.models import construct_instance
 
-from .excel_import import import_employee_workbook, import_company_visa_workbook
+from .excel_import import (
+    import_company_visa_workbook,
+    import_employee_workbook,
+    import_main_format_workbook,
+)
 
 from .utils import scope_queryset
 from .tasks import schedule_range_bulk
@@ -536,6 +540,11 @@ class EmployeeAdmin(CleanSaveModelMixin, ScopedAdminMixin, UserAdmin):
         urls = super().get_urls()
         custom = [
             path(
+                "main-format-upload/",
+                self.admin_site.admin_view(self.main_format_upload),
+                name="pagasys_employee_main_format_upload",
+            ),
+            path(
                 "own-visa-upload/",
                 self.admin_site.admin_view(self.own_visa_upload),
                 name="pagasys_employee_own_visa_upload",
@@ -552,6 +561,30 @@ class EmployeeAdmin(CleanSaveModelMixin, ScopedAdminMixin, UserAdmin):
             ),
         ]
         return custom + urls
+
+    def main_format_upload(self, request):
+        if request.method == "POST":
+            form = self.VisaUploadForm(request.POST, request.FILES)
+            if form.is_valid():
+                results = import_main_format_workbook(form.cleaned_data["file"])
+                if results["created"]:
+                    messages.success(
+                        request, f"Created {results['created']} employees."
+                    )
+                for err in results["errors"]:
+                    messages.error(request, err)
+                return redirect("..")
+        else:
+            form = self.VisaUploadForm()
+        context = dict(
+            self.admin_site.each_context(request),
+            title="Main Format Upload",
+            form=form,
+            opts=self.model._meta,
+        )
+        return TemplateResponse(
+            request, "admin/pagasys/employee/main_format_upload.html", context
+        )
 
     def own_visa_upload(self, request):
         if request.method == "POST":
