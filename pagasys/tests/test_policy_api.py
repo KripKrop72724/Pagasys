@@ -1,7 +1,11 @@
+from datetime import date
+
 from rest_framework.test import APIClient
 from django.contrib.auth.models import Group
 from django.core.management import call_command
+from django.db import connection
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 from unittest.mock import patch
 from pagasys.models import (
     Company,
@@ -520,6 +524,29 @@ class PolicyApiTests(TestCase):
         )
         assert resp2.status_code == 400
 
+    def test_roster_schedule_range_rejects_empty_employees(self):
+        st = ShiftTemplate.objects.create(
+            company=self.company,
+            name="Shift",
+            start_time="09:00",
+            end_time="17:00",
+        )
+        payload = {
+            "employees": [],
+            "shift": st.id,
+            "start_date": "2024-07-01",
+            "days": 1,
+        }
+        resp = self.client.post(
+            f"/api/companies/{self.company.id}/roster/schedule-range/",
+            payload,
+            format="json",
+        )
+        assert resp.status_code == 400
+        assert resp.data["detail"] == "Validation error"
+        errors = [str(err) for err in resp.data["errors"].get("non_field_errors", [])]
+        assert "employees must contain at least one ID" in errors
+
     @patch("pagasys.policy.views.schedule_range_bulk.delay")
     def test_roster_schedule_range_bulk_async(self, mock_delay):
         st = ShiftTemplate.objects.create(
@@ -571,6 +598,28 @@ class PolicyApiTests(TestCase):
             format="json",
         )
         assert resp.status_code == 400
+
+    def test_roster_schedule_range_deduplicates_employee_ids(self):
+        st = ShiftTemplate.objects.create(
+            company=self.company,
+            name="Shift",
+            start_time="09:00",
+            end_time="17:00",
+        )
+        payload = {
+            "employees": [self.user.id, self.user.id],
+            "shift": st.id,
+            "start_date": "2024-07-01",
+            "days": 2,
+        }
+        resp = self.client.post(
+            f"/api/companies/{self.company.id}/roster/schedule-range/",
+            payload,
+            format="json",
+        )
+        assert resp.status_code == 200
+        assert resp.data["count"] == 2
+        assert RosterEntry.objects.filter(employee=self.user).count() == 2
 
     def test_roster_schedule_range_upsert(self):
         st1 = ShiftTemplate.objects.create(
@@ -653,6 +702,115 @@ class PolicyApiTests(TestCase):
             format="json",
         )
         assert resp.status_code == 400
+
+    def test_roster_schedule_range_query_count_constant(self):
+        st = ShiftTemplate.objects.create(
+            company=self.company,
+            name="Shift",
+            start_time="09:00",
+            end_time="17:00",
+        )
+        other1 = Employee.objects.create_user(
+            username="u2",
+            password="pass",
+            department=self.department,
+            trade_license=self.license,
+            hire_date="2024-01-01",
+            employment_type="permanent",
+            visa_type="company",
+        )
+        other2 = Employee.objects.create_user(
+            username="u3",
+            password="pass",
+            department=self.department,
+            trade_license=self.license,
+            hire_date="2024-01-01",
+            employment_type="permanent",
+            visa_type="company",
+        )
+        employee_map = {e.id: e for e in (self.user, other1, other2)}
+        shift_map = {st.id: st}
+
+        class DummyRosterEntrySerializer:
+            def __init__(self, instance=None, data=None, context=None, **kwargs):
+                self.instance = instance
+                self.context = context
+                payload = data or {}
+                self.validated_data = dict(payload)
+                emp_id = self.validated_data.get("employee")
+                if emp_id is not None:
+                    self.validated_data["employee"] = employee_map[emp_id]
+                shift_id = self.validated_data.get("shift")
+                if shift_id is not None:
+                    self.validated_data["shift"] = shift_map[shift_id]
+
+            def is_valid(self, raise_exception=False):
+                return True
+
+        class DummyRosterRangeSerializer:
+            def __init__(self, data=None, context=None):
+                self.data = data or {}
+                self.context = context or {}
+                self._validated = False
+
+            def is_valid(self, raise_exception=False):
+                self._validated = True
+                return True
+
+            @property
+            def validated_data(self):
+                assert self._validated
+                employees = [employee_map[eid] for eid in self.data.get("employees", [])]
+                seen = set()
+                unique = []
+                for emp in employees:
+                    if emp.id not in seen:
+                        seen.add(emp.id)
+                        unique.append(emp)
+                result = {
+                    "employees": unique,
+                    "shift": shift_map[self.data["shift"]],
+                    "start_date": date.fromisoformat(self.data["start_date"]),
+                }
+                if "days" in self.data:
+                    result["days"] = self.data["days"]
+                if "until" in self.data:
+                    result["until"] = date.fromisoformat(self.data["until"])
+                if "rest_weekdays" in self.data:
+                    result["rest_weekdays"] = self.data["rest_weekdays"]
+                return result
+
+        with patch("pagasys.policy.views.holiday_flags", return_value=(False, False)), patch(
+            "pagasys.policy.views.RosterViewSet.serializer_class", DummyRosterEntrySerializer
+        ), patch("pagasys.policy.views.RosterRangeSerializer", DummyRosterRangeSerializer):
+            payload_single = {
+                "employees": [self.user.id],
+                "shift": st.id,
+                "start_date": "2024-07-01",
+                "days": 1,
+            }
+            with CaptureQueriesContext(connection) as ctx_single:
+                resp1 = self.client.post(
+                    f"/api/companies/{self.company.id}/roster/schedule-range/",
+                    payload_single,
+                    format="json",
+                )
+            assert resp1.status_code == 200
+            RosterEntry.objects.all().delete()
+            payload_many = {
+                "employees": [self.user.id, other1.id, other2.id],
+                "shift": st.id,
+                "start_date": "2024-07-01",
+                "days": 5,
+            }
+            with CaptureQueriesContext(connection) as ctx_many:
+                resp2 = self.client.post(
+                    f"/api/companies/{self.company.id}/roster/schedule-range/",
+                    payload_many,
+                    format="json",
+                )
+            assert resp2.status_code == 200
+            assert len(ctx_single) == len(ctx_many)
 
     def test_roster_single_create_and_update_holiday_flags(self):
         cal = WorkCalendar.objects.create(
