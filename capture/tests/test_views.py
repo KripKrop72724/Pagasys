@@ -355,6 +355,7 @@ def test_requires_face_blocks_without_image(client, company, device, employee, f
     assert resp.status_code == 403
     data = resp.json()
     assert data["accepted"] is False
+    assert data["reason"] == "face_required_no_match"
     ev = PunchEvent.objects.get(id=data["event_id"])
     assert ev.exception.kind == "face_required_no_match"
 
@@ -465,6 +466,7 @@ def test_unrostered_face_match_requires_review(
     assert data["accepted"] is False
     assert data["face_mismatch"] is True
     assert data["matched_employee"] == employee.id
+    assert data["reason"] == "unrostered_face_match"
     ev = PunchEvent.objects.get(id=data["event_id"])
     assert ev.employee is None
     assert ev.matched_employee_id == employee.id
@@ -510,6 +512,7 @@ def test_face_low_confidence_rejected(client, company, device, employee, face_ro
     data = resp.json()
     assert data["accepted"] is False
     assert data["notes"] == "face_required_no_match"
+    assert data["reason"] == "face_required_no_match"
     ev = PunchEvent.objects.get(id=data["event_id"])
     assert ev.exception.kind == "face_required_no_match"
 
@@ -587,6 +590,7 @@ def test_face_mismatch_rejected_when_required(
     data = resp.json()
     assert data["accepted"] is False
     assert data["face_mismatch"] is True
+    assert data["reason"] == "face_required_no_match"
     ev = PunchEvent.objects.get(id=data["event_id"])
     assert ev.exception.kind == "face_required_no_match"
 
@@ -626,6 +630,7 @@ def test_face_required_no_enrollment(client, company, device, employee, face_ros
     assert resp.status_code == 403
     data = resp.json()
     assert data["accepted"] is False
+    assert data["reason"] == "no_enrollment"
     ev = PunchEvent.objects.get(id=data["event_id"])
     assert ev.exception.kind == "no_enrollment"
 
@@ -641,6 +646,7 @@ def test_face_required_inactive_enrollment(client, company, device, employee, fa
     )
     assert resp.status_code == 403
     data = resp.json()
+    assert data["reason"] == "no_enrollment"
     ev = PunchEvent.objects.get(id=data["event_id"])
     assert ev.exception.kind == "no_enrollment"
 
@@ -672,6 +678,7 @@ def test_geofence_required_rule_enforced(client, company, device, employee, rost
     assert data["accepted"] is False
     assert data["geofence_ok"] is None
     assert data["geofence_rule_violation"] is True
+    assert data["reason"] == "geofence_rule"
     ev = PunchEvent.objects.get(id=data["event_id"])
     assert ev.geofence_rule_violation is True
     assert ev.exception.kind == "geofence_rule"
@@ -704,6 +711,7 @@ def test_geofence_required_missing_device_geofence(client, company, device, empl
     data = resp.json()
     assert data["geofence_ok"] is None
     assert data["geofence_rule_violation"] is True
+    assert data["reason"] == "geofence_rule"
     ev = PunchEvent.objects.get(id=data["event_id"])
     assert ev.exception.kind == "geofence_rule"
     assert ev.exception.details["reason"] == "missing_device_geofence"
@@ -735,6 +743,7 @@ def test_geofence_required_zero_device_radius(client, company, device, employee,
     data = resp.json()
     assert data["geofence_ok"] is None
     assert data["geofence_rule_violation"] is True
+    assert data["reason"] == "geofence_rule"
     ev = PunchEvent.objects.get(id=data["event_id"])
     assert ev.exception.details["reason"] == "missing_device_geofence"
 

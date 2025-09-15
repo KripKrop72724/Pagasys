@@ -113,7 +113,17 @@ class PunchResponseSerializer(serializers.Serializer):
     geofence_ok = serializers.BooleanField(required=False, allow_null=True)
     geofence_rule_violation = serializers.BooleanField()
     roster_fallback = serializers.BooleanField()
-    notes = serializers.CharField(required=False, allow_blank=True)
+    reason = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        help_text="Exact reason when a punch is rejected",
+    )
+    # TODO: remove in future versions; kept for backward compatibility
+    notes = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        help_text="Deprecated: use `reason` instead",
+    )
     event_id = serializers.IntegerField()
 
 
