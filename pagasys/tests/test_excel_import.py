@@ -1,15 +1,11 @@
 import io
-import os
 from datetime import date
 
-import django
 import pytest
 from django.core.management import call_command
 from openpyxl import Workbook
 
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.test")
-django.setup()
-call_command("migrate", run_syncdb=True, verbosity=0)
+pytestmark = pytest.mark.django_db(transaction=True)
 
 from pagasys.excel_import import import_main_format_workbook
 from pagasys.models import Branch, Company, Department, Designation, Employee, TradeLicense
@@ -28,7 +24,7 @@ def _build_workbook(rows):
 
 
 @pytest.fixture(autouse=True)
-def reset_db():
+def reset_db(transactional_db):
     call_command("flush", verbosity=0, interactive=False)
 
 
