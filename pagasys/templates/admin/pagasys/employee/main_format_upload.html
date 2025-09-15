@@ -1,0 +1,11 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+{% block content %}
+<h1>Main Format Upload</h1>
+<p>Upload the standard employee Excel file to create multiple employees at once.</p>
+<form method="post" enctype="multipart/form-data">
+  {% csrf_token %}
+  {{ form.as_p }}
+  <input type="submit" value="Upload" class="default" />
+</form>
+{% endblock %}
