@@ -11,7 +11,7 @@ from attendance.services import build_pairs_for, compute_att_day
 
 
 class Command(BaseCommand):
-    """Backfill duplicate punch exceptions and rebuild attendance."""
+    """Backfill duplicate punch exceptions and rebuild attendance to fix the double punch issue"""
 
     help = "Backfill duplicate punch exceptions and rebuild attendance pairs"
 
