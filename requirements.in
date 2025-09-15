@@ -21,3 +21,4 @@ flake8
 opencv-python-headless
 boto3
 openpyxl
+weasyprint

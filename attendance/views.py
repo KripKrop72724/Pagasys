@@ -1,8 +1,9 @@
-from datetime import timedelta
+from datetime import timedelta, date
 
 from rest_framework import viewsets, status, serializers
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.permissions import IsAdminUser
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db import transaction
 from drf_spectacular.utils import (
@@ -16,8 +17,14 @@ from drf_spectacular.utils import (
 from pagasys.openapi_utils import document_filters
 from pagasys.utils import scope_queryset
 from pagasys.models import Employee
+from django.http import HttpResponse
 
 from .models import AttDay, AttPair, AttAdjustment
+from .reports import (
+    get_late_comers,
+    group_late_comers,
+    render_late_comers_pdf,
+)
 from .serializers import (
     AttDaySerializer,
     AttPairSerializer,
@@ -175,6 +182,36 @@ class AttDayViewSet(viewsets.ReadOnlyModelViewSet):
         with transaction.atomic():
             qs.update(locked=data.get("locked", True))
         return Response({"updated": qs.count()})
+
+    @action(
+        detail=False,
+        methods=["get"],
+        url_path="late-comers-report",
+        permission_classes=[IsAdminUser],
+    )
+    def late_comers_report(self, request, company_id=None):
+        """Render a PDF report of late arrivals."""
+
+        try:
+            start = date.fromisoformat(request.query_params.get("start"))
+            end = date.fromisoformat(request.query_params.get("end"))
+        except (TypeError, ValueError):
+            return Response(
+                {"detail": "start and end query params required in YYYY-MM-DD"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        filters = {}
+        for key in ["branch", "department", "project", "shift"]:
+            val = request.query_params.get(key)
+            if val:
+                filters[f"{key}_id"] = int(val)
+        records = get_late_comers(start, end, filters)
+        grouped, stats = group_late_comers(records)
+        pdf = render_late_comers_pdf(grouped, stats, start, end, request)
+        filename = f"late_comers_{start}_{end}.pdf"
+        response = HttpResponse(pdf, content_type="application/pdf")
+        response["Content-Disposition"] = f"attachment; filename={filename}"
+        return response
 
 
 @extend_schema_view(

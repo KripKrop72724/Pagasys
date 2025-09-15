@@ -249,6 +249,7 @@ class AttDay(models.Model):
         indexes = [
             models.Index(fields=["employee", "date"]),
             models.Index(fields=["locked"]),
+            models.Index(fields=["date", "late_min"]),
         ]
 
 

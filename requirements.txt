@@ -23,8 +23,12 @@ botocore==1.40.21
     # via
     #   boto3
     #   s3transfer
+brotli==1.1.0
+    # via fonttools
 celery==5.5.3
     # via -r requirements.in
+cffi==2.0.0
+    # via weasyprint
 click==8.2.1
     # via
     #   celery
@@ -37,6 +41,8 @@ click-plugins==1.1.1.2
     # via celery
 click-repl==0.3.0
     # via celery
+cssselect2==0.8.0
+    # via weasyprint
 dj-database-url==3.0.1
     # via -r requirements.in
 django==5.2.4
@@ -73,6 +79,8 @@ et-xmlfile==2.0.0
     # via openpyxl
 flake8==7.3.0
     # via -r requirements.in
+fonttools[woff]==4.59.2
+    # via weasyprint
 gunicorn==23.0.0
     # via -r requirements.in
 inflection==0.5.1
@@ -100,17 +108,25 @@ packaging==25.0
     #   gunicorn
     #   kombu
 pillow==11.3.0
-    # via -r requirements.in
+    # via
+    #   -r requirements.in
+    #   weasyprint
 prompt-toolkit==3.0.51
     # via click-repl
 psycopg2-binary==2.9.10
     # via -r requirements.in
 pycodestyle==2.14.0
     # via flake8
+pycparser==2.23
+    # via cffi
+pydyf==0.11.0
+    # via weasyprint
 pyflakes==3.4.0
     # via flake8
 pyjwt==2.10.1
     # via djangorestframework-simplejwt
+pyphen==0.17.2
+    # via weasyprint
 python-dateutil==2.9.0.post0
     # via
     #   botocore
@@ -133,6 +149,12 @@ six==1.17.0
     # via python-dateutil
 sqlparse==0.5.3
     # via django
+tinycss2==1.4.0
+    # via
+    #   cssselect2
+    #   weasyprint
+tinyhtml5==2.0.0
+    # via weasyprint
 typing-extensions==4.14.1
     # via
     #   django-countries
@@ -150,5 +172,14 @@ vine==5.1.0
     #   kombu
 wcwidth==0.2.13
     # via prompt-toolkit
+weasyprint==66.0
+    # via -r requirements.in
+webencodings==0.5.1
+    # via
+    #   cssselect2
+    #   tinycss2
+    #   tinyhtml5
 whitenoise==6.9.0
     # via -r requirements.in
+zopfli==0.2.3.post1
+    # via fonttools
