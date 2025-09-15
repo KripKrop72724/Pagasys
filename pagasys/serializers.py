@@ -358,7 +358,12 @@ class EmployeeSerializer(ScopedSerializerMixin, serializers.ModelSerializer):
     """Serializer for Employee"""
 
     username = serializers.CharField(help_text="Login name")
-    password = serializers.CharField(write_only=True, help_text="Password")
+    password = serializers.CharField(
+        write_only=True,
+        required=False,
+        allow_blank=True,
+        help_text="Password",
+    )
     groups = serializers.PrimaryKeyRelatedField(
         queryset=Group.objects.all(),
         many=True,
@@ -491,9 +496,15 @@ class EmployeeSerializer(ScopedSerializerMixin, serializers.ModelSerializer):
         return attrs
 
     def create(self, validated_data):
-        password = validated_data.pop('password')
+        password = validated_data.pop('password', None)
+        if password == "":
+            password = None
         groups = validated_data.pop('groups', [])
         if validated_data.get("is_superuser"):
+            if password is None:
+                raise serializers.ValidationError(
+                    {"password": ["This field is required for superusers."]}
+                )
             user = Employee.objects.create_superuser(password=password, **validated_data)
         else:
             user = Employee.objects.create_user(password=password, **validated_data)
