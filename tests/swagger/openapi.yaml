@@ -3217,8 +3217,10 @@ paths:
       description: Create or update consecutive roster entries starting from `start_date`.
         Provide either `days` (number of days) or `until` (inclusive end date). `rest_weekdays`
         may list weekday codes such as ['SAT','SUN'] to mark rest days automatically.
-        Entries on calendar holidays are flagged with `is_holiday`, and `was_holiday`
-        records that a holiday was originally scheduled.
+        Provide exactly one of `employee`, `employees`, or `branch`. Use the `employees`
+        array to schedule multiple employees by ID (e.g., [1, 2, 3]). Entries on calendar
+        holidays are flagged with `is_holiday`, and `was_holiday` records that a holiday
+        was originally scheduled.
       parameters:
       - in: path
         name: company_id
@@ -3244,15 +3246,18 @@ paths:
                   - SAT
                   - SUN
                 summary: By days with weekend rest
-              MultipleEmployees:
+              EmployeesArray:
                 value:
                   employees:
                   - 1
                   - 2
+                  - 3
                   shift: 1
                   start_date: '2024-07-01'
-                  days: 3
-                summary: Multiple employees
+                  until: '2024-07-07'
+                summary: Schedule multiple employees in one request
+                description: Send employee primary keys in the `employees` array to
+                  assign the same shift to each employee.
               UntilDate:
                 value:
                   employee: 1
@@ -3286,15 +3291,18 @@ paths:
                     - SAT
                     - SUN
                   summary: By days with weekend rest
-                MultipleEmployees:
+                EmployeesArray:
                   value:
                     employees:
                     - 1
                     - 2
+                    - 3
                     shift: 1
                     start_date: '2024-07-01'
-                    days: 3
-                  summary: Multiple employees
+                    until: '2024-07-07'
+                  summary: Schedule multiple employees in one request
+                  description: Send employee primary keys in the `employees` array
+                    to assign the same shift to each employee.
                 UntilDate:
                   value:
                     employee: 1
