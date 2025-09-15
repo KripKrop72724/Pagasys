@@ -4,7 +4,7 @@ Generate a PDF summary of employees who arrived late within a date range.
 
 ## API
 
-`GET /api/companies/{company_id}/att-days/late_comers_report/`
+`GET /api/companies/{company_id}/att-days/late-comers-report/`
 
 Query parameters:
 
@@ -22,7 +22,7 @@ Example:
 ```bash
 curl -L -o late.pdf \
   -H "Authorization: Token <token>" \
-  "/api/companies/1/att-days/late_comers_report/?start=2024-01-01&end=2024-01-31"
+  "/api/companies/1/att-days/late-comers-report/?start=2024-01-01&end=2024-01-31"
 ```
 
 ## Admin
