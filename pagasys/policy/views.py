@@ -321,7 +321,9 @@ class RosterViewSet(BasePolicyViewSet):
             "Create or update consecutive roster entries starting from `start_date`."
             " Provide either `days` (number of days) or `until` (inclusive end date)."
             " `rest_weekdays` may list weekday codes such as ['SAT','SUN'] to mark"
-            " rest days automatically. Entries on calendar holidays are flagged"
+            " rest days automatically. Provide exactly one of `employee`,"
+            " `employees`, or `branch`. Use the `employees` array to schedule"
+            " multiple employees by ID (e.g., [1, 2, 3]). Entries on calendar holidays are flagged"
             " with `is_holiday`, and `was_holiday` records that a holiday was"
             " originally scheduled."
         ),
@@ -337,12 +339,17 @@ class RosterViewSet(BasePolicyViewSet):
                 },
             ),
             OpenApiExample(
-                "Multiple employees",
+                "Employees array",
+                summary="Schedule multiple employees in one request",
+                description=(
+                    "Send employee primary keys in the `employees` array to assign"
+                    " the same shift to each employee."
+                ),
                 value={
-                    "employees": [1, 2],
+                    "employees": [1, 2, 3],
                     "shift": 1,
                     "start_date": "2024-07-01",
-                    "days": 3,
+                    "until": "2024-07-07",
                 },
             ),
             OpenApiExample(
