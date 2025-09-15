@@ -13110,8 +13110,12 @@ components:
           type: boolean
         roster_fallback:
           type: boolean
+        reason:
+          type: string
+          description: Exact reason when a punch is rejected
         notes:
           type: string
+          description: 'Deprecated: use `reason` instead'
         event_id:
           type: integer
       required:
