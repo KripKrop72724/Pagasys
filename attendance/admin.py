@@ -9,7 +9,8 @@ from django.urls import path
 from django.http import HttpResponse
 
 from pagasys.admin import ScopedAdminMixin
-from pagasys.models import Employee
+from pagasys.models import Branch, Department, Employee, Project, ShiftTemplate
+from pagasys.utils import scope_queryset
 from .models import AttDay, AttPair, AttAdjustment, LeaveRequest, LeaveDay
 from .tasks import compute_employee_day_task, recompute_range_task
 from .reports import get_late_comers, group_late_comers, render_late_comers_pdf
@@ -148,10 +149,33 @@ class AttDayAdmin(ScopedAdminMixin, admin.ModelAdmin):
     class LateComersReportForm(forms.Form):
         start = forms.DateField()
         end = forms.DateField()
-        branch = forms.IntegerField(required=False)
-        department = forms.IntegerField(required=False)
-        project = forms.IntegerField(required=False)
-        shift = forms.IntegerField(required=False)
+        branch = forms.ModelChoiceField(
+            queryset=Branch.objects.none(), required=False
+        )
+        department = forms.ModelChoiceField(
+            queryset=Department.objects.none(), required=False
+        )
+        project = forms.ModelChoiceField(
+            queryset=Project.objects.none(), required=False
+        )
+        shift = forms.ModelChoiceField(
+            queryset=ShiftTemplate.objects.none(), required=False
+        )
+
+        def __init__(self, *args, **kwargs):
+            request = kwargs.pop("request", None)
+            super().__init__(*args, **kwargs)
+            queryset_map = {
+                "branch": Branch,
+                "department": Department,
+                "project": Project,
+                "shift": ShiftTemplate,
+            }
+            for field_name, model in queryset_map.items():
+                qs = model.objects.all()
+                if request is not None:
+                    qs = scope_queryset(qs, request.user)
+                self.fields[field_name].queryset = qs
 
     def get_urls(self):
         urls = super().get_urls()
@@ -174,15 +198,15 @@ class AttDayAdmin(ScopedAdminMixin, admin.ModelAdmin):
 
     def late_comers_report(self, request):  # pragma: no cover - admin view
         if request.method == "POST":
-            form = self.LateComersReportForm(request.POST)
+            form = self.LateComersReportForm(request.POST, request=request)
             if form.is_valid():
                 start = form.cleaned_data["start"]
                 end = form.cleaned_data["end"]
-                filters = {
-                    f"{k}_id": form.cleaned_data[k]
-                    for k in ["branch", "department", "project", "shift"]
-                    if form.cleaned_data.get(k)
-                }
+                filters = {}
+                for key in ["branch", "department", "project", "shift"]:
+                    obj = form.cleaned_data.get(key)
+                    if obj is not None:
+                        filters[f"{key}_id"] = obj.pk
                 records = get_late_comers(start, end, filters)
                 grouped, stats = group_late_comers(records)
                 pdf = render_late_comers_pdf(grouped, stats, start, end, request)
@@ -192,7 +216,7 @@ class AttDayAdmin(ScopedAdminMixin, admin.ModelAdmin):
                 )
                 return response
         else:
-            form = self.LateComersReportForm()
+            form = self.LateComersReportForm(request=request)
         context = {"form": form, "title": "Late comers report"}
         return TemplateResponse(request, "admin/late_comers_report.html", context)
 @admin.register(AttPair)
