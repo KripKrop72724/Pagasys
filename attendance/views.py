@@ -268,8 +268,8 @@ class AttDayViewSet(viewsets.ReadOnlyModelViewSet):
             if val:
                 filters[f"{key}_id"] = int(val)
         records = get_late_comers(start, end, filters)
-        grouped, stats = group_late_comers(records)
-        pdf = render_late_comers_pdf(grouped, stats, start, end, request)
+        records, stats = group_late_comers(records)
+        pdf = render_late_comers_pdf(records, stats, start, end, request)
         filename = f"late_comers_{start}_{end}.pdf"
         response = HttpResponse(pdf, content_type="application/pdf")
         response["Content-Disposition"] = f"attachment; filename={filename}"
