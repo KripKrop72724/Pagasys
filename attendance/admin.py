@@ -147,19 +147,31 @@ class AttDayAdmin(ScopedAdminMixin, admin.ModelAdmin):
     manual_recompute.short_description = "Manual recompute by date range"
 
     class LateComersReportForm(forms.Form):
-        start = forms.DateField()
-        end = forms.DateField()
+        start = forms.DateField(
+            widget=forms.DateInput(attrs={"type": "date"})
+        )
+        end = forms.DateField(
+            widget=forms.DateInput(attrs={"type": "date"})
+        )
         branch = forms.ModelChoiceField(
-            queryset=Branch.objects.none(), required=False
+            queryset=Branch.objects.none(),
+            required=False,
+            empty_label="All branches",
         )
         department = forms.ModelChoiceField(
-            queryset=Department.objects.none(), required=False
+            queryset=Department.objects.none(),
+            required=False,
+            empty_label="All departments",
         )
         project = forms.ModelChoiceField(
-            queryset=Project.objects.none(), required=False
+            queryset=Project.objects.none(),
+            required=False,
+            empty_label="All projects",
         )
         shift = forms.ModelChoiceField(
-            queryset=ShiftTemplate.objects.none(), required=False
+            queryset=ShiftTemplate.objects.none(),
+            required=False,
+            empty_label="All shifts",
         )
 
         def __init__(self, *args, **kwargs):

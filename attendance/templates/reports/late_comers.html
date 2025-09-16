@@ -2,69 +2,141 @@
 <!DOCTYPE html>
 <html>
 <head>
-<meta charset="utf-8"/>
-<title>Late Comers Report</title>
-<style>
-body { font-family: sans-serif; font-size: 12px; margin: 20px; }
-header { text-align: center; margin-bottom: 20px; }
-.logo { height: 60px; }
-table { width: 100%; border-collapse: collapse; margin: 10px 0; }
-th, td { border: 1px solid #333; padding: 4px; }
-h2, h3, h4, h5 { margin: 8px 0 4px 0; }
-.section { page-break-inside: avoid; }
-</style>
+  <meta charset="utf-8"/>
+  <title>Late Comers Report</title>
+  <link rel="stylesheet" href="{% static 'attendance/css/reports.css' %}">
 </head>
-<body>
-<header>
-  <img src="{{ logo_url }}" class="logo" alt="Company Logo"/>
-  <h1>Late Comers Report</h1>
-  <p>{{ start_date }} to {{ end_date }}</p>
-  <p>Generated at {{ generated_at }}</p>
-</header>
-{% for branch_name, branch in data.items %}
-<section class="section">
-  <h2>Branch: {{ branch_name }} ({{ branch.total }} min)</h2>
-  {% for dept_name, dept in branch.departments.items %}
-  <section class="section">
-    <h3>Department: {{ dept_name }} ({{ dept.total }} min)</h3>
-    {% for proj_name, proj in dept.projects.items %}
-    <section class="section">
-      <h4>Project: {{ proj_name }} ({{ proj.total }} min)</h4>
-      {% for shift_name, shift in proj.shifts.items %}
-      <section class="section">
-        <h5>Shift: {{ shift_name }} ({{ shift.total }} min)</h5>
-        <table>
-          <thead>
-            <tr>
-              <th>Employee</th>
-              <th>Date</th>
-              <th>Scheduled Start</th>
-              <th>Actual Arrival</th>
-              <th>Late (min)</th>
-            </tr>
-          </thead>
-          <tbody>
-          {% for emp, records in shift.employees.items %}
-            {% for rec in records %}
-            <tr>
-              <td>{{ emp }}</td>
-              <td>{{ rec.date }}</td>
-              <td>{{ rec.scheduled_start }}</td>
-              <td>{{ rec.actual_arrival }}</td>
-              <td>{{ rec.late_min }}</td>
-            </tr>
-            {% endfor %}
+<body class="report-body">
+  <header class="report-header">
+    <div class="report-branding">
+      <img src="{{ logo_url }}" class="logo" alt="Company Logo"/>
+      <div>
+        <h1 class="report-title">Late Comers Report</h1>
+        <p class="report-period">{{ start_date|date:"Y-m-d" }} &ndash; {{ end_date|date:"Y-m-d" }}</p>
+      </div>
+    </div>
+    <div class="report-meta">
+      <p class="label">Generated</p>
+      <p class="timestamp">{{ generated_at|date:"Y-m-d H:i" }}</p>
+    </div>
+  </header>
+  <footer class="report-footer">
+    <p>Late Comers Report</p>
+    <p class="page-number">Page</p>
+  </footer>
+  <main class="report-content">
+    <section class="report-overview section">
+      <h2 class="section-title">Overview</h2>
+      <p class="intro-text">Summary of recorded late arrivals for the selected period.</p>
+      <table class="summary-table">
+        <thead>
+          <tr>
+            <th>Branch</th>
+            <th class="numeric">Late minutes</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for branch_name, branch in data.items %}
+          <tr>
+            <td>{{ branch_name }}</td>
+            <td class="numeric">{{ branch.total }}</td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="2" class="empty-state">No late arrivals were recorded for the selected period.</td>
+          </tr>
           {% endfor %}
-          </tbody>
-        </table>
+        </tbody>
+        <tfoot>
+          <tr>
+            <th>Total late minutes</th>
+            <th class="numeric">{{ total_late_min }}</th>
+          </tr>
+        </tfoot>
+      </table>
+    </section>
+
+    {% if data %}
+    <hr class="section-divider"/>
+    {% for branch_name, branch in data.items %}
+    <section class="branch-section section">
+      <div class="section-header">
+        <h2 class="section-title">Branch: {{ branch_name }}</h2>
+        <p class="section-total">Total late minutes: <span class="muted">{{ branch.total }} min</span></p>
+      </div>
+      {% if branch.departments %}
+      <table class="summary-table compact">
+        <thead>
+          <tr>
+            <th>Department</th>
+            <th class="numeric">Late minutes</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for dept_name, dept in branch.departments.items %}
+          <tr>
+            <td>{{ dept_name }}</td>
+            <td class="numeric">{{ dept.total }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% endif %}
+      {% for dept_name, dept in branch.departments.items %}
+      <section class="department-section">
+        <h3 class="subsection-title">Department: {{ dept_name }} <span class="muted">({{ dept.total }} min)</span></h3>
+        {% for proj_name, proj in dept.projects.items %}
+        <section class="project-section">
+          <h4 class="subsection-title">Project: {{ proj_name }} <span class="muted">({{ proj.total }} min)</span></h4>
+          {% for shift_name, shift in proj.shifts.items %}
+          <section class="shift-section">
+            <h5 class="shift-title">Shift: {{ shift_name }} <span class="muted">({{ shift.total }} min)</span></h5>
+            <table class="detail-table">
+              <thead>
+                <tr>
+                  <th>Employee</th>
+                  <th>Date</th>
+                  <th>Scheduled Start</th>
+                  <th>Actual Arrival</th>
+                  <th class="numeric">Late (min)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for emp, records in shift.employees.items %}
+                  {% for rec in records %}
+                  <tr>
+                    <td>{{ emp }}</td>
+                    <td>{{ rec.date|date:"Y-m-d" }}</td>
+                    <td>{{ rec.scheduled_start|date:"H:i"|default:"-" }}</td>
+                    <td>{{ rec.actual_arrival|date:"H:i"|default:"-" }}</td>
+                    <td class="numeric">{{ rec.late_min }}</td>
+                  </tr>
+                  {% endfor %}
+                {% endfor %}
+              </tbody>
+            </table>
+          </section>
+          {% empty %}
+          <p class="empty-state">No shift data available for this project.</p>
+          {% endfor %}
+        </section>
+        {% empty %}
+        <p class="empty-state">No project data available for this department.</p>
+        {% endfor %}
       </section>
+      {% empty %}
+      <p class="empty-state">No departmental data recorded for this branch.</p>
       {% endfor %}
     </section>
+    {% if not forloop.last %}<hr class="section-divider"/>{% endif %}
     {% endfor %}
-  </section>
-  {% endfor %}
-</section>
-{% endfor %}
-<p><strong>Total late minutes: {{ total_late_min }}</strong></p>
+    {% endif %}
+
+    <section class="grand-total section">
+      <h2 class="section-title">Grand total</h2>
+      <p class="section-total">Combined late minutes for the period</p>
+      <p class="grand-total-value">{{ total_late_min }}</p>
+    </section>
+  </main>
 </body>
 </html>
