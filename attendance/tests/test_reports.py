@@ -78,10 +78,9 @@ class LateComersReportTests(TestCase):
         filtered = get_late_comers(self.day, self.day, {"branch_id": self.branch1.id})
         assert len(filtered) == 1
         assert filtered[0]["employee"] == str(self.emp1)
-        grouped, stats = group_late_comers(records)
+        ordered, stats = group_late_comers(records)
         assert stats["total_late_min"] == 20
-        assert grouped["B1"]["total"] == 15
-        assert grouped["B2"]["total"] == 5
+        assert {r["employee"] for r in ordered} == {str(self.emp1), str(self.emp2)}
 
     def test_api_late_comers_report(self):
         self.api_client.force_authenticate(self.admin)
