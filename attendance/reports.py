@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import defaultdict, OrderedDict
 from datetime import date
 from typing import Any, Dict, Iterable, List, Tuple
 
@@ -51,12 +52,14 @@ def get_late_comers(
 
     records: List[Dict[str, Any]] = []
     for day in qs:
+        branch = day.employee.branch
         records.append(
             {
-                "employee": str(day.employee),
+                "employee": f"{day.employee.first_name} {day.employee.last_name}".strip(),
                 "shift": getattr(day.shift, "name", ""),
                 "date": day.date,
                 "late_min": day.late_min,
+                "branch": getattr(branch, "name", "Unassigned"),
             }
         )
     return records
@@ -64,17 +67,32 @@ def get_late_comers(
 
 def group_late_comers(
     records: Iterable[Dict[str, Any]]
-) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
-    """Sort records and compute aggregate late minutes."""
+) -> Tuple["OrderedDict[str, Dict[str, Any]]", Dict[str, Any]]:
+    """Group records by branch and compute aggregate late minutes."""
 
     records = list(records)
-    records.sort(key=lambda r: (r["employee"], r["date"]))
-    total = sum(r["late_min"] for r in records)
-    return records, {"total_late_min": total}
+    branches: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+    for record in records:
+        branch_name = record.get("branch") or "Unassigned"
+        branches[branch_name].append(record)
+
+    grouped: "OrderedDict[str, Dict[str, Any]]" = OrderedDict()
+    total_late = 0
+    for branch_name in sorted(branches):
+        branch_records = branches[branch_name]
+        branch_records.sort(key=lambda r: (r["employee"], r["date"]))
+        branch_total = sum(r["late_min"] for r in branch_records)
+        grouped[branch_name] = {
+            "records": branch_records,
+            "total_late_min": branch_total,
+        }
+        total_late += branch_total
+
+    return grouped, {"total_late_min": total_late}
 
 
 def render_late_comers_pdf(
-    records: List[Dict[str, Any]],
+    branches: "OrderedDict[str, Dict[str, Any]]",
     stats: Dict[str, Any],
     start_date: date,
     end_date: date,
@@ -89,7 +107,7 @@ def render_late_comers_pdf(
         base_url = request.build_absolute_uri("/")
 
     context = {
-        "data": records,
+        "branches": branches,
         "start_date": start_date,
         "end_date": end_date,
         "generated_at": timezone.now(),

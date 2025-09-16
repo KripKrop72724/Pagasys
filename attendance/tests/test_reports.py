@@ -1,9 +1,11 @@
-from datetime import date, datetime
 import io
+from collections import OrderedDict
+from datetime import date, datetime
 
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
+from django.template.loader import render_to_string
 from rest_framework.test import APIClient
 
 from pagasys.models import Company, Branch, Department, Project, Employee, ShiftTemplate
@@ -30,6 +32,8 @@ class LateComersReportTests(TestCase):
         self.emp1 = Employee.objects.create_user(
             username="e1",
             password="pass",
+            first_name="Alice",
+            last_name="Anderson",
             department=self.dept1,
             hire_date=self.day,
             employment_type="permanent",
@@ -38,6 +42,8 @@ class LateComersReportTests(TestCase):
         self.emp2 = Employee.objects.create_user(
             username="e2",
             password="pass",
+            first_name="Bob",
+            last_name="Brown",
             project=self.proj2,
             hire_date=self.day,
             employment_type="permanent",
@@ -77,10 +83,75 @@ class LateComersReportTests(TestCase):
         assert len(records) == 2
         filtered = get_late_comers(self.day, self.day, {"branch_id": self.branch1.id})
         assert len(filtered) == 1
-        assert filtered[0]["employee"] == str(self.emp1)
-        ordered, stats = group_late_comers(records)
+        expected_emp1_name = f"{self.emp1.first_name} {self.emp1.last_name}".strip()
+        expected_emp2_name = f"{self.emp2.first_name} {self.emp2.last_name}".strip()
+        assert filtered[0]["employee"] == expected_emp1_name
+        assert filtered[0]["branch"] == self.branch1.name
+        branches, stats = group_late_comers(records)
         assert stats["total_late_min"] == 20
-        assert {r["employee"] for r in ordered} == {str(self.emp1), str(self.emp2)}
+        assert set(branches.keys()) == {self.branch1.name, self.branch2.name}
+        branch1_records = branches[self.branch1.name]["records"]
+        branch2_records = branches[self.branch2.name]["records"]
+        assert branches[self.branch1.name]["total_late_min"] == 15
+        assert branches[self.branch2.name]["total_late_min"] == 5
+        assert [r["employee"] for r in branch1_records] == [expected_emp1_name]
+        assert [r["employee"] for r in branch2_records] == [expected_emp2_name]
+
+    def test_late_comers_template_uses_new_header_format(self):
+        generated_at = timezone.make_aware(datetime(2024, 1, 2, 9, 30))
+        branches = OrderedDict(
+            (
+                (
+                    self.branch1.name,
+                    {
+                        "records": [
+                            {
+                                "employee": "Alice Anderson",
+                                "shift": "S1",
+                                "date": self.day,
+                                "late_min": 15,
+                            }
+                        ],
+                        "total_late_min": 15,
+                    },
+                ),
+                (
+                    self.branch2.name,
+                    {
+                        "records": [
+                            {
+                                "employee": "Bob Brown",
+                                "shift": "S2",
+                                "date": self.day,
+                                "late_min": 5,
+                            }
+                        ],
+                        "total_late_min": 5,
+                    },
+                ),
+            )
+        )
+        html = render_to_string(
+            "reports/late_comers.html",
+            {
+                "branches": branches,
+                "start_date": self.day,
+                "end_date": self.day,
+                "generated_at": generated_at,
+                "total_late_min": 20,
+            },
+        )
+        assert 'class="report-header-primary"' in html
+        assert "01 Jan 2024 &ndash; 01 Jan 2024" in html
+        assert "02 Jan 2024 09:30" in html
+        assert 'class="footer-report-title"' in html
+        assert 'class="footer-pagination"' in html
+        assert 'class="column-employee"' in html
+        assert f">{self.branch1.name}<" in html
+        assert f">{self.branch2.name}<" in html
+        assert "Total late minutes: 15" in html
+        assert "Grand total late minutes" in html
+        assert "20" in html
 
     def test_api_late_comers_report(self):
         self.api_client.force_authenticate(self.admin)

@@ -220,8 +220,8 @@ class AttDayAdmin(ScopedAdminMixin, admin.ModelAdmin):
                     if obj is not None:
                         filters[f"{key}_id"] = obj.pk
                 records = get_late_comers(start, end, filters)
-                records, stats = group_late_comers(records)
-                pdf = render_late_comers_pdf(records, stats, start, end, request)
+                branches, stats = group_late_comers(records)
+                pdf = render_late_comers_pdf(branches, stats, start, end, request)
                 response = HttpResponse(pdf, content_type="application/pdf")
                 response["Content-Disposition"] = (
                     f"attachment; filename=late_comers_{start}_{end}.pdf"
