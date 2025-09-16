@@ -6,12 +6,13 @@ from collections import defaultdict
 from datetime import datetime, date
 from typing import Any, Dict, Iterable, List, Tuple
 
+from django.contrib.staticfiles import finders
 from django.db.models import Q
 from django.template.loader import render_to_string
 from django.utils import timezone
 from django.templatetags.static import static
 
-from weasyprint import HTML
+from weasyprint import HTML, CSS
 
 from .models import AttDay, AttPair
 
@@ -134,7 +135,9 @@ def render_late_comers_pdf(
         "logo_url": logo_url,
     }
     html = render_to_string("reports/late_comers.html", context)
-    return HTML(string=html, base_url=base_url).write_pdf()
+    stylesheet_path = finders.find("attendance/css/reports.css")
+    stylesheets = [CSS(filename=stylesheet_path)] if stylesheet_path else None
+    return HTML(string=html, base_url=base_url).write_pdf(stylesheets=stylesheets)
 
 
 __all__ = [

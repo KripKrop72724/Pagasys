@@ -1,0 +1,267 @@
+/* Late comers report stylesheet */
+
+@page {
+  size: A4;
+  margin: 30mm 18mm 25mm;
+  @top-center {
+    content: element(report-header);
+  }
+  @bottom-center {
+    content: element(report-footer);
+  }
+}
+
+body.report-body {
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-size: 11pt;
+  line-height: 1.5;
+  color: #1f2933;
+  background: #ffffff;
+  margin: 0;
+}
+
+p {
+  margin: 0 0 3mm;
+}
+
+.report-header,
+.report-footer {
+  width: 100%;
+  background: #ffffff;
+}
+
+.report-header {
+  position: running(report-header);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12mm;
+  padding-bottom: 4mm;
+  border-bottom: 1px solid #d0d7de;
+}
+
+.report-branding {
+  display: flex;
+  align-items: center;
+  gap: 6mm;
+}
+
+.report-branding .logo {
+  max-height: 26mm;
+}
+
+.report-title {
+  margin: 0;
+  font-size: 20pt;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.report-period {
+  margin: 1mm 0 0;
+  font-size: 11pt;
+  color: #334155;
+}
+
+.report-meta {
+  text-align: right;
+  font-size: 10pt;
+  color: #475569;
+}
+
+.report-meta .label {
+  margin: 0;
+  text-transform: uppercase;
+  font-size: 8pt;
+  letter-spacing: 0.08em;
+  color: #94a3b8;
+}
+
+.report-meta .timestamp {
+  margin: 1mm 0 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.report-footer {
+  position: running(report-footer);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 3mm;
+  border-top: 1px solid #d0d7de;
+  font-size: 9pt;
+  color: #475569;
+}
+
+.report-footer p {
+  margin: 0;
+}
+
+.report-footer .page-number::after {
+  content: " " counter(page) " / " counter(pages);
+  font-variant-numeric: tabular-nums;
+}
+
+main.report-content {
+  margin: 0;
+}
+
+main.report-content > section {
+  margin-bottom: 14mm;
+}
+
+.report-overview {
+  margin-top: 8mm;
+}
+
+.report-overview .intro-text {
+  margin: 0 0 4mm;
+  color: #475569;
+}
+
+.section-divider {
+  border: 0;
+  border-top: 1px solid #d0d7de;
+  margin: 10mm 0 8mm;
+}
+
+.section {
+  page-break-inside: avoid;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 4mm;
+  flex-wrap: wrap;
+}
+
+.section-title {
+  margin: 0 0 3mm;
+  font-size: 16pt;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.section-total {
+  margin: 0 0 4mm;
+  color: #475569;
+  font-size: 11pt;
+}
+
+.subsection-title {
+  margin: 6mm 0 2mm;
+  font-size: 13pt;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.shift-title {
+  margin: 4mm 0 2mm;
+  font-size: 12pt;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.muted {
+  color: #64748b;
+}
+
+.empty-state {
+  margin: 4mm 0 0;
+  color: #64748b;
+  font-style: italic;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 4mm 0 6mm;
+  font-size: 10pt;
+}
+
+th,
+td {
+  border: 1px solid #d8dee4;
+  padding: 3mm 4mm;
+  vertical-align: top;
+}
+
+th {
+  background: #f1f5f9;
+  color: #0f172a;
+  font-weight: 600;
+  text-align: left;
+}
+
+tbody tr:nth-child(even) {
+  background: #f8fafc;
+}
+
+.summary-table {
+  margin-top: 4mm;
+}
+
+.summary-table.compact th,
+.summary-table.compact td {
+  padding: 2.4mm 4mm;
+}
+
+.summary-table tfoot th {
+  background: #e2e8f0;
+  font-weight: 700;
+}
+
+.numeric {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.detail-table thead th {
+  white-space: nowrap;
+}
+
+.detail-table td {
+  font-size: 9.5pt;
+}
+
+.branch-section {
+  padding-bottom: 6mm;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.branch-section:last-of-type {
+  border-bottom: none;
+}
+
+.department-section {
+  margin-top: 4mm;
+}
+
+.project-section {
+  margin-top: 3mm;
+}
+
+.shift-section {
+  margin-top: 2mm;
+}
+
+.section-metadata {
+  margin: 0 0 3mm;
+  color: #475569;
+  font-size: 10pt;
+}
+
+.grand-total {
+  font-size: 18pt;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.grand-total-value {
+  font-size: 24pt;
+  font-weight: 700;
+  margin: 2mm 0 0;
+  color: #1d4ed8;
+}
