@@ -84,21 +84,35 @@ p {
 
 .report-footer {
   position: running(report-footer);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+  display: table;
+  width: 100%;
+  table-layout: fixed;
   padding-top: 3mm;
   border-top: 1px solid #d0d7de;
   font-size: 9pt;
   color: #475569;
 }
 
-.report-footer p {
-  margin: 0;
+.report-footer > div {
+  display: table-cell;
+  vertical-align: middle;
+}
+
+.report-footer .footer-title {
+  text-align: left;
+}
+
+.report-footer .footer-pagination {
+  text-align: right;
+}
+
+.report-footer .page-number {
+  display: inline-block;
+  white-space: nowrap;
 }
 
 .report-footer .page-number::after {
-  content: " " counter(page) " / " counter(pages);
+  content: "Page " counter(page) " / " counter(pages);
   font-variant-numeric: tabular-nums;
 }
 
