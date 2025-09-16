@@ -737,9 +737,9 @@ paths:
       - in: path
         name: company_id
         schema:
-          type: string
-          pattern: ^\d+$
+          type: integer
         required: true
+        description: Company whose roster is being modified.
       - in: query
         name: date
         schema:
@@ -805,9 +805,9 @@ paths:
       - in: path
         name: company_id
         schema:
-          type: string
-          pattern: ^\d+$
+          type: integer
         required: true
+        description: Company whose roster is being modified.
       tags:
       - Attendance
       requestBody:
@@ -858,9 +858,9 @@ paths:
       - in: path
         name: company_id
         schema:
-          type: string
-          pattern: ^\d+$
+          type: integer
         required: true
+        description: Company whose roster is being modified.
       - in: path
         name: id
         schema:
@@ -894,9 +894,9 @@ paths:
       - in: path
         name: company_id
         schema:
-          type: string
-          pattern: ^\d+$
+          type: integer
         required: true
+        description: Company whose roster is being modified.
       - in: path
         name: id
         schema:
@@ -2200,9 +2200,9 @@ paths:
       - in: path
         name: company_id
         schema:
-          type: string
-          pattern: ^\d+$
+          type: integer
         required: true
+        description: Company whose roster is being modified.
       tags:
       - companies
       requestBody:
@@ -3213,24 +3213,38 @@ paths:
           description: ''
   /api/companies/{company_id}/roster/schedule-range/:
     post:
+      summary: Assign a shift to employees across a date range
       operationId: companies_roster_schedule_range_create
-      description: Create or update consecutive roster entries starting from `start_date`.
-        Provide either `days` (number of days) or `until` (inclusive end date). `rest_weekdays`
-        may list weekday codes such as ['SAT','SUN'] to mark rest days automatically.
-        Provide exactly one of `employee`, `employees`, or `branch`. Use the `employees`
-        array to schedule multiple employees by ID (e.g., [1, 2, 3]). Entries on calendar
-        holidays are flagged with `is_holiday`, and `was_holiday` records that a holiday
-        was originally scheduled.
+      description: |-
+        Assign or update a single shift for one or more employees across a continuous
+        date range.
+
+        * Path scope – the request targets the company identified by `company_id`.
+        * Target selection – exactly one of `employee`, `employees`, or `branch`
+          determines which employees receive the shift. When `branch` is provided the
+          backend expands it to all employees in that branch; `employees` accepts a list
+          of employee IDs (minimum one); `employee` targets a single employee.
+        * Date span – supply `start_date` together with either `days` (number of
+          consecutive days, ≥ 1) **or** `until` (inclusive end date). These fields are
+          mutually exclusive.
+        * Rest days – optional `rest_weekdays` entries such as `['SAT','SUN']` mark those
+          weekdays as rest days. Official holidays are flagged automatically in the
+          response payload with `is_holiday`/`was_holiday`.
+        * Processing – the endpoint updates existing roster entries or creates new ones.
+          Large requests may be queued; a `202 Accepted` response returns a task ID that
+          can be polled for completion.
       parameters:
       - in: path
         name: company_id
         schema:
-          type: string
-          pattern: ^\d+$
+          type: integer
         required: true
+        description: Company whose roster is being modified.
       tags:
       - companies
       requestBody:
+        description: JSON payload describing the shift assignment, including exactly one
+          employee selector and either `days` or `until` to define the range.
         content:
           application/json:
             schema:
@@ -3281,50 +3295,25 @@ paths:
               schema:
                 $ref: '#/components/schemas/RosterRangeResult'
               examples:
-                ByDaysWithWeekendRest:
-                  value:
-                    employee: 1
-                    shift: 1
-                    start_date: '2024-07-01'
-                    days: 7
-                    rest_weekdays:
-                    - SAT
-                    - SUN
-                  summary: By days with weekend rest
-                EmployeesArray:
-                  value:
-                    employees:
-                    - 1
-                    - 2
-                    - 3
-                    shift: 1
-                    start_date: '2024-07-01'
-                    until: '2024-07-07'
-                  summary: Schedule multiple employees in one request
-                  description: Send employee primary keys in the `employees` array
-                    to assign the same shift to each employee.
-                UntilDate:
-                  value:
-                    employee: 1
-                    shift: 1
-                    start_date: '2024-07-01'
-                    until: '2024-07-31'
-                  summary: Until date
                 SuccessResponse:
                   value:
                     count: 31
-                  summary: Success response
-                AcceptedResponse:
-                  value:
-                    task_id: uuid
-                  summary: Accepted response
-          description: Count of roster entries created or updated
+                  summary: Number of roster entries created or updated
+          description: Request handled synchronously; `count` reflects the total roster
+            entries created or updated.
         '202':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/RosterRangeTask'
-          description: Task enqueued for asynchronous processing
+              examples:
+                AsyncQueued:
+                  value:
+                    task_id: '8d7df1dd-1cf7-4f62-baa8-6c97c2f92e7d'
+                  summary: Task identifier for queued processing
+          description: Task enqueued for asynchronous processing when the employee
+            selection exceeds the synchronous threshold; the returned `task_id`
+            can be used to poll task progress.
   /api/companies/{company_id}/roster/summary/:
     get:
       operationId: companies_roster_summary_list
@@ -13386,15 +13375,19 @@ components:
       properties:
         employee:
           type: integer
-          description: Employee ID to schedule
+          description: Employee ID to schedule; mutually exclusive with `employees`
+            and `branch`.
         employees:
           type: array
           items:
             type: integer
-          description: Employee IDs to schedule
+          minItems: 1
+          description: List of employee IDs to schedule; mutually exclusive with
+            `employee` and `branch`.
         branch:
           type: integer
-          description: Branch ID whose employees to schedule
+          description: Branch ID whose employees to schedule; mutually exclusive with
+            `employee` and `employees`.
         shift:
           type: integer
           description: Shift template to assign
@@ -13405,11 +13398,12 @@ components:
         days:
           type: integer
           minimum: 1
-          description: Number of days to create starting from start_date
+          description: Number of consecutive days starting from `start_date`; provide
+            this or `until`, not both.
         until:
           type: string
           format: date
-          description: Inclusive end date; alternative to days
+          description: Inclusive end date; alternative to `days`.
         rest_weekdays:
           type: array
           items:
@@ -13418,8 +13412,23 @@ components:
       required:
       - shift
       - start_date
+      allOf:
+      - oneOf:
+        - required:
+          - employee
+        - required:
+          - employees
+        - required:
+          - branch
+      - oneOf:
+        - required:
+          - days
+        - required:
+          - until
     RosterRangeResult:
       type: object
+      description: Synchronous response summarizing how many roster entries were
+        created or updated.
       properties:
         count:
           type: integer
@@ -13427,6 +13436,8 @@ components:
       - count
     RosterRangeTask:
       type: object
+      description: Asynchronous acknowledgement returned when bulk scheduling is
+        queued.
       properties:
         task_id:
           type: string
