@@ -93,6 +93,7 @@
           {% for shift_name, shift in proj.shifts.items %}
           <section class="shift-section">
             <h5 class="shift-title">Shift: {{ shift_name }} <span class="muted">({{ shift.total }} min)</span></h5>
+            {% if shift.employees %}
             <table class="detail-table">
               <thead>
                 <tr>
@@ -117,6 +118,9 @@
                 {% endfor %}
               </tbody>
             </table>
+            {% else %}
+            <p class="empty-state">No late arrivals for this shift.</p>
+            {% endif %}
           </section>
           {% empty %}
           <p class="empty-state">No shift data available for this project.</p>
