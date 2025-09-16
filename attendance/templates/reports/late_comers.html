@@ -1,79 +1,53 @@
-{% load static %}
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="utf-8"/>
+  <meta charset="utf-8" />
   <title>Late Comers Report</title>
-  <link rel="stylesheet" href="{% static 'attendance/css/reports.css' %}">
 </head>
-<body class="report-body">
-  <header class="report-header">
-    <div class="report-header-primary">
-      <h1 class="report-title">Late Comers Report</h1>
-      <p class="report-period">{{ start_date|date:"d M Y" }} &ndash; {{ end_date|date:"d M Y" }}</p>
-    </div>
-    <div class="report-meta">
-      <p class="label">Generated</p>
-      <p class="timestamp">{{ generated_at|date:"d M Y H:i" }}</p>
-    </div>
-  </header>
-  <footer class="report-footer">
-    <div class="footer-content">
-      <span class="footer-report-title">Late Comers Report</span>
-      <span class="footer-pagination">
-        <span class="page-number"></span>
-      </span>
-    </div>
-  </footer>
-  <main class="report-content">
-    {% if branches %}
-      {% for branch_name, branch in branches.items %}
-      <section class="section branch-section">
-        <div class="section-header">
-          <h2 class="section-title">{{ branch_name }}</h2>
-          <p class="section-total">Total late minutes: {{ branch.total_late_min }}</p>
-        </div>
-        <table class="detail-table">
-          <colgroup>
-            <col class="column-employee">
-            <col class="column-shift">
-            <col class="column-date">
-            <col class="column-late">
-          </colgroup>
-          <thead>
+<body>
+  <h1>Late Comers Report</h1>
+  <p>
+    Date:
+    {% if start_date == end_date %}
+      {{ start_date|date:"d M Y" }}
+    {% else %}
+      {{ start_date|date:"d M Y" }} &ndash; {{ end_date|date:"d M Y" }}
+    {% endif %}
+  </p>
+  <table border="1" cellspacing="0" cellpadding="4">
+    <thead>
+      <tr>
+        <th>Branch</th>
+        <th>Employee</th>
+        <th>Shift</th>
+        <th>Date</th>
+        <th>Late (min)</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% if branches %}
+        {% for branch_name, branch in branches.items %}
+          {% for rec in branch.records %}
             <tr>
-              <th>Employee</th>
-              <th>Shift</th>
-              <th>Date</th>
-              <th class="numeric">Late (min)</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for rec in branch.records %}
-            <tr>
+              <td>{{ branch_name }}</td>
               <td>{{ rec.employee }}</td>
               <td>{{ rec.shift|default:"-" }}</td>
               <td>{{ rec.date|date:"d M Y" }}</td>
-              <td class="numeric">{{ rec.late_min }}</td>
+              <td>{{ rec.late_min }}</td>
             </tr>
-            {% empty %}
+          {% empty %}
             <tr>
-              <td colspan="4" class="empty-state">No late arrivals were recorded for this branch.</td>
+              <td>{{ branch_name }}</td>
+              <td colspan="4">No late arrivals were recorded for this branch.</td>
             </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </section>
-      {% endfor %}
-      <section class="section report-summary">
-        <div class="section-header">
-          <h2 class="section-title grand-total">Grand total late minutes</h2>
-          <p class="section-total grand-total-value">{{ total_late_min }}</p>
-        </div>
-      </section>
-    {% else %}
-      <p class="empty-state">No late arrivals were recorded for the selected period.</p>
-    {% endif %}
-  </main>
+          {% endfor %}
+        {% endfor %}
+      {% else %}
+        <tr>
+          <td colspan="5">No late arrivals were recorded for the selected period.</td>
+        </tr>
+      {% endif %}
+    </tbody>
+  </table>
 </body>
 </html>
