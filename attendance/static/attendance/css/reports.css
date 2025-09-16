@@ -245,6 +245,11 @@ tbody tr:nth-child(even) {
   border-bottom: 1px solid #e2e8f0;
 }
 
+.branch-section + .branch-section {
+  break-before: page;
+  page-break-before: always;
+}
+
 .branch-section:last-of-type {
   border-bottom: none;
 }
