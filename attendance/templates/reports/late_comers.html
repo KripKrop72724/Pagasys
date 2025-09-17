@@ -11,10 +11,10 @@
     {% if start_date == end_date %}
       {{ start_date|date:"d M Y" }}
     {% else %}
-      {{ start_date|date:"d M Y" }} &ndash; {{ end_date|date:"d M Y" }}
+      {{ start_date|date:"d M Y" }} - {{ end_date|date:"d M Y" }}
     {% endif %}
   </p>
-  <table border="1" cellspacing="0" cellpadding="4">
+  <table>
     <thead>
       <tr>
         <th>Branch</th>
@@ -27,20 +27,22 @@
     <tbody>
       {% if branches %}
         {% for branch_name, branch in branches.items %}
-          {% for rec in branch.records %}
-            <tr>
-              <td>{{ branch_name }}</td>
-              <td>{{ rec.employee }}</td>
-              <td>{{ rec.shift|default:"-" }}</td>
-              <td>{{ rec.date|date:"d M Y" }}</td>
-              <td>{{ rec.late_min }}</td>
-            </tr>
-          {% empty %}
+          {% if branch.records %}
+            {% for rec in branch.records %}
+              <tr>
+                <td>{{ branch_name }}</td>
+                <td>{{ rec.employee }}</td>
+                <td>{{ rec.shift|default:"-" }}</td>
+                <td>{{ rec.date|date:"d M Y" }}</td>
+                <td>{{ rec.late_min }}</td>
+              </tr>
+            {% endfor %}
+          {% else %}
             <tr>
               <td>{{ branch_name }}</td>
               <td colspan="4">No late arrivals were recorded for this branch.</td>
             </tr>
-          {% endfor %}
+          {% endif %}
         {% endfor %}
       {% else %}
         <tr>
