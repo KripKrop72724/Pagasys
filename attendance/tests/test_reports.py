@@ -97,7 +97,7 @@ class LateComersReportTests(TestCase):
         assert [r["employee"] for r in branch1_records] == [expected_emp1_name]
         assert [r["employee"] for r in branch2_records] == [expected_emp2_name]
 
-    def test_late_comers_template_uses_new_header_format(self):
+    def test_late_comers_template_renders_simple_layout(self):
         generated_at = timezone.make_aware(datetime(2024, 1, 2, 9, 30))
         branches = OrderedDict(
             (
@@ -141,17 +141,24 @@ class LateComersReportTests(TestCase):
                 "total_late_min": 20,
             },
         )
-        assert 'class="report-header-primary"' in html
-        assert "01 Jan 2024 &ndash; 01 Jan 2024" in html
-        assert "02 Jan 2024 09:30" in html
-        assert 'class="footer-report-title"' in html
-        assert 'class="footer-pagination"' in html
-        assert 'class="column-employee"' in html
+        # The simplified template should just show a heading, the selected date, and a basic table.
+        assert "<h1>Late Comers Report</h1>" in html
+        assert "Date:" in html
+        # When the start and end dates match, only a single date should be shown.
+        assert "01 Jan 2024" in html
+        assert " - " not in html
+        assert "<table>" in html
+        assert "<th>Branch</th>" in html
+        assert "<th>Employee</th>" in html
+        assert "<th>Shift</th>" in html
+        assert "<th>Date</th>" in html
+        assert "<th>Late (min)</th>" in html
         assert f">{self.branch1.name}<" in html
         assert f">{self.branch2.name}<" in html
-        assert "Total late minutes: 15" in html
-        assert "Grand total late minutes" in html
-        assert "20" in html
+        assert "Alice Anderson" in html
+        assert "Bob Brown" in html
+        assert "S1" in html and "S2" in html
+        assert "15" in html and "5" in html
 
     def test_api_late_comers_report(self):
         self.api_client.force_authenticate(self.admin)
