@@ -279,8 +279,7 @@ th.numeric {
 }
 
 .branch-section + .branch-section {
-  break-before: page;
-  page-break-before: always;
+  margin-top: 8mm;
 }
 
 .branch-section:last-of-type {
