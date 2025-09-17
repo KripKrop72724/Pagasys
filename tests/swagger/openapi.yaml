@@ -1824,6 +1824,466 @@ paths:
               schema:
                 $ref: '#/components/schemas/RebuildResponse'
           description: Tasks queued
+  /api/companies/{company_id}/attendance-calendar/:
+    get:
+      operationId: companies_attendance_calendar_list
+      description: Compound filtering is supported.
+      summary: List attendance calendar rows
+      parameters:
+      - in: query
+        name: branch
+        schema:
+          type: string
+        description: Restrict employees by branch via their department or project
+          relationship. Accepts repeated parameters or a comma separated list of branch
+          IDs.
+      - in: path
+        name: company_id
+        schema:
+          type: string
+          pattern: ^\d+$
+        required: true
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - in: query
+        name: department
+        schema:
+          type: string
+        description: Restrict employees by department IDs (repeated or comma separated)
+      - in: query
+        name: employee
+        schema:
+          type: string
+        description: Restrict the calendar to specific employees. Accepts repeated
+          parameters or a comma separated list of employee IDs.
+      - in: query
+        name: include_adjustments
+        schema:
+          type: boolean
+        description: When true, embed AttAdjustment records that land on the day
+        examples:
+          IncludeAdjustments:
+            value: 'true'
+            summary: Include adjustments
+      - in: query
+        name: include_anomalies
+        schema:
+          type: boolean
+        description: Toggle anomaly payloads on day rows. Defaults to true.
+        examples:
+          OmitAnomalies:
+            value: 'false'
+            summary: Omit anomalies
+      - in: query
+        name: include_pairs
+        schema:
+          type: boolean
+        description: When true, embed AttPair records for each populated day
+        examples:
+          IncludePairs:
+            value: 'true'
+            summary: Include pairs
+      - in: query
+        name: locked
+        schema:
+          type: boolean
+        description: Filter days by lock state before aggregation
+      - in: query
+        name: month
+        schema:
+          type: string
+        description: Target month in YYYY-MM format. The API expands this to the first
+          and last day of the month to guarantee a 28–31 day window.
+        required: true
+        examples:
+          May2024:
+            value: 2024-05
+            summary: May 2024
+      - in: query
+        name: ordering
+        schema:
+          type: string
+        description: Comma-separated list of fields to sort by
+      - in: query
+        name: project
+        schema:
+          type: string
+        description: Restrict employees by project IDs (repeated or comma separated)
+      - in: query
+        name: search
+        schema:
+          type: string
+        description: Case-insensitive text search over employee first name, last name,
+          username, email, department name, project name, and related branch names.
+          All terms supplied must match.
+        examples:
+          FindAlice:
+            value: alice ops
+            summary: Find Alice
+      - in: query
+        name: sort
+        schema:
+          type: string
+        description: Comma separated list of fields to order employees by. Supports
+          name, code, department, project, first_name, last_name, and id. Prefix with
+          '-' for descending order.
+        examples:
+          DepartmentThenName:
+            value: department,-name
+            summary: Department then name
+      - in: query
+        name: stats_only
+        schema:
+          type: boolean
+        description: Return only monthly summaries without the per-day grid
+        examples:
+          StatsOnly:
+            value: 'true'
+            summary: Stats only
+      - in: query
+        name: status
+        schema:
+          type: string
+        description: Comma separated list of AttDay.status values to include (e.g.
+          present,absent,leave). Only matching days appear in the grid and summary
+          counts.
+      tags:
+      - Attendance
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedAttendanceCalendarResponseDocList'
+              examples:
+                CalendarGrid:
+                  value:
+                    next: http://api.example.org/accounts/?cursor=cD00ODY%3D"
+                    previous: http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+                    results:
+                    - month: 2024-05
+                      days:
+                      - '2024-05-01'
+                      - '2024-05-02'
+                      - '2024-05-03'
+                      employees:
+                      - id: 17
+                        display: Maria Gomez
+                        metadata:
+                          department: Operations
+                          project: Project Falcon
+                          branch: Dubai Marina
+                          code: EMP-0017
+                        rows:
+                        - date: '2024-05-01'
+                          status: present
+                          locked: true
+                          locked_reason: Attendance day is locked; adjustments are
+                            disabled.
+                          metrics:
+                            work_min: 480
+                            unpaid_break_min: 0
+                            paid_break_min: 60
+                            late_min: 5
+                            early_leave_min: 0
+                            ot_regular_min: 45
+                            ot_night_min: 0
+                            ot_holiday_min: 0
+                            on_leave: false
+                            leave_portion: 0.0
+                            is_holiday: false
+                            is_rest_day: false
+                            pairs_count: 2
+                            punches_used: 4
+                          anomalies:
+                            missing_out_closed_at_next_in: 1
+                          adjustments:
+                          - id: 901
+                            employee: 17
+                            date: '2024-05-01'
+                            delta_work_min: -15
+                            reason: Late arrival waiver
+                            created_by_id: 3
+                            created_at: '2024-05-02T06:00:00Z'
+                          pairs:
+                          - id: 3001
+                            employee: 17
+                            date: '2024-05-01'
+                            in_event_id: 555
+                            out_event_id: 556
+                            in_ts: '2024-05-01T08:00:00+04:00'
+                            out_ts: '2024-05-01T12:00:00+04:00'
+                            duration_min: 240
+                            cross_midnight: false
+                            source: auto
+                            anomaly: {}
+                        summary:
+                          present: 18
+                          absent: 2
+                          leave: 1
+                          holiday: 1
+                          rest: 3
+                          partial: 0
+                          locked_days: 12
+                          total_ot_min: 480
+                      next: null
+                      previous: null
+                  summary: Calendar grid
+          description: Monthly attendance grid with optional drill-down detail
+  /api/companies/{company_id}/attendance-calendar/{id}/:
+    get:
+      operationId: companies_attendance_calendar_retrieve
+      description: Return the same calendar payload as the list view but scoped to
+        the employee identified by the path parameter. Supports the same query parameters
+        (month, include_* flags, status, locked, search, etc.) so UI drill-down panels
+        can reuse list view requests.
+      summary: Retrieve calendar rows for a single employee
+      parameters:
+      - in: query
+        name: branch
+        schema:
+          type: string
+        description: Restrict employees by branch via their department or project
+          relationship. Accepts repeated parameters or a comma separated list of branch
+          IDs.
+      - in: path
+        name: company_id
+        schema:
+          type: string
+          pattern: ^\d+$
+        required: true
+      - in: query
+        name: department
+        schema:
+          type: string
+        description: Restrict employees by department IDs (repeated or comma separated)
+      - in: query
+        name: employee
+        schema:
+          type: string
+        description: Restrict the calendar to specific employees. Accepts repeated
+          parameters or a comma separated list of employee IDs.
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this employee.
+        required: true
+      - in: query
+        name: include_adjustments
+        schema:
+          type: boolean
+        description: When true, embed AttAdjustment records that land on the day
+        examples:
+          IncludeAdjustments:
+            value: 'true'
+            summary: Include adjustments
+      - in: query
+        name: include_anomalies
+        schema:
+          type: boolean
+        description: Toggle anomaly payloads on day rows. Defaults to true.
+        examples:
+          OmitAnomalies:
+            value: 'false'
+            summary: Omit anomalies
+      - in: query
+        name: include_pairs
+        schema:
+          type: boolean
+        description: When true, embed AttPair records for each populated day
+        examples:
+          IncludePairs:
+            value: 'true'
+            summary: Include pairs
+      - in: query
+        name: locked
+        schema:
+          type: boolean
+        description: Filter days by lock state before aggregation
+      - in: query
+        name: month
+        schema:
+          type: string
+        description: Target month in YYYY-MM format. The API expands this to the first
+          and last day of the month to guarantee a 28–31 day window.
+        required: true
+        examples:
+          May2024:
+            value: 2024-05
+            summary: May 2024
+      - in: query
+        name: project
+        schema:
+          type: string
+        description: Restrict employees by project IDs (repeated or comma separated)
+      - in: query
+        name: search
+        schema:
+          type: string
+        description: Case-insensitive text search over employee first name, last name,
+          username, email, department name, project name, and related branch names.
+          All terms supplied must match.
+        examples:
+          FindAlice:
+            value: alice ops
+            summary: Find Alice
+      - in: query
+        name: sort
+        schema:
+          type: string
+        description: Comma separated list of fields to order employees by. Supports
+          name, code, department, project, first_name, last_name, and id. Prefix with
+          '-' for descending order.
+        examples:
+          DepartmentThenName:
+            value: department,-name
+            summary: Department then name
+      - in: query
+        name: stats_only
+        schema:
+          type: boolean
+        description: Return only monthly summaries without the per-day grid
+        examples:
+          StatsOnly:
+            value: 'true'
+            summary: Stats only
+      - in: query
+        name: status
+        schema:
+          type: string
+        description: Comma separated list of AttDay.status values to include (e.g.
+          present,absent,leave). Only matching days appear in the grid and summary
+          counts.
+      tags:
+      - Attendance
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttendanceCalendarResponseDoc'
+              examples:
+                CalendarGrid:
+                  value:
+                    month: 2024-05
+                    days:
+                    - '2024-05-01'
+                    - '2024-05-02'
+                    - '2024-05-03'
+                    employees:
+                    - id: 17
+                      display: Maria Gomez
+                      metadata:
+                        department: Operations
+                        project: Project Falcon
+                        branch: Dubai Marina
+                        code: EMP-0017
+                      rows:
+                      - date: '2024-05-01'
+                        status: present
+                        locked: true
+                        locked_reason: Attendance day is locked; adjustments are disabled.
+                        metrics:
+                          work_min: 480
+                          unpaid_break_min: 0
+                          paid_break_min: 60
+                          late_min: 5
+                          early_leave_min: 0
+                          ot_regular_min: 45
+                          ot_night_min: 0
+                          ot_holiday_min: 0
+                          on_leave: false
+                          leave_portion: 0.0
+                          is_holiday: false
+                          is_rest_day: false
+                          pairs_count: 2
+                          punches_used: 4
+                        anomalies:
+                          missing_out_closed_at_next_in: 1
+                        adjustments:
+                        - id: 901
+                          employee: 17
+                          date: '2024-05-01'
+                          delta_work_min: -15
+                          reason: Late arrival waiver
+                          created_by_id: 3
+                          created_at: '2024-05-02T06:00:00Z'
+                        pairs:
+                        - id: 3001
+                          employee: 17
+                          date: '2024-05-01'
+                          in_event_id: 555
+                          out_event_id: 556
+                          in_ts: '2024-05-01T08:00:00+04:00'
+                          out_ts: '2024-05-01T12:00:00+04:00'
+                          duration_min: 240
+                          cross_midnight: false
+                          source: auto
+                          anomaly: {}
+                      summary:
+                        present: 18
+                        absent: 2
+                        leave: 1
+                        holiday: 1
+                        rest: 3
+                        partial: 0
+                        locked_days: 12
+                        total_ot_min: 480
+                    next: null
+                    previous: null
+                  summary: Calendar grid
+          description: Single-employee attendance calendar response
+  /api/companies/{company_id}/attendance-calendar/adjustments/:
+    post:
+      operationId: companies_attendance_calendar_adjustments_create
+      description: Monthly attendance calendar endpoint that aggregates computed AttDay
+        summaries, raw pairs, and manual adjustments for each employee in scope. Use
+        the optional lock and adjustment actions to manage period finalisation without
+        leaving the calendar view.
+      parameters:
+      - in: path
+        name: company_id
+        schema:
+          type: string
+          pattern: ^\d+$
+        required: true
+      tags:
+      - Attendance
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/companies/{company_id}/attendance-calendar/lock/:
+    post:
+      operationId: companies_attendance_calendar_lock_create
+      description: Monthly attendance calendar endpoint that aggregates computed AttDay
+        summaries, raw pairs, and manual adjustments for each employee in scope. Use
+        the optional lock and adjustment actions to manage period finalisation without
+        leaving the calendar view.
+      parameters:
+      - in: path
+        name: company_id
+        schema:
+          type: string
+          pattern: ^\d+$
+        required: true
+      tags:
+      - Attendance
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
   /api/companies/{company_id}/devices/:
     get:
       operationId: companies_devices_list
@@ -9158,6 +9618,213 @@ components:
       - out_ts
       - source
       - updated_at
+    AttendanceCalendarEmployeeDoc:
+      type: object
+      properties:
+        id:
+          type: integer
+        display:
+          type: string
+          description: Display name shown to the user
+        metadata:
+          $ref: '#/components/schemas/AttendanceCalendarEmployeeMetadataDoc'
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/AttendanceCalendarRowDoc'
+        summary:
+          $ref: '#/components/schemas/AttendanceCalendarSummaryDoc'
+      required:
+      - display
+      - id
+      - metadata
+      - summary
+    AttendanceCalendarEmployeeMetadataDoc:
+      type: object
+      properties:
+        department:
+          type: string
+          nullable: true
+        project:
+          type: string
+          nullable: true
+        branch:
+          type: string
+          nullable: true
+        code:
+          type: string
+          description: Employee code/username
+      required:
+      - code
+    AttendanceCalendarMetricsDoc:
+      type: object
+      properties:
+        work_min:
+          type: integer
+          description: Computed work minutes for the day
+        unpaid_break_min:
+          type: integer
+          description: Unpaid break minutes deducted
+        paid_break_min:
+          type: integer
+          description: Paid break minutes
+        late_min:
+          type: integer
+          description: Minutes late relative to shift start
+        early_leave_min:
+          type: integer
+          description: Minutes left before scheduled end
+        ot_regular_min:
+          type: integer
+          description: Regular overtime minutes
+        ot_night_min:
+          type: integer
+          description: Night overtime minutes
+        ot_holiday_min:
+          type: integer
+          description: Holiday overtime minutes
+        on_leave:
+          type: boolean
+          description: True when the employee was on leave
+        leave_portion:
+          type: number
+          format: double
+          description: Portion of the day covered by leave
+        is_holiday:
+          type: boolean
+          description: Day is marked as a holiday
+        is_rest_day:
+          type: boolean
+          description: Day is marked as a rest day
+        pairs_count:
+          type: integer
+          description: Number of raw IN/OUT pairs recorded
+        punches_used:
+          type: integer
+          description: Punch events contributing to computation
+      required:
+      - early_leave_min
+      - is_holiday
+      - is_rest_day
+      - late_min
+      - leave_portion
+      - on_leave
+      - ot_holiday_min
+      - ot_night_min
+      - ot_regular_min
+      - paid_break_min
+      - pairs_count
+      - punches_used
+      - unpaid_break_min
+      - work_min
+    AttendanceCalendarResponseDoc:
+      type: object
+      properties:
+        month:
+          type: string
+          description: Requested month in YYYY-MM format
+        days:
+          type: array
+          items:
+            type: string
+            format: date
+          description: Ordered list of days that frame the calendar grid
+        employees:
+          type: array
+          items:
+            $ref: '#/components/schemas/AttendanceCalendarEmployeeDoc'
+        next:
+          type: string
+          nullable: true
+          description: Cursor to fetch the next page of employees when paginated
+        previous:
+          type: string
+          nullable: true
+          description: Cursor to fetch the previous page of employees
+      required:
+      - days
+      - employees
+      - month
+    AttendanceCalendarRowDoc:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+          description: Day within the requested month
+        status:
+          type: string
+          nullable: true
+          description: Canonical attendance status (present, absent, leave, rest,
+            holiday, partial)
+        locked:
+          type: boolean
+          description: Whether the day is locked for changes
+        locked_reason:
+          type: string
+          nullable: true
+          description: Message explaining why adjustments are blocked when locked
+        metrics:
+          $ref: '#/components/schemas/AttendanceCalendarMetricsDoc'
+        anomalies:
+          type: object
+          additionalProperties:
+            type: integer
+          description: Counts keyed by canonical anomaly name
+        pairs:
+          type: array
+          items:
+            $ref: '#/components/schemas/AttPair'
+          readOnly: true
+        adjustments:
+          type: array
+          items:
+            $ref: '#/components/schemas/AttAdjustment'
+          readOnly: true
+      required:
+      - adjustments
+      - date
+      - locked
+      - locked_reason
+      - metrics
+      - pairs
+      - status
+    AttendanceCalendarSummaryDoc:
+      type: object
+      properties:
+        present:
+          type: integer
+          description: Number of present days in the month
+        absent:
+          type: integer
+          description: Number of absent days in the month
+        leave:
+          type: integer
+          description: Number of leave days in the month
+        holiday:
+          type: integer
+          description: Number of holiday days in the month
+        rest:
+          type: integer
+          description: Number of rest days in the month
+        partial:
+          type: integer
+          description: Number of partial/exception days in the month
+        locked_days:
+          type: integer
+          description: Count of days locked for changes
+        total_ot_min:
+          type: integer
+          description: Total overtime minutes in the month
+      required:
+      - absent
+      - holiday
+      - leave
+      - locked_days
+      - partial
+      - present
+      - rest
+      - total_ot_min
     AttendanceDevice:
       type: object
       properties:
@@ -10885,6 +11552,25 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/AttPair'
+    PaginatedAttendanceCalendarResponseDocList:
+      type: object
+      required:
+      - results
+      properties:
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cD00ODY%3D"
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/AttendanceCalendarResponseDoc'
     PaginatedAttendanceDeviceList:
       type: object
       required:
