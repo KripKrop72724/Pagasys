@@ -1,4 +1,5 @@
-from datetime import timedelta
+from datetime import date, timedelta
+from urllib.parse import urlsplit
 
 from django.contrib import admin, messages
 from django.utils.safestring import mark_safe
@@ -7,6 +8,10 @@ from django.template.response import TemplateResponse
 from django.shortcuts import redirect
 from django.urls import path
 from django.http import HttpResponse
+from django.utils import timezone
+
+from rest_framework import serializers
+from rest_framework.request import Request
 
 from pagasys.admin import ScopedAdminMixin
 from pagasys.models import Branch, Department, Employee, Project, ShiftTemplate
@@ -14,6 +19,12 @@ from pagasys.utils import scope_queryset
 from .models import AttDay, AttPair, AttAdjustment, LeaveRequest, LeaveDay
 from .tasks import compute_employee_day_task, recompute_range_task
 from .reports import get_late_comers, group_late_comers, render_late_comers_pdf
+from .views import (
+    AttendanceCalendarViewSet,
+    CALENDAR_PAGE_SIZE,
+    parse_bool,
+    parse_month,
+)
 
 
 class AttAdjustmentForm(forms.ModelForm):
@@ -47,6 +58,310 @@ class AttDayAdmin(ScopedAdminMixin, admin.ModelAdmin):
         "unlock_selected",
         "manual_recompute",
     ]
+
+    @staticmethod
+    def _format_validation_error(exc):
+        detail = getattr(exc, "detail", exc)
+        if isinstance(detail, dict):
+            parts = []
+            for key, value in detail.items():
+                if isinstance(value, (list, tuple)):
+                    message = ", ".join(str(item) for item in value)
+                else:
+                    message = str(value)
+                if key:
+                    parts.append(f"{key}: {message}")
+                else:
+                    parts.append(message)
+            return "; ".join(parts)
+        if isinstance(detail, (list, tuple)):
+            return "; ".join(str(item) for item in detail)
+        return str(detail)
+
+    @staticmethod
+    def _relative_link(link):
+        if not link:
+            return None
+        parts = urlsplit(link)
+        path = parts.path
+        if parts.query:
+            path = f"{path}?{parts.query}"
+        return path
+
+    def _parse_bool_param(self, request, name, *, default=False):
+        value = request.GET.get(name)
+        if value is None:
+            return default
+        try:
+            return parse_bool(value, default=default)
+        except serializers.ValidationError:
+            self.message_user(
+                request,
+                f"Invalid value for '{name}'. Using default.",
+                level=messages.WARNING,
+            )
+            return default
+
+    def calendar_view(self, request):
+        query = request.GET.copy()
+        default_month = timezone.localdate().strftime("%Y-%m")
+
+        def redirect_with_params(params):
+            encoded = params.urlencode()
+            if encoded:
+                return redirect(f"{request.path}?{encoded}")
+            return redirect(request.path)
+
+        if not query.get("month"):
+            query["month"] = default_month
+            if "cursor" in query:
+                del query["cursor"]
+            return redirect_with_params(query)
+
+        month_value = query.get("month")
+        try:
+            start, end = parse_month(month_value)
+        except serializers.ValidationError as exc:
+            self.message_user(
+                request,
+                self._format_validation_error(exc),
+                level=messages.ERROR,
+            )
+            query["month"] = default_month
+            if "cursor" in query:
+                del query["cursor"]
+            return redirect_with_params(query)
+
+        include_pairs = self._parse_bool_param(
+            request, "include_pairs", default=False
+        )
+        include_adjustments = self._parse_bool_param(
+            request, "include_adjustments", default=False
+        )
+        include_anomalies = self._parse_bool_param(
+            request, "include_anomalies", default=True
+        )
+
+        stats_only = False
+        if request.GET.get("stats_only") is not None:
+            try:
+                requested_stats = parse_bool(request.GET.get("stats_only"))
+            except serializers.ValidationError:
+                self.message_user(
+                    request,
+                    "Invalid value for 'stats_only'. Showing full calendar instead.",
+                    level=messages.WARNING,
+                )
+            else:
+                if requested_stats:
+                    self.message_user(
+                        request,
+                        "Stats-only mode is not available in the admin calendar view. Displaying the full grid.",
+                        level=messages.INFO,
+                    )
+
+        status_param = request.GET.get("status")
+        status_filters = (
+            [value.strip() for value in status_param.split(",") if value.strip()]
+            if status_param
+            else []
+        )
+
+        locked_filter = None
+        if "locked" in request.GET:
+            try:
+                locked_filter = parse_bool(request.GET.get("locked"))
+            except serializers.ValidationError:
+                self.message_user(
+                    request,
+                    "Invalid value for 'locked'. Showing all days.",
+                    level=messages.WARNING,
+                )
+                locked_filter = None
+
+        viewset = AttendanceCalendarViewSet()
+        drf_request = Request(request)
+        drf_request.user = request.user
+        viewset.request = drf_request
+        viewset.args = []
+        viewset.kwargs = {}
+        viewset.action = "list"
+        viewset.format_kwarg = None
+
+        queryset = viewset._filter_employees(viewset.get_queryset(), drf_request, None)
+        queryset = viewset._apply_sorting(queryset, drf_request)
+
+        page = viewset.paginate_queryset(queryset)
+        employees = []
+        using_pagination = False
+        if page is not None:
+            employees = list(page)
+            using_pagination = True
+            if not employees and queryset.exists():
+                employees = list(queryset[:CALENDAR_PAGE_SIZE])
+                using_pagination = False
+        else:
+            employees = list(queryset[:CALENDAR_PAGE_SIZE])
+
+        if not using_pagination and len(employees) > CALENDAR_PAGE_SIZE:
+            employees = employees[:CALENDAR_PAGE_SIZE]
+
+        payload = viewset._build_calendar_response(
+            employees,
+            start,
+            end,
+            include_pairs=include_pairs,
+            include_adjustments=include_adjustments,
+            include_anomalies=include_anomalies,
+            stats_only=stats_only,
+            status_filters=status_filters,
+            locked_filter=locked_filter,
+        )
+
+        paginator = getattr(viewset, "paginator", None)
+        next_link = previous_link = None
+        if paginator and using_pagination:
+            next_link = self._relative_link(paginator.get_next_link())
+            previous_link = self._relative_link(paginator.get_previous_link())
+
+        days_context = []
+        for iso_day in payload.get("days", []):
+            current = date.fromisoformat(iso_day)
+            days_context.append(
+                {
+                    "iso": iso_day,
+                    "date": current,
+                    "weekday": current.strftime("%a"),
+                    "is_weekend": current.weekday() >= 5,
+                }
+            )
+
+        employees_context = []
+        for item in payload.get("employees", []):
+            metadata = item.get("metadata") or {}
+            summary = item.get("summary") or {}
+            rows = []
+            for row in item.get("rows", []):
+                metrics = row.get("metrics", {})
+                total_ot = (
+                    metrics.get("ot_regular_min", 0)
+                    + metrics.get("ot_night_min", 0)
+                    + metrics.get("ot_holiday_min", 0)
+                )
+                status_value = row.get("status")
+                status_class = (status_value or "empty").replace("_", "-")
+                status_display = (
+                    status_value.replace("_", " ").title() if status_value else "—"
+                )
+                rows.append(
+                    {
+                        **row,
+                        "total_ot": total_ot,
+                        "metrics": metrics,
+                        "anomalies": row.get("anomalies", {}),
+                        "pairs": row.get("pairs", []),
+                        "adjustments": row.get("adjustments", []),
+                        "status_class": status_class,
+                        "status_display": status_display,
+                    }
+                )
+
+            metadata_tags = []
+            if metadata.get("department"):
+                metadata_tags.append({"label": metadata["department"], "name": "Department"})
+            if metadata.get("project"):
+                metadata_tags.append({"label": metadata["project"], "name": "Project"})
+            if metadata.get("branch"):
+                metadata_tags.append({"label": metadata["branch"], "name": "Branch"})
+
+            summary_definitions = [
+                ("present", "Present", "present"),
+                ("absent", "Absent", "absent"),
+                ("leave", "Leave", "leave"),
+                ("holiday", "Holiday", "holiday"),
+                ("rest", "Rest day", "rest"),
+                ("partial", "Partial", "partial"),
+            ]
+            summary_items = []
+            for key, label, css in summary_definitions:
+                value = summary.get(key, 0)
+                summary_items.append(
+                    {
+                        "key": key,
+                        "label": label,
+                        "value": value,
+                        "css": css,
+                        "is_zero": value == 0,
+                    }
+                )
+            summary_items.append(
+                {
+                    "key": "locked_days",
+                    "label": "Locked",
+                    "value": summary.get("locked_days", 0),
+                    "css": "locked",
+                    "is_zero": summary.get("locked_days", 0) == 0,
+                }
+            )
+            summary_items.append(
+                {
+                    "key": "total_ot_min",
+                    "label": "OT min",
+                    "value": summary.get("total_ot_min", 0),
+                    "css": "ot",
+                    "is_zero": summary.get("total_ot_min", 0) == 0,
+                }
+            )
+
+            employees_context.append(
+                {
+                    "id": item.get("id"),
+                    "display": item.get("display"),
+                    "metadata": metadata,
+                    "metadata_tags": metadata_tags,
+                    "code": metadata.get("code"),
+                    "rows": rows,
+                    "summary": summary,
+                    "summary_items": summary_items,
+                }
+            )
+
+        hidden_params = []
+        excluded = {
+            "month",
+            "search",
+            "include_pairs",
+            "include_adjustments",
+            "include_anomalies",
+            "cursor",
+            "stats_only",
+        }
+        for key, values in request.GET.lists():
+            if key in excluded:
+                continue
+            for value in values:
+                hidden_params.append((key, value))
+
+        context = {
+            "title": "Attendance calendar",
+            "month_value": start.strftime("%Y-%m"),
+            "month_display": start.strftime("%B %Y"),
+            "days": days_context,
+            "employees": employees_context,
+            "employee_count": len(employees_context),
+            "include_pairs": include_pairs,
+            "include_adjustments": include_adjustments,
+            "include_anomalies": include_anomalies,
+            "search_value": request.GET.get("search", ""),
+            "hidden_params": hidden_params,
+            "next_link": next_link,
+            "previous_link": previous_link,
+            "page_size": CALENDAR_PAGE_SIZE,
+        }
+
+        return TemplateResponse(
+            request, "admin/attendance/attday/calendar.html", context
+        )
 
     class ManualRecomputeForm(forms.Form):
         start = forms.DateField()
@@ -192,6 +507,11 @@ class AttDayAdmin(ScopedAdminMixin, admin.ModelAdmin):
     def get_urls(self):
         urls = super().get_urls()
         custom = [
+            path(
+                "calendar/",
+                self.admin_site.admin_view(self.calendar_view),
+                name="attendance_attday_calendar",
+            ),
             path(
                 "manual-recompute/",
                 self.admin_site.admin_view(self.manual_recompute_view),
