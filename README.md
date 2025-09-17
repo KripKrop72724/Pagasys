@@ -61,6 +61,150 @@ comprehensive automated test suite.
   the admin interface. See [docs/attendance_reports.md](docs/attendance_reports.md)
   for usage and query parameters.
 
+### Attendance calendar API
+
+Pagasys now exposes a calendar-centric attendance feed that merges the
+pre-computed `AttDay` outcomes, raw punch `AttPair` data, and manual
+`AttAdjustment` overrides into a month grid that front-end widgets can render
+without additional API calls. The routes follow the multitenant pattern used by
+other attendance endpoints and inherit the same role-based scope checks.
+
+#### Base endpoints
+
+* `GET /api/companies/{company_id}/attendance-calendar/?month=YYYY-MM`
+  returns a paginated collection of employees, each with per-day rows and a
+  summary footer for the requested month.
+* `GET /api/companies/{company_id}/attendance-calendar/{employee_id}/?month=YYYY-MM`
+  focuses the payload on a single employee, which is useful for detail panels
+  or drill-downs.
+
+Responses share the following structure:
+
+```json
+{
+  "month": "2024-05",
+  "days": ["2024-05-01", "2024-05-31"],
+  "employees": [
+    {
+      "id": 17,
+      "display": "Maria Gomez",
+      "metadata": {
+        "department": "Operations",
+        "project": "Project Falcon",
+        "branch": "Dubai Marina",
+        "code": "EMP-0017"
+      },
+      "rows": [
+        {
+          "date": "2024-05-01",
+          "status": "present",
+          "locked": true,
+          "locked_reason": "Attendance day is locked; adjustments are disabled.",
+          "metrics": {
+            "work_min": 480,
+            "unpaid_break_min": 0,
+            "paid_break_min": 60,
+            "late_min": 5,
+            "early_leave_min": 0,
+            "ot_regular_min": 45,
+            "ot_night_min": 0,
+            "ot_holiday_min": 0,
+            "on_leave": false,
+            "leave_portion": 0.0,
+            "is_holiday": false,
+            "is_rest_day": false,
+            "pairs_count": 2,
+            "punches_used": 4
+          },
+          "anomalies": {"missing_out_closed_at_next_in": 1},
+          "pairs": [
+            {
+              "id": 3001,
+              "employee": 17,
+              "date": "2024-05-01",
+              "in_ts": "2024-05-01T08:00:00+04:00",
+              "out_ts": "2024-05-01T12:00:00+04:00",
+              "duration_min": 240,
+              "source": "auto",
+              "anomaly": {}
+            }
+          ],
+          "adjustments": [
+            {
+              "id": 901,
+              "employee": 17,
+              "date": "2024-05-01",
+              "delta_work_min": -15,
+              "reason": "Late arrival waiver",
+              "created_by_id": 3,
+              "created_at": "2024-05-02T06:00:00Z"
+            }
+          ]
+        }
+      ],
+      "summary": {
+        "present": 18,
+        "absent": 2,
+        "leave": 1,
+        "holiday": 1,
+        "rest": 3,
+        "partial": 0,
+        "locked_days": 12,
+        "total_ot_min": 480
+      }
+    }
+  ],
+  "next": null,
+  "previous": null
+}
+```
+
+Every employee object exposes rich metadata (department, project, branch, and
+code) and daily rows include the canonical metrics surfaced by `AttDay`. When
+the `include_pairs` or `include_adjustments` query flags are enabled, the API
+embeds the full serializer output for `AttPair` and `AttAdjustment` models so UI
+clients can build punch-by-punch or adjustment history panels without chaining
+requests. Setting `include_anomalies=false` suppresses the anomaly dictionary to
+trim payload size. Use `stats_only=true` to omit the `rows` array entirely and
+return only the monthly `summary` object for each employee.
+
+#### Query parameters
+
+* `month=YYYY-MM` (required) expands to the first and last day of the month.
+* `include_pairs`, `include_adjustments`, `include_anomalies`, and
+  `stats_only` toggle optional sections of the payload.
+* `status=present,leave` filters to specific `AttDay.status` values before
+  building the grid and summary counts.
+* `locked=true|false` restricts the response to days in a particular lock state.
+* `employee`, `branch`, `department`, and `project` accept either comma-separated
+  identifiers or repeated query parameters to limit the employee set.
+* `search` performs case-insensitive matching across employee name, username,
+  email, department, project, and associated branch names. Multiple terms must
+  all match (for example `search=alice ops`).
+* `sort=department,-name` controls employee ordering using the same syntax as
+  DRF's `ordering` filter. Pagination honours this ordering and falls back to
+  `first_name`, `last_name`, `username`, and `id`.
+* Cursor pagination is enabled with a hard limit of 200 employees per page; the
+  response includes `next`/`previous` links when additional pages are available.
+
+#### Locking and adjustments
+
+The calendar viewset exposes helper actions so managers can complete their
+workflow without swapping endpoints:
+
+* `POST /api/companies/{company_id}/attendance-calendar/lock` accepts the same
+  payload as `LockDaysSerializer` (`start`, `end`, optional `employee_ids`, and
+  `locked`) and wraps the transactional bulk update already used by
+  `AttDayViewSet.lock`. The response returns `{ "updated": <count> }`.
+* `POST /api/companies/{company_id}/attendance-calendar/adjustments` proxies the
+  `AttAdjustmentViewSet` create action. Successful requests return the created
+  adjustment with the acting user's ID stamped in `created_by_id`.
+
+Locked days automatically surface a `locked_reason` message in the daily payload
+to warn UI clients that adjustments are prohibited. Because adjustments cannot
+touch locked days, callers should respect this flag before opening edit modals.
+
+
 ### Roster scheduling
 
 Use `/api/companies/{cid}/roster/schedule-range/` to assign shifts to an entire

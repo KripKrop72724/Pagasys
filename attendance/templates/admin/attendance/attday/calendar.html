@@ -1,0 +1,117 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block extrastyle %}
+{{ block.super }}
+<link rel="stylesheet" type="text/css" href="{% static 'attendance/admin-calendar.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="attendance-calendar-page">
+  <div class="calendar-header">
+    <div>
+      <h1>{{ title }}</h1>
+      <p class="calendar-subtitle">{{ month_display }}</p>
+    </div>
+    <div class="calendar-meta">
+      <span class="calendar-count">Showing {{ employee_count }} employees</span>
+      <span class="calendar-page-size">Page size {{ page_size }}</span>
+    </div>
+  </div>
+
+  <form method="get" class="calendar-filters">
+    <div class="field-group">
+      <label for="id_month">Month</label>
+      <input type="month" id="id_month" name="month" value="{{ month_value }}">
+    </div>
+    <div class="field-group">
+      <label for="id_search">Search</label>
+      <input type="text" id="id_search" name="search" value="{{ search_value }}" placeholder="Search name, code, department…">
+    </div>
+    <div class="field-group checkbox-group">
+      <label><input type="checkbox" name="include_pairs" value="true"{% if include_pairs %} checked{% endif %}> Include pairs</label>
+      <label><input type="checkbox" name="include_adjustments" value="true"{% if include_adjustments %} checked{% endif %}> Include adjustments</label>
+      <label><input type="checkbox" name="include_anomalies" value="true"{% if include_anomalies %} checked{% endif %}> Include anomalies</label>
+    </div>
+    {% for key, value in hidden_params %}
+      <input type="hidden" name="{{ key }}" value="{{ value }}">
+    {% endfor %}
+    <div class="field-group field-actions">
+      <button type="submit" class="button button-primary">Apply filters</button>
+      <a class="button button-secondary" href="?month={{ month_value }}">Reset</a>
+    </div>
+  </form>
+
+  {% if employees %}
+  <div class="calendar-table-wrapper">
+    <table class="calendar-table">
+      <thead>
+        <tr>
+          <th class="employee-col">Employee</th>
+          {% for day in days %}
+          <th class="day-col{% if day.is_weekend %} weekend{% endif %}">
+            <span class="day-number">{{ day.date|date:"j" }}</span>
+            <span class="day-weekday">{{ day.date|date:"D" }}</span>
+          </th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for employee in employees %}
+        <tr class="employee-row">
+          <th scope="row" class="employee-info">
+            <div class="employee-name">{{ employee.display }}</div>
+            <div class="employee-meta">
+              {% for tag in employee.metadata_tags %}
+              <span><strong>{{ tag.name }}:</strong> {{ tag.label }}</span>
+              {% endfor %}
+              <span class="employee-code"><strong>Code:</strong> {{ employee.code }}</span>
+            </div>
+            <div class="employee-summary">
+              {% for item in employee.summary_items %}
+              <span class="summary-chip {{ item.css }}{% if item.is_zero %} is-zero{% endif %}">{{ item.label }}: {{ item.value }}</span>
+              {% endfor %}
+            </div>
+          </th>
+          {% for row in employee.rows %}
+          <td class="calendar-cell status-{{ row.status_class }}{% if row.locked %} is-locked{% endif %}{% if row.anomalies %} has-anomalies{% endif %}"
+              title="{{ row.date }}&#10;Status: {{ row.status_display }}&#10;Work: {{ row.metrics.work_min }} min&#10;Late: {{ row.metrics.late_min }} min&#10;Overtime: {{ row.total_ot }} min">
+            <div class="cell-icons">
+              {% if row.locked %}<span class="icon" title="{{ row.locked_reason }}">🔒</span>{% endif %}
+              {% if row.adjustments %}<span class="icon" title="{{ row.adjustments|length }} adjustment{% if row.adjustments|length != 1 %}s{% endif %}">✏️</span>{% endif %}
+              {% if row.pairs %}<span class="icon" title="{{ row.pairs|length }} pair{% if row.pairs|length != 1 %}s{% endif %}">⏱</span>{% endif %}
+            </div>
+            <div class="status-label">{{ row.status_display }}</div>
+            <div class="metric-line">
+              <span class="metric">Work {{ row.metrics.work_min }}m</span>
+              {% if row.metrics.late_min %}
+              <span class="metric late">Late {{ row.metrics.late_min }}m</span>
+              {% endif %}
+              {% if row.total_ot %}
+              <span class="metric ot">OT {{ row.total_ot }}m</span>
+              {% endif %}
+            </div>
+          </td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty-state">
+    <h2>No employees found</h2>
+    <p>Try adjusting your filters or search query.</p>
+  </div>
+  {% endif %}
+
+  <div class="calendar-pagination">
+    {% if previous_link %}
+    <a class="button button-secondary" href="{{ previous_link }}">&larr; Previous</a>
+    {% endif %}
+    {% if next_link %}
+    <a class="button button-primary" href="{{ next_link }}">Next &rarr;</a>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

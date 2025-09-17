@@ -1,12 +1,18 @@
-from datetime import timedelta, date
+import calendar
+from collections import Counter, defaultdict
+from datetime import date, timedelta
 
-from rest_framework import viewsets, status, serializers
+from rest_framework import serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.renderers import BaseRenderer
 from rest_framework.response import Response
+from rest_framework.pagination import CursorPagination
 from rest_framework.permissions import IsAdminUser
+from rest_framework.exceptions import NotFound
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db import transaction
+from django.db.models import CharField, Q, Value
+from django.db.models.functions import Coalesce
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import (
     OpenApiExample,
@@ -44,6 +50,337 @@ from .tasks import (
 
 MAX_RANGE_DAYS = 31
 MAX_EMPLOYEES = 50
+CALENDAR_PAGE_SIZE = 200
+LOCKED_REASON = "Attendance day is locked; adjustments are disabled."
+
+
+class AttendanceCalendarMetricsDocSerializer(serializers.Serializer):
+    work_min = serializers.IntegerField(help_text="Computed work minutes for the day")
+    unpaid_break_min = serializers.IntegerField(help_text="Unpaid break minutes deducted")
+    paid_break_min = serializers.IntegerField(help_text="Paid break minutes")
+    late_min = serializers.IntegerField(help_text="Minutes late relative to shift start")
+    early_leave_min = serializers.IntegerField(help_text="Minutes left before scheduled end")
+    ot_regular_min = serializers.IntegerField(help_text="Regular overtime minutes")
+    ot_night_min = serializers.IntegerField(help_text="Night overtime minutes")
+    ot_holiday_min = serializers.IntegerField(help_text="Holiday overtime minutes")
+    on_leave = serializers.BooleanField(help_text="True when the employee was on leave")
+    leave_portion = serializers.FloatField(help_text="Portion of the day covered by leave")
+    is_holiday = serializers.BooleanField(help_text="Day is marked as a holiday")
+    is_rest_day = serializers.BooleanField(help_text="Day is marked as a rest day")
+    pairs_count = serializers.IntegerField(help_text="Number of raw IN/OUT pairs recorded")
+    punches_used = serializers.IntegerField(help_text="Punch events contributing to computation")
+
+
+class AttendanceCalendarRowDocSerializer(serializers.Serializer):
+    date = serializers.DateField(format="iso-8601", help_text="Day within the requested month")
+    status = serializers.CharField(
+        allow_null=True,
+        help_text="Canonical attendance status (present, absent, leave, rest, holiday, partial)",
+    )
+    locked = serializers.BooleanField(help_text="Whether the day is locked for changes")
+    locked_reason = serializers.CharField(
+        allow_null=True,
+        help_text="Message explaining why adjustments are blocked when locked",
+    )
+    metrics = AttendanceCalendarMetricsDocSerializer()
+    anomalies = serializers.DictField(
+        child=serializers.IntegerField(),
+        required=False,
+        help_text="Counts keyed by canonical anomaly name",
+    )
+    pairs = AttPairSerializer(many=True, required=False, read_only=True)
+    adjustments = AttAdjustmentSerializer(many=True, required=False, read_only=True)
+
+
+class AttendanceCalendarSummaryDocSerializer(serializers.Serializer):
+    present = serializers.IntegerField(help_text="Number of present days in the month")
+    absent = serializers.IntegerField(help_text="Number of absent days in the month")
+    leave = serializers.IntegerField(help_text="Number of leave days in the month")
+    holiday = serializers.IntegerField(help_text="Number of holiday days in the month")
+    rest = serializers.IntegerField(help_text="Number of rest days in the month")
+    partial = serializers.IntegerField(help_text="Number of partial/exception days in the month")
+    locked_days = serializers.IntegerField(help_text="Count of days locked for changes")
+    total_ot_min = serializers.IntegerField(help_text="Total overtime minutes in the month")
+
+
+class AttendanceCalendarEmployeeMetadataDocSerializer(serializers.Serializer):
+    department = serializers.CharField(allow_null=True, required=False)
+    project = serializers.CharField(allow_null=True, required=False)
+    branch = serializers.CharField(allow_null=True, required=False)
+    code = serializers.CharField(help_text="Employee code/username")
+
+
+class AttendanceCalendarEmployeeDocSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    display = serializers.CharField(help_text="Display name shown to the user")
+    metadata = AttendanceCalendarEmployeeMetadataDocSerializer()
+    rows = AttendanceCalendarRowDocSerializer(many=True, required=False)
+    summary = AttendanceCalendarSummaryDocSerializer()
+
+
+class AttendanceCalendarResponseDocSerializer(serializers.Serializer):
+    month = serializers.CharField(help_text="Requested month in YYYY-MM format")
+    days = serializers.ListField(
+        child=serializers.DateField(format="iso-8601"),
+        help_text="Ordered list of days that frame the calendar grid",
+    )
+    employees = AttendanceCalendarEmployeeDocSerializer(many=True)
+    next = serializers.CharField(
+        allow_null=True,
+        required=False,
+        help_text="Cursor to fetch the next page of employees when paginated",
+    )
+    previous = serializers.CharField(
+        allow_null=True,
+        required=False,
+        help_text="Cursor to fetch the previous page of employees",
+    )
+
+ATTENDANCE_CALENDAR_QUERY_PARAMS = [
+    OpenApiParameter(
+        "month",
+        OpenApiTypes.STR,
+        OpenApiParameter.QUERY,
+        required=True,
+        description=(
+            "Target month in YYYY-MM format. The API expands this to the first and last day "
+            "of the month to guarantee a 28–31 day window."
+        ),
+        examples=[OpenApiExample("May 2024", value="2024-05")],
+    ),
+    OpenApiParameter(
+        "include_pairs",
+        OpenApiTypes.BOOL,
+        OpenApiParameter.QUERY,
+        description="When true, embed AttPair records for each populated day",
+        examples=[OpenApiExample("Include pairs", value="true")],
+    ),
+    OpenApiParameter(
+        "include_adjustments",
+        OpenApiTypes.BOOL,
+        OpenApiParameter.QUERY,
+        description="When true, embed AttAdjustment records that land on the day",
+        examples=[OpenApiExample("Include adjustments", value="true")],
+    ),
+    OpenApiParameter(
+        "include_anomalies",
+        OpenApiTypes.BOOL,
+        OpenApiParameter.QUERY,
+        description="Toggle anomaly payloads on day rows. Defaults to true.",
+        examples=[OpenApiExample("Omit anomalies", value="false")],
+    ),
+    OpenApiParameter(
+        "stats_only",
+        OpenApiTypes.BOOL,
+        OpenApiParameter.QUERY,
+        description="Return only monthly summaries without the per-day grid",
+        examples=[OpenApiExample("Stats only", value="true")],
+    ),
+    OpenApiParameter(
+        "status",
+        OpenApiTypes.STR,
+        OpenApiParameter.QUERY,
+        description=(
+            "Comma separated list of AttDay.status values to include (e.g. present,absent,leave). "
+            "Only matching days appear in the grid and summary counts."
+        ),
+    ),
+    OpenApiParameter(
+        "locked",
+        OpenApiTypes.BOOL,
+        OpenApiParameter.QUERY,
+        description="Filter days by lock state before aggregation",
+    ),
+    OpenApiParameter(
+        "employee",
+        OpenApiTypes.STR,
+        OpenApiParameter.QUERY,
+        description=(
+            "Restrict the calendar to specific employees. Accepts repeated parameters or a comma "
+            "separated list of employee IDs."
+        ),
+    ),
+    OpenApiParameter(
+        "branch",
+        OpenApiTypes.STR,
+        OpenApiParameter.QUERY,
+        description=(
+            "Restrict employees by branch via their department or project relationship. Accepts "
+            "repeated parameters or a comma separated list of branch IDs."
+        ),
+    ),
+    OpenApiParameter(
+        "department",
+        OpenApiTypes.STR,
+        OpenApiParameter.QUERY,
+        description="Restrict employees by department IDs (repeated or comma separated)",
+    ),
+    OpenApiParameter(
+        "project",
+        OpenApiTypes.STR,
+        OpenApiParameter.QUERY,
+        description="Restrict employees by project IDs (repeated or comma separated)",
+    ),
+    OpenApiParameter(
+        "search",
+        OpenApiTypes.STR,
+        OpenApiParameter.QUERY,
+        description=(
+            "Case-insensitive text search over employee first name, last name, username, email, "
+            "department name, project name, and related branch names. All terms supplied must match."
+        ),
+        examples=[OpenApiExample("Find Alice", value="alice ops")],
+    ),
+    OpenApiParameter(
+        "sort",
+        OpenApiTypes.STR,
+        OpenApiParameter.QUERY,
+        description=(
+            "Comma separated list of fields to order employees by. Supports name, code, department, "
+            "project, first_name, last_name, and id. Prefix with '-' for descending order."
+        ),
+        examples=[OpenApiExample("Department then name", value="department,-name")],
+    ),
+]
+
+ATTENDANCE_CALENDAR_EXAMPLE = OpenApiExample(
+    "Calendar grid",
+    value={
+        "month": "2024-05",
+        "days": ["2024-05-01", "2024-05-02", "2024-05-03"],
+        "employees": [
+            {
+                "id": 17,
+                "display": "Maria Gomez",
+                "metadata": {
+                    "department": "Operations",
+                    "project": "Project Falcon",
+                    "branch": "Dubai Marina",
+                    "code": "EMP-0017",
+                },
+                "rows": [
+                    {
+                        "date": "2024-05-01",
+                        "status": "present",
+                        "locked": True,
+                        "locked_reason": "Attendance day is locked; adjustments are disabled.",
+                        "metrics": {
+                            "work_min": 480,
+                            "unpaid_break_min": 0,
+                            "paid_break_min": 60,
+                            "late_min": 5,
+                            "early_leave_min": 0,
+                            "ot_regular_min": 45,
+                            "ot_night_min": 0,
+                            "ot_holiday_min": 0,
+                            "on_leave": False,
+                            "leave_portion": 0.0,
+                            "is_holiday": False,
+                            "is_rest_day": False,
+                            "pairs_count": 2,
+                            "punches_used": 4,
+                        },
+                        "anomalies": {"missing_out_closed_at_next_in": 1},
+                        "adjustments": [
+                            {
+                                "id": 901,
+                                "employee": 17,
+                                "date": "2024-05-01",
+                                "delta_work_min": -15,
+                                "reason": "Late arrival waiver",
+                                "created_by_id": 3,
+                                "created_at": "2024-05-02T06:00:00Z",
+                            }
+                        ],
+                        "pairs": [
+                            {
+                                "id": 3001,
+                                "employee": 17,
+                                "date": "2024-05-01",
+                                "in_event_id": 555,
+                                "out_event_id": 556,
+                                "in_ts": "2024-05-01T08:00:00+04:00",
+                                "out_ts": "2024-05-01T12:00:00+04:00",
+                                "duration_min": 240,
+                                "cross_midnight": False,
+                                "source": "auto",
+                                "anomaly": {},
+                            }
+                        ],
+                    }
+                ],
+                "summary": {
+                    "present": 18,
+                    "absent": 2,
+                    "leave": 1,
+                    "holiday": 1,
+                    "rest": 3,
+                    "partial": 0,
+                    "locked_days": 12,
+                    "total_ot_min": 480,
+                },
+            }
+        ],
+        "next": None,
+        "previous": None,
+    },
+    response_only=True,
+)
+
+
+class AttendanceCalendarPagination(CursorPagination):
+    page_size = CALENDAR_PAGE_SIZE
+    ordering = ("first_name", "last_name", "username", "id")
+
+    def get_ordering(self, request, queryset, view):  # pragma: no cover - simple delegation
+        if getattr(view, "cursor_ordering", None):
+            return tuple(view.cursor_ordering)
+        return super().get_ordering(request, queryset, view)
+
+
+def parse_month(value: str):
+    if not value:
+        raise serializers.ValidationError({"month": "Expected YYYY-MM query parameter"})
+    try:
+        year, month = value.split("-")
+        start = date(int(year), int(month), 1)
+    except (TypeError, ValueError):
+        raise serializers.ValidationError({"month": "Expected YYYY-MM format"})
+    days_in_month = calendar.monthrange(start.year, start.month)[1]
+    end = start.replace(day=days_in_month)
+    return start, end
+
+
+def parse_bool(value, *, default=False):
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    value = value.lower()
+    if value in {"1", "true", "yes", "on"}:
+        return True
+    if value in {"0", "false", "no", "off"}:
+        return False
+    raise serializers.ValidationError({"detail": f"Invalid boolean value '{value}'"})
+
+
+def parse_int_list(value):
+    if value is None:
+        return []
+    if isinstance(value, (list, tuple)):
+        items = value
+    else:
+        items = str(value).split(",")
+    result = []
+    for item in items:
+        item = str(item).strip()
+        if not item:
+            continue
+        try:
+            result.append(int(item))
+        except ValueError as exc:
+            raise serializers.ValidationError({"detail": f"Invalid integer '{item}'"}) from exc
+    return result
 
 
 class LateComersPDFRenderer(BaseRenderer):
@@ -406,6 +743,511 @@ class AttPairViewSet(viewsets.ModelViewSet):
 # attach filter documentation
 document_filters(AttDayViewSet)
 document_filters(AttPairViewSet)
+
+
+@extend_schema_view(
+    list=extend_schema(
+        summary="List attendance calendar rows",
+        description=(
+            "Aggregate AttDay outcomes, optional AttPair sessions, and AttAdjustment entries into "
+            "a month-oriented matrix optimised for calendar widgets. The endpoint enforces scope "
+            "permissions identical to the AttDay and AttPair APIs, supports cursor pagination "
+            "for large employee sets, and exposes optional expansions so clients can trade payload "
+            "size for detail."
+        ),
+        parameters=ATTENDANCE_CALENDAR_QUERY_PARAMS,
+        responses={
+            200: OpenApiResponse(
+                description="Monthly attendance grid with optional drill-down detail",
+                response=AttendanceCalendarResponseDocSerializer,
+            )
+        },
+        examples=[ATTENDANCE_CALENDAR_EXAMPLE],
+    ),
+    retrieve=extend_schema(
+        summary="Retrieve calendar rows for a single employee",
+        description=(
+            "Return the same calendar payload as the list view but scoped to the employee identified "
+            "by the path parameter. Supports the same query parameters (month, include_* flags, "
+            "status, locked, search, etc.) so UI drill-down panels can reuse list view requests."
+        ),
+        parameters=ATTENDANCE_CALENDAR_QUERY_PARAMS,
+        responses={
+            200: OpenApiResponse(
+                description="Single-employee attendance calendar response",
+                response=AttendanceCalendarResponseDocSerializer,
+            )
+        },
+        examples=[ATTENDANCE_CALENDAR_EXAMPLE],
+    ),
+)
+@extend_schema(
+    tags=["Attendance"],
+    description=(
+        "Monthly attendance calendar endpoint that aggregates computed AttDay summaries, raw "
+        "pairs, and manual adjustments for each employee in scope. Use the optional lock and "
+        "adjustment actions to manage period finalisation without leaving the calendar view."
+    ),
+)
+class AttendanceCalendarViewSet(viewsets.GenericViewSet):
+    """Expose a monthly attendance calendar grid combining days, pairs and adjustments."""
+
+    queryset = Employee.objects.all()
+    pagination_class = AttendanceCalendarPagination
+    filter_backends = []
+
+    def get_queryset(self):
+        qs = (
+            super()
+            .get_queryset()
+            .select_related(
+                "department__branch",
+                "project__branch",
+                "trade_license__company",
+            )
+        )
+        return scope_queryset(qs, self.request.user)
+
+    def _filter_employees(self, queryset, request, company_id):
+        queryset = queryset.filter(is_superuser=False)
+        if company_id:
+            queryset = queryset.filter(
+                Q(trade_license__company_id=company_id)
+                | Q(department__branch__company_id=company_id)
+                | Q(project__branch__company_id=company_id)
+            )
+
+        employee_ids = parse_int_list(request.query_params.getlist("employee"))
+        if employee_ids:
+            queryset = queryset.filter(id__in=employee_ids)
+
+        branch_ids = parse_int_list(request.query_params.getlist("branch"))
+        if branch_ids:
+            branch_filter = Q()
+            for branch_id in branch_ids:
+                branch_filter |= Q(department__branch_id=branch_id)
+                branch_filter |= Q(project__branch_id=branch_id)
+            queryset = queryset.filter(branch_filter)
+
+        department_ids = parse_int_list(request.query_params.getlist("department"))
+        if department_ids:
+            queryset = queryset.filter(department_id__in=department_ids)
+
+        project_ids = parse_int_list(request.query_params.getlist("project"))
+        if project_ids:
+            queryset = queryset.filter(project_id__in=project_ids)
+
+        search_value = request.query_params.get("search", "").strip()
+        if search_value:
+            terms = [term for term in search_value.split() if term]
+            for term in terms:
+                term_filter = (
+                    Q(first_name__icontains=term)
+                    | Q(last_name__icontains=term)
+                    | Q(username__icontains=term)
+                    | Q(email__icontains=term)
+                    | Q(department__name__icontains=term)
+                    | Q(project__name__icontains=term)
+                    | Q(department__branch__name__icontains=term)
+                    | Q(project__branch__name__icontains=term)
+                )
+                queryset = queryset.filter(term_filter)
+
+        return queryset.distinct()
+
+    def _apply_sorting(self, queryset, request):
+        sort_param = request.query_params.get("sort", "").strip()
+        annotations = {}
+        ordering = []
+
+        field_map = {
+            "name": ["first_name", "last_name", "username"],
+            "first_name": ["first_name"],
+            "last_name": ["last_name"],
+            "code": ["username"],
+            "department": ["department_name"],
+            "project": ["project_name"],
+            "id": ["id"],
+        }
+
+        def ensure_annotation(key):
+            if key == "department_name" and "department_name" not in annotations:
+                annotations["department_name"] = Coalesce(
+                    "department__name",
+                    Value(""),
+                    output_field=CharField(),
+                )
+            if key == "project_name" and "project_name" not in annotations:
+                annotations["project_name"] = Coalesce(
+                    "project__name",
+                    Value(""),
+                    output_field=CharField(),
+                )
+
+        if sort_param:
+            for raw in sort_param.split(","):
+                raw = raw.strip()
+                if not raw:
+                    continue
+                descending = raw.startswith("-")
+                key = raw[1:] if descending else raw
+                mapped = field_map.get(key)
+                if not mapped:
+                    continue
+                for field_name in mapped:
+                    ensure_annotation(field_name)
+                    clause = field_name
+                    if descending:
+                        clause = f"-{clause}"
+                    ordering.append(clause)
+
+        if not ordering:
+            ordering = ["first_name", "last_name", "username"]
+
+        if not any(field.lstrip("-") == "id" for field in ordering):
+            ordering.append("id")
+
+        if annotations:
+            queryset = queryset.annotate(**annotations)
+
+        self.cursor_ordering = ordering
+        return queryset
+
+    def _build_calendar_response(
+        self,
+        employees,
+        start,
+        end,
+        *,
+        include_pairs,
+        include_adjustments,
+        include_anomalies,
+        stats_only,
+        status_filters,
+        locked_filter,
+    ):
+        days = [start + timedelta(days=offset) for offset in range((end - start).days + 1)]
+        employee_ids = [employee.id for employee in employees]
+        request = self.request
+        context = self.get_serializer_context()
+
+        day_map = defaultdict(dict)
+        if employee_ids:
+            day_qs = (
+                AttDay.objects.filter(employee_id__in=employee_ids, date__range=(start, end))
+                .select_related("shift", "roster")
+            )
+            day_qs = scope_queryset(day_qs, request.user)
+            if status_filters:
+                day_qs = day_qs.filter(status__in=status_filters)
+            if locked_filter is not None:
+                day_qs = day_qs.filter(locked=locked_filter)
+            for day in day_qs:
+                day_map[day.employee_id][day.date] = day
+
+        valid_keys = {(emp_id, day) for emp_id, entries in day_map.items() for day in entries.keys()}
+
+        pairs_data = {}
+        if include_pairs and not stats_only and valid_keys:
+            pair_qs = AttPair.objects.filter(
+                employee_id__in=employee_ids, date__range=(start, end)
+            ).order_by("in_ts")
+            pair_qs = scope_queryset(pair_qs, request.user)
+            grouped_pairs = defaultdict(list)
+            valid_dates = {key[1] for key in valid_keys}
+            pair_qs = pair_qs.filter(date__in=valid_dates)
+            for pair in pair_qs:
+                key = (pair.employee_id, pair.date)
+                if key in valid_keys:
+                    grouped_pairs[key].append(pair)
+            for key, records in grouped_pairs.items():
+                pairs_data[key] = AttPairSerializer(records, many=True, context=context).data
+
+        adjustments_data = {}
+        if include_adjustments and not stats_only and valid_keys:
+            adjustment_qs = AttAdjustment.objects.filter(
+                employee_id__in=employee_ids, date__range=(start, end)
+            ).order_by("created_at")
+            adjustment_qs = scope_queryset(adjustment_qs, request.user)
+            grouped_adjustments = defaultdict(list)
+            valid_dates = {key[1] for key in valid_keys}
+            adjustment_qs = adjustment_qs.filter(date__in=valid_dates)
+            for adjustment in adjustment_qs:
+                key = (adjustment.employee_id, adjustment.date)
+                if key in valid_keys:
+                    grouped_adjustments[key].append(adjustment)
+            for key, records in grouped_adjustments.items():
+                adjustments_data[key] = AttAdjustmentSerializer(
+                    records, many=True, context=context
+                ).data
+
+        employees_payload = []
+        for employee in employees:
+            employee_days = day_map.get(employee.id, {})
+            summary_counts = Counter()
+            locked_days = 0
+            total_ot = 0
+            rows = []
+
+            for current_day in days:
+                day = employee_days.get(current_day)
+                if day:
+                    summary_counts[day.status] += 1
+                    if day.locked:
+                        locked_days += 1
+                    total_ot += day.ot_regular_min + day.ot_night_min + day.ot_holiday_min
+                if stats_only:
+                    continue
+
+                key = (employee.id, current_day)
+                row = {
+                    "date": current_day.isoformat(),
+                    "status": day.status if day else None,
+                    "locked": bool(day.locked) if day else False,
+                    "locked_reason": LOCKED_REASON if day and day.locked else None,
+                    "metrics": {
+                        "work_min": day.work_min if day else 0,
+                        "unpaid_break_min": day.unpaid_break_min if day else 0,
+                        "paid_break_min": day.paid_break_min if day else 0,
+                        "late_min": day.late_min if day else 0,
+                        "early_leave_min": day.early_leave_min if day else 0,
+                        "ot_regular_min": day.ot_regular_min if day else 0,
+                        "ot_night_min": day.ot_night_min if day else 0,
+                        "ot_holiday_min": day.ot_holiday_min if day else 0,
+                        "on_leave": day.on_leave if day else False,
+                        "leave_portion": float(day.leave_portion) if day else 0.0,
+                        "is_holiday": day.is_holiday if day else False,
+                        "is_rest_day": day.is_rest_day if day else False,
+                        "pairs_count": day.pairs_count if day else 0,
+                        "punches_used": day.punches_used if day else 0,
+                    },
+                }
+                if include_anomalies:
+                    row["anomalies"] = day.anomalies if day else {}
+                if include_pairs:
+                    row["pairs"] = pairs_data.get(key, [])
+                if include_adjustments:
+                    row["adjustments"] = adjustments_data.get(key, [])
+                rows.append(row)
+
+            summary = {
+                "present": summary_counts.get("present", 0),
+                "absent": summary_counts.get("absent", 0),
+                "leave": summary_counts.get("leave", 0),
+                "holiday": summary_counts.get("holiday", 0),
+                "rest": summary_counts.get("rest", 0),
+                "partial": summary_counts.get("partial", 0),
+                "locked_days": locked_days,
+                "total_ot_min": total_ot,
+            }
+
+            branch = None
+            if employee.department and employee.department.branch:
+                branch = employee.department.branch
+            elif employee.project and employee.project.branch:
+                branch = employee.project.branch
+
+            employees_payload.append(
+                {
+                    "id": employee.id,
+                    "display": employee.get_full_name().strip() or employee.username,
+                    "metadata": {
+                        "department": employee.department.name if employee.department else None,
+                        "project": employee.project.name if employee.project else None,
+                        "branch": branch.name if branch else None,
+                        "code": employee.username,
+                    },
+                    "rows": [] if stats_only else rows,
+                    "summary": summary,
+                }
+            )
+
+        return {
+            "month": start.strftime("%Y-%m"),
+            "days": [day.isoformat() for day in days],
+            "employees": employees_payload,
+        }
+
+    def list(self, request, company_id=None):
+        start, end = parse_month(request.query_params.get("month"))
+        include_pairs = parse_bool(request.query_params.get("include_pairs"), default=False)
+        include_adjustments = parse_bool(
+            request.query_params.get("include_adjustments"), default=False
+        )
+        include_anomalies = parse_bool(
+            request.query_params.get("include_anomalies"), default=True
+        )
+        stats_only = parse_bool(request.query_params.get("stats_only"), default=False)
+
+        status_param = request.query_params.get("status")
+        status_filters = (
+            [value.strip() for value in status_param.split(",") if value.strip()]
+            if status_param
+            else []
+        )
+        locked_filter = None
+        if "locked" in request.query_params:
+            locked_filter = parse_bool(request.query_params.get("locked"))
+
+        queryset = self._filter_employees(self.get_queryset(), request, company_id)
+        queryset = self._apply_sorting(queryset, request)
+
+        page = self.paginate_queryset(queryset)
+        employees = list(page if page is not None else queryset[:CALENDAR_PAGE_SIZE])
+        if page is None and len(employees) > CALENDAR_PAGE_SIZE:
+            employees = employees[:CALENDAR_PAGE_SIZE]
+
+        payload = self._build_calendar_response(
+            employees,
+            start,
+            end,
+            include_pairs=include_pairs,
+            include_adjustments=include_adjustments,
+            include_anomalies=include_anomalies,
+            stats_only=stats_only,
+            status_filters=status_filters,
+            locked_filter=locked_filter,
+        )
+
+        if getattr(self, "paginator", None) and getattr(self.paginator, "page", None) is not None:
+            payload["next"] = self.paginator.get_next_link()
+            payload["previous"] = self.paginator.get_previous_link()
+        return Response(payload)
+
+    def retrieve(self, request, pk=None, company_id=None):
+        start, end = parse_month(request.query_params.get("month"))
+        include_pairs = parse_bool(request.query_params.get("include_pairs"), default=False)
+        include_adjustments = parse_bool(
+            request.query_params.get("include_adjustments"), default=False
+        )
+        include_anomalies = parse_bool(
+            request.query_params.get("include_anomalies"), default=True
+        )
+        stats_only = parse_bool(request.query_params.get("stats_only"), default=False)
+
+        status_param = request.query_params.get("status")
+        status_filters = (
+            [value.strip() for value in status_param.split(",") if value.strip()]
+            if status_param
+            else []
+        )
+        locked_filter = None
+        if "locked" in request.query_params:
+            locked_filter = parse_bool(request.query_params.get("locked"))
+
+        queryset = self._filter_employees(self.get_queryset(), request, company_id)
+        queryset = self._apply_sorting(queryset, request)
+        employee = queryset.filter(pk=pk).first()
+        if not employee:
+            raise NotFound("Employee not found")
+
+        payload = self._build_calendar_response(
+            [employee],
+            start,
+            end,
+            include_pairs=include_pairs,
+            include_adjustments=include_adjustments,
+            include_anomalies=include_anomalies,
+            stats_only=stats_only,
+            status_filters=status_filters,
+            locked_filter=locked_filter,
+        )
+        return Response(payload)
+
+    @action(detail=False, methods=["post"], url_path="lock")
+    @extend_schema(
+        summary="Lock or unlock computed attendance days",
+        request=LockDaysSerializer,
+        responses={
+            200: OpenApiResponse(
+                description="Number of AttDay rows updated",
+                response=inline_serializer(
+                    name="AttendanceCalendarLockResponse",
+                    fields={"updated": serializers.IntegerField()},
+                ),
+            )
+        },
+        examples=[
+            OpenApiExample(
+                "Lock May 2024",
+                value={
+                    "start": "2024-05-01",
+                    "end": "2024-05-31",
+                    "employee_ids": [42, 43],
+                    "locked": True,
+                },
+                request_only=True,
+            ),
+            OpenApiExample(
+                "Lock response",
+                value={"updated": 62},
+                response_only=True,
+            ),
+        ],
+    )
+    def lock(self, request, company_id=None):
+        params = LockDaysSerializer(data=request.data or {})
+        params.is_valid(raise_exception=True)
+        data = params.validated_data
+        start, end = data["start"], data["end"]
+        employee_ids = data.get("employee_ids", [])
+        queryset = AttDay.objects.filter(date__range=(start, end))
+        if company_id:
+            queryset = queryset.filter(
+                Q(employee__trade_license__company_id=company_id)
+                | Q(employee__department__branch__company_id=company_id)
+                | Q(employee__project__branch__company_id=company_id)
+            )
+        if employee_ids:
+            queryset = queryset.filter(employee_id__in=employee_ids)
+        queryset = scope_queryset(queryset, request.user)
+        with transaction.atomic():
+            updated = queryset.update(locked=data.get("locked", True))
+        return Response({"updated": updated})
+
+    @action(detail=False, methods=["post"], url_path="adjustments")
+    @extend_schema(
+        summary="Proxy to create a manual attendance adjustment",
+        request=AttAdjustmentSerializer,
+        responses={
+            201: OpenApiResponse(
+                description="Created adjustment",
+                response=AttAdjustmentSerializer,
+            )
+        },
+        examples=[
+            OpenApiExample(
+                "Create adjustment",
+                value={
+                    "employee": 42,
+                    "date": "2024-05-01",
+                    "delta_work_min": -15,
+                    "override_status": None,
+                    "reason": "Late arrival waiver",
+                },
+                request_only=True,
+            ),
+        ],
+    )
+    def adjustments(self, request, company_id=None):
+        serializer = AttAdjustmentSerializer(data=request.data, context=self.get_serializer_context())
+        serializer.is_valid(raise_exception=True)
+        employee = serializer.validated_data["employee"]
+        scoped_employee = scope_queryset(Employee.objects.filter(pk=employee.pk), request.user)
+        if company_id:
+            scoped_employee = scoped_employee.filter(
+                Q(trade_license__company_id=company_id)
+                | Q(department__branch__company_id=company_id)
+                | Q(project__branch__company_id=company_id)
+            )
+        if not scoped_employee.exists():
+            raise serializers.ValidationError({"detail": "Employee outside allowed scope"})
+        adjustment = serializer.save(created_by_id=request.user.id)
+        output = AttAdjustmentSerializer(adjustment, context=self.get_serializer_context())
+        return Response(output.data, status=status.HTTP_201_CREATED)
+
+
+document_filters(AttendanceCalendarViewSet)
 
 
 @extend_schema_view(
