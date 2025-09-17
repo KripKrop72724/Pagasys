@@ -1,6 +1,6 @@
 import io
 from collections import OrderedDict
-from datetime import date, datetime
+from datetime import date, datetime, time
 
 from django.test import TestCase
 from django.urls import reverse
@@ -14,6 +14,10 @@ from attendance.reports import get_late_comers, group_late_comers
 
 
 class LateComersReportTests(TestCase):
+    @staticmethod
+    def _normalize_time(value):
+        return time.fromisoformat(value) if isinstance(value, str) else value
+
     def setUp(self):
         self.company = Company.objects.create(name="C1")
         self.branch1 = Branch.objects.create(company=self.company, name="B1")
@@ -85,8 +89,16 @@ class LateComersReportTests(TestCase):
         assert len(filtered) == 1
         expected_emp1_name = f"{self.emp1.first_name} {self.emp1.last_name}".strip()
         expected_emp2_name = f"{self.emp2.first_name} {self.emp2.last_name}".strip()
+        expected_shift1_start = self._normalize_time(self.shift1.start_time)
+        expected_shift1_end = self._normalize_time(self.shift1.end_time)
+        expected_shift2_start = self._normalize_time(self.shift2.start_time)
+        expected_shift2_end = self._normalize_time(self.shift2.end_time)
         assert filtered[0]["employee"] == expected_emp1_name
         assert filtered[0]["branch"] == self.branch1.name
+        assert filtered[0]["employee_id"] == self.emp1.id
+        assert filtered[0]["shift_start"] == expected_shift1_start
+        assert filtered[0]["shift_end"] == expected_shift1_end
+        assert filtered[0]["punch_in"].time() == time(9, 15)
         branches, stats = group_late_comers(records)
         assert stats["total_late_min"] == 20
         assert set(branches.keys()) == {self.branch1.name, self.branch2.name}
@@ -96,6 +108,16 @@ class LateComersReportTests(TestCase):
         assert branches[self.branch2.name]["total_late_min"] == 5
         assert [r["employee"] for r in branch1_records] == [expected_emp1_name]
         assert [r["employee"] for r in branch2_records] == [expected_emp2_name]
+        alice_record = branch1_records[0]
+        bob_record = branch2_records[0]
+        assert alice_record["employee_id"] == self.emp1.id
+        assert alice_record["shift_start"] == expected_shift1_start
+        assert alice_record["shift_end"] == expected_shift1_end
+        assert alice_record["punch_in"].time() == time(9, 15)
+        assert bob_record["employee_id"] == self.emp2.id
+        assert bob_record["shift_start"] == expected_shift2_start
+        assert bob_record["shift_end"] == expected_shift2_end
+        assert bob_record["punch_in"].time() == time(10, 5)
 
     def test_late_comers_template_renders_simple_layout(self):
         generated_at = timezone.make_aware(datetime(2024, 1, 2, 9, 30))
@@ -107,7 +129,13 @@ class LateComersReportTests(TestCase):
                         "records": [
                             {
                                 "employee": "Alice Anderson",
+                                "employee_id": self.emp1.id,
                                 "shift": "S1",
+                                "shift_start": self._normalize_time(self.shift1.start_time),
+                                "shift_end": self._normalize_time(self.shift1.end_time),
+                                "punch_in": timezone.make_aware(
+                                    datetime(2024, 1, 1, 9, 15)
+                                ),
                                 "date": self.day,
                                 "late_min": 15,
                             }
@@ -121,7 +149,13 @@ class LateComersReportTests(TestCase):
                         "records": [
                             {
                                 "employee": "Bob Brown",
+                                "employee_id": self.emp2.id,
                                 "shift": "S2",
+                                "shift_start": self._normalize_time(self.shift2.start_time),
+                                "shift_end": self._normalize_time(self.shift2.end_time),
+                                "punch_in": timezone.make_aware(
+                                    datetime(2024, 1, 1, 10, 5)
+                                ),
                                 "date": self.day,
                                 "late_min": 5,
                             }
@@ -141,24 +175,22 @@ class LateComersReportTests(TestCase):
                 "total_late_min": 20,
             },
         )
-        # The simplified template should just show a heading, the selected date, and a basic table.
-        assert "<h1>Late Comers Report</h1>" in html
-        assert "Date:" in html
-        # When the start and end dates match, only a single date should be shown.
-        assert "01 Jan 2024" in html
-        assert " - " not in html
-        assert "<table>" in html
-        assert "<th>Branch</th>" in html
-        assert "<th>Employee</th>" in html
-        assert "<th>Shift</th>" in html
-        assert "<th>Date</th>" in html
-        assert "<th>Late (min)</th>" in html
-        assert f">{self.branch1.name}<" in html
-        assert f">{self.branch2.name}<" in html
+        assert "Late Comers Report - 01 Jan 2024" in html
+        assert f"<h2 class=\"branch-name\">{self.branch1.name}</h2>" in html
+        assert f"<h2 class=\"branch-name\">{self.branch2.name}</h2>" in html
+        assert "<th>Sr.No</th>" in html
+        assert "<th>Emp. ID</th>" in html
+        assert "<th>Name</th>" in html
+        assert "<th>Shift Time</th>" in html
+        assert "<th>Punch In Time</th>" in html
         assert "Alice Anderson" in html
         assert "Bob Brown" in html
-        assert "S1" in html and "S2" in html
-        assert "15" in html and "5" in html
+        assert f">{self.emp1.id}<" in html
+        assert f">{self.emp2.id}<" in html
+        assert "09:00 - 17:00" in html
+        assert "10:00 - 18:00" in html
+        assert "09:15" in html
+        assert "10:05" in html
 
     def test_api_late_comers_report(self):
         self.api_client.force_authenticate(self.admin)

@@ -7,14 +7,14 @@ from datetime import date
 from typing import Any, Dict, Iterable, List, Tuple
 
 from django.contrib.staticfiles import finders
-from django.db.models import Q
+from django.db.models import Q, Min
 from django.template.loader import render_to_string
 from django.utils import timezone
 from django.templatetags.static import static
 
 from weasyprint import HTML, CSS
 
-from .models import AttDay
+from .models import AttDay, AttPair
 
 
 def get_late_comers(
@@ -50,13 +50,36 @@ def get_late_comers(
     if shift_id:
         qs = qs.filter(shift_id=shift_id)
 
+    days = list(qs)
+    if not days:
+        return []
+
+    employee_ids = {day.employee_id for day in days}
+    punch_map: Dict[Tuple[int, date], Any] = {}
+    if employee_ids:
+        punches = (
+            AttPair.objects.filter(
+                employee_id__in=employee_ids, date__range=(start_date, end_date)
+            )
+            .values("employee_id", "date")
+            .annotate(first_in=Min("in_ts"))
+        )
+        punch_map = {
+            (punch["employee_id"], punch["date"]): punch["first_in"]
+            for punch in punches
+        }
+
     records: List[Dict[str, Any]] = []
-    for day in qs:
+    for day in days:
         branch = day.employee.branch
         records.append(
             {
                 "employee": f"{day.employee.first_name} {day.employee.last_name}".strip(),
+                "employee_id": day.employee_id,
                 "shift": getattr(day.shift, "name", ""),
+                "shift_start": getattr(day.shift, "start_time", None),
+                "shift_end": getattr(day.shift, "end_time", None),
+                "punch_in": punch_map.get((day.employee_id, day.date)),
                 "date": day.date,
                 "late_min": day.late_min,
                 "branch": getattr(branch, "name", "Unassigned"),

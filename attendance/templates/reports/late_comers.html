@@ -3,53 +3,137 @@
 <head>
   <meta charset="utf-8" />
   <title>Late Comers Report</title>
+  <style>
+    body {
+      font-family: "Helvetica Neue", Arial, sans-serif;
+      margin: 32px;
+      color: #1f2933;
+    }
+
+    h1.report-title {
+      text-align: center;
+      font-size: 24px;
+      margin: 0 0 12px;
+      letter-spacing: 0.5px;
+    }
+
+    p.generated-at {
+      text-align: center;
+      margin: 0 0 24px;
+      color: #6b7280;
+      font-size: 12px;
+    }
+
+    section.branch-section {
+      margin-bottom: 32px;
+    }
+
+    h2.branch-name {
+      text-align: center;
+      font-size: 18px;
+      margin: 0 0 16px;
+      color: #374151;
+      letter-spacing: 0.3px;
+    }
+
+    table.report-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 0 auto 16px;
+      font-size: 12px;
+    }
+
+    table.report-table th,
+    table.report-table td {
+      padding: 6px 10px;
+      text-align: left;
+      border-bottom: 1px solid #d1d5db;
+    }
+
+    table.report-table th {
+      font-weight: 600;
+      background-color: #f3f4f6;
+      color: #111827;
+    }
+
+    table.report-table tbody tr:last-child td {
+      border-bottom: none;
+    }
+
+    p.empty-branch,
+    p.empty-state {
+      text-align: center;
+      font-size: 12px;
+      color: #6b7280;
+      margin: 0;
+    }
+  </style>
 </head>
 <body>
-  <h1>Late Comers Report</h1>
-  <p>
-    Date:
+  {% if start_date and end_date %}
     {% if start_date == end_date %}
-      {{ start_date|date:"d M Y" }}
+      {% with report_period=start_date|date:"d M Y" %}
+        <h1 class="report-title">Late Comers Report - {{ report_period }}</h1>
+      {% endwith %}
     {% else %}
-      {{ start_date|date:"d M Y" }} - {{ end_date|date:"d M Y" }}
+      {% with start_label=start_date|date:"d M Y" end_label=end_date|date:"d M Y" %}
+        <h1 class="report-title">Late Comers Report - {{ start_label }} to {{ end_label }}</h1>
+      {% endwith %}
     {% endif %}
-  </p>
-  <table>
-    <thead>
-      <tr>
-        <th>Branch</th>
-        <th>Employee</th>
-        <th>Shift</th>
-        <th>Date</th>
-        <th>Late (min)</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% if branches %}
-        {% for branch_name, branch in branches.items %}
-          {% if branch.records %}
-            {% for rec in branch.records %}
+  {% else %}
+    <h1 class="report-title">Late Comers Report</h1>
+  {% endif %}
+
+  {% if generated_at %}
+    <p class="generated-at">Generated on {{ generated_at|date:"d M Y H:i" }}</p>
+  {% endif %}
+
+  {% if branches %}
+    {% for branch_name, branch in branches.items %}
+      <section class="branch-section">
+        <h2 class="branch-name">{{ branch_name }}</h2>
+        {% if branch.records %}
+          <table class="report-table">
+            <thead>
               <tr>
-                <td>{{ branch_name }}</td>
-                <td>{{ rec.employee }}</td>
-                <td>{{ rec.shift|default:"-" }}</td>
-                <td>{{ rec.date|date:"d M Y" }}</td>
-                <td>{{ rec.late_min }}</td>
+                <th>Sr.No</th>
+                <th>Emp. ID</th>
+                <th>Name</th>
+                <th>Shift Time</th>
+                <th>Punch In Time</th>
               </tr>
-            {% endfor %}
-          {% else %}
-            <tr>
-              <td>{{ branch_name }}</td>
-              <td colspan="4">No late arrivals were recorded for this branch.</td>
-            </tr>
-          {% endif %}
-        {% endfor %}
-      {% else %}
-        <tr>
-          <td colspan="5">No late arrivals were recorded for the selected period.</td>
-        </tr>
-      {% endif %}
-    </tbody>
-  </table>
+            </thead>
+            <tbody>
+              {% for rec in branch.records %}
+                <tr>
+                  <td>{{ forloop.counter }}</td>
+                  <td>{{ rec.employee_id }}</td>
+                  <td>{{ rec.employee }}</td>
+                  <td>
+                    {% if rec.shift_start and rec.shift_end %}
+                      {{ rec.shift_start|time:"H:i" }} - {{ rec.shift_end|time:"H:i" }}
+                    {% else %}
+                      -
+                    {% endif %}
+                  </td>
+                  <td>
+                    {% if rec.punch_in %}
+                      {{ rec.punch_in|date:"H:i" }}
+                    {% else %}
+                      -
+                    {% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <p class="empty-branch">No late arrivals were recorded for this branch.</p>
+        {% endif %}
+      </section>
+    {% endfor %}
+  {% else %}
+    <p class="empty-state">No late arrivals were recorded for the selected period.</p>
+  {% endif %}
 </body>
 </html>
