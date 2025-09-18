@@ -789,15 +789,17 @@ override the final status.
 
 1. Visit the [`AttAdjustment` admin](/admin/attendance/attadjustment/add/)
    and fill the minute deltas plus an optional `override_status` and reason.
-   The `created_by_id` field is set automatically to the logged-in user.
+   Tick **Mark full attendance** to auto-fill `delta_work_min` with the
+   minutes required to reach the scheduled shift total. The `created_by_id`
+   field is set automatically to the logged-in user.
 2. Or call `POST /companies/{cid}/att-adjustments/` with a payload such as:
 
 ```json
 {
   "employee": 1,
   "date": "2024-05-01",
-  "delta_work_min": 15,
-  "reason": "handover"
+  "mark_full_attendance": true,
+  "reason": "Grant full-day credit"
 }
 ```
 

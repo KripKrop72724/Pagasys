@@ -1,17 +1,22 @@
-from datetime import date, datetime
+from datetime import date, datetime, time
 
 from django.test import TestCase, RequestFactory
 from django.utils import timezone
 from django.contrib import admin
+from django.contrib.messages.storage.fallback import FallbackStorage
 
-from pagasys.models import Company, Branch, Department, Project, Employee
+from pagasys.models import Company, Branch, Department, Project, Employee, ShiftTemplate
 from attendance.models import AttDay, AttPair, AttAdjustment
-from attendance.admin import AttDayAdmin
+from attendance.admin import AttDayAdmin, EmployeeBranchListFilter
 
 
 def test_attday_admin_includes_date_filter():
     assert "date" in AttDayAdmin.list_filter
     assert AttDayAdmin.date_hierarchy == "date"
+
+
+def test_attday_admin_includes_branch_filter():
+    assert EmployeeBranchListFilter in AttDayAdmin.list_filter
 
 
 class AttendanceCalendarAdminViewTests(TestCase):
@@ -44,6 +49,13 @@ class AttendanceCalendarAdminViewTests(TestCase):
             visa_type="personal",
         )
 
+        self.shift = ShiftTemplate.objects.create(
+            company=self.company,
+            name="Day",
+            start_time=time(9, 0),
+            end_time=time(17, 0),
+        )
+
         self.day_one = date(2024, 5, 1)
         self.day_two = date(2024, 5, 2)
 
@@ -55,11 +67,14 @@ class AttendanceCalendarAdminViewTests(TestCase):
             ot_regular_min=60,
             status="present",
             anomalies={"missing_out_closed_at_next_in": 1},
+            shift=self.shift,
         )
         AttDay.objects.create(
             employee=self.employee,
             date=self.day_two,
-            status="absent",
+            status="partial",
+            work_min=420,
+            shift=self.shift,
         )
 
         AttPair.objects.create(
@@ -84,6 +99,7 @@ class AttendanceCalendarAdminViewTests(TestCase):
 
         self.factory = RequestFactory()
         self.attday_admin = AttDayAdmin(AttDay, admin.site)
+        self.client.force_login(self.admin)
 
     def test_calendar_view_redirects_to_current_month_when_missing(self):
         request = self.factory.get("/admin/attendance/attday/calendar/")
@@ -143,3 +159,51 @@ class AttendanceCalendarAdminViewTests(TestCase):
         response = self.attday_admin.monthly_attendance_report(request)
         assert response.status_code == 200
         assert response["Content-Type"] == "application/pdf"
+
+    def test_change_view_includes_quick_adjustment_form(self):
+        day = AttDay.objects.get(employee=self.employee, date=self.day_two)
+        request = self.factory.get(f"/admin/attendance/attday/{day.pk}/change/")
+        request.user = self.admin
+        request._cached_user = self.admin
+        response = self.attday_admin.changeform_view(request, str(day.pk))
+        response.render()
+        assert response.context_data["quick_adjustment_target"] == day
+        form = response.context_data["quick_adjustment_form"]
+        assert form is not None
+        url = response.context_data["quick_adjustment_url"]
+        assert url.endswith(f"/{day.pk}/add-adjustment/")
+
+    def test_add_adjustment_view_creates_record(self):
+        day = AttDay.objects.get(employee=self.employee, date=self.day_two)
+        request = self.factory.post(
+            f"/admin/attendance/attday/{day.pk}/add-adjustment/",
+            {"delta_work_min": 30, "reason": "Quick fix"},
+        )
+        request.user = self.admin
+        request._cached_user = self.admin
+        request.session = self.client.session
+        request._messages = FallbackStorage(request)
+        response = self.attday_admin.add_adjustment_view(request, str(day.pk))
+        assert response.status_code == 302
+        created = AttAdjustment.objects.filter(
+            employee=self.employee, date=self.day_two, reason="Quick fix"
+        ).latest("id")
+        assert created.delta_work_min == 30
+        assert created.created_by_id == self.admin.id
+
+    def test_add_adjustment_view_marks_full_attendance(self):
+        day = AttDay.objects.get(employee=self.employee, date=self.day_two)
+        request = self.factory.post(
+            f"/admin/attendance/attday/{day.pk}/add-adjustment/",
+            {"mark_full_attendance": "on", "reason": "Fill to full day"},
+        )
+        request.user = self.admin
+        request._cached_user = self.admin
+        request.session = self.client.session
+        request._messages = FallbackStorage(request)
+        response = self.attday_admin.add_adjustment_view(request, str(day.pk))
+        assert response.status_code == 302
+        created = AttAdjustment.objects.filter(
+            employee=self.employee, date=self.day_two, reason="Fill to full day"
+        ).latest("id")
+        assert created.delta_work_min == 60

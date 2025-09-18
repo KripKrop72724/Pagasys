@@ -6,6 +6,7 @@ from drf_spectacular.utils import OpenApiExample, extend_schema_serializer
 
 from pagasys.models import Employee
 from .models import AttDay, AttPair, AttAdjustment, LeaveRequest, LeaveDay
+from .services_helpers import compute_full_attendance_delta
 
 CANONICAL_ANOMALY_KEYS = [
     "unpaired_out",
@@ -184,11 +185,47 @@ class AttAdjustmentSerializer(serializers.ModelSerializer):
     employee = serializers.PrimaryKeyRelatedField(
         queryset=Employee.objects.all(), help_text="Employee ID"
     )
+    mark_full_attendance = serializers.BooleanField(
+        required=False,
+        default=False,
+        write_only=True,
+        help_text=(
+            "When true, delta_work_min is set to the minutes needed to meet the "
+            "scheduled shift total."
+        ),
+    )
 
     class Meta:
         model = AttAdjustment
         fields = "__all__"
         read_only_fields = ["created_at", "created_by_id"]
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        mark_full = attrs.pop("mark_full_attendance", False)
+        if mark_full:
+            employee = attrs.get("employee") or getattr(
+                self.instance, "employee", None
+            )
+            date_value = attrs.get("date") or getattr(
+                self.instance, "date", None
+            )
+            if not employee or not date_value:
+                raise serializers.ValidationError(
+                    {
+                        "mark_full_attendance": (
+                            "Employee and date are required to mark full attendance."
+                        )
+                    }
+                )
+            try:
+                delta = compute_full_attendance_delta(employee.id, date_value)
+            except ValueError as exc:
+                raise serializers.ValidationError(
+                    {"mark_full_attendance": str(exc)}
+                ) from exc
+            attrs["delta_work_min"] = delta
+        return attrs
 
 
 class RecomputeRangeSerializer(serializers.Serializer):

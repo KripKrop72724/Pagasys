@@ -43,6 +43,7 @@ from .serializers import (
     LockDaysSerializer,
     AttAdjustmentSerializer,
 )
+from .filters import AttDayFilter, AttPairFilter
 from .tasks import (
     recompute_range_task,
     pair_employee_day_task,
@@ -408,11 +409,19 @@ class MonthlyAttendancePDFRenderer(BaseRenderer):
 
 @extend_schema_view(
     list=extend_schema(
-        description="List computed attendance days.",
+        description=(
+            "List computed attendance days. Supports filtering by employee, date,"
+            " status, holiday flags, lock state, and branch." 
+        ),
         examples=[
             OpenApiExample(
                 "IN-AUTO-OUT request",
                 value={"employee": 1, "date": "2024-01-01"},
+                request_only=True,
+            ),
+            OpenApiExample(
+                "Filter by branch",
+                value={"branch": "7"},
                 request_only=True,
             ),
             OpenApiExample(
@@ -460,7 +469,7 @@ class AttDayViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = AttDay.objects.all().select_related("employee", "shift", "roster")
     serializer_class = AttDaySerializer
     filter_backends = [DjangoFilterBackend]
-    filterset_fields = ["employee", "date", "status", "is_holiday", "is_rest_day", "locked"]
+    filterset_class = AttDayFilter
 
     def get_queryset(self):
         """Restrict results to the requesting user's scope."""
@@ -630,8 +639,11 @@ class AttDayViewSet(viewsets.ReadOnlyModelViewSet):
 
 @extend_schema_view(
     list=extend_schema(
-        description="List paired IN/OUT sessions. An 'auto' punch opens a new"
-        " session when none is active or closes the current session.",
+        description=(
+            "List paired IN/OUT sessions. An 'auto' punch opens a new session when"
+            " none is active or closes the current session. Supports filtering by"
+            " employee, date, source, and branch."
+        ),
     ),
     retrieve=extend_schema(
         description="Retrieve a specific paired session and its anomalies.",
@@ -688,7 +700,7 @@ class AttPairViewSet(viewsets.ModelViewSet):
     queryset = AttPair.objects.all().select_related("employee")
     serializer_class = AttPairSerializer
     filter_backends = [DjangoFilterBackend]
-    filterset_fields = ["employee", "date", "source"]
+    filterset_class = AttPairFilter
 
     def get_queryset(self):
         """Restrict results to the requesting user's scope."""
@@ -810,6 +822,7 @@ class AttendanceCalendarViewSet(viewsets.GenericViewSet):
     queryset = Employee.objects.all()
     pagination_class = AttendanceCalendarPagination
     filter_backends = []
+    serializer_class = AttendanceCalendarResponseDocSerializer
 
     def get_queryset(self):
         qs = (
@@ -1140,7 +1153,6 @@ class AttendanceCalendarViewSet(viewsets.GenericViewSet):
             headers={"Content-Disposition": f"attachment; filename={filename}"},
         )
 
-    @action(detail=False, methods=["post"], url_path="lock")
     @extend_schema(
         summary="Lock or unlock computed attendance days",
         request=LockDaysSerializer,
@@ -1171,6 +1183,7 @@ class AttendanceCalendarViewSet(viewsets.GenericViewSet):
             ),
         ],
     )
+    @action(detail=False, methods=["post"], url_path="lock")
     def lock(self, request, company_id=None):
         params = LockDaysSerializer(data=request.data or {})
         params.is_valid(raise_exception=True)
@@ -1191,7 +1204,6 @@ class AttendanceCalendarViewSet(viewsets.GenericViewSet):
             updated = queryset.update(locked=data.get("locked", True))
         return Response({"updated": updated})
 
-    @action(detail=False, methods=["post"], url_path="adjustments")
     @extend_schema(
         summary="Proxy to create a manual attendance adjustment",
         request=AttAdjustmentSerializer,
@@ -1213,8 +1225,19 @@ class AttendanceCalendarViewSet(viewsets.GenericViewSet):
                 },
                 request_only=True,
             ),
+            OpenApiExample(
+                "Mark full attendance",
+                value={
+                    "employee": 42,
+                    "date": "2024-05-01",
+                    "mark_full_attendance": True,
+                    "reason": "Auto-fill to full shift",
+                },
+                request_only=True,
+            ),
         ],
     )
+    @action(detail=False, methods=["post"], url_path="adjustments")
     def adjustments(self, request, company_id=None):
         serializer = AttAdjustmentSerializer(data=request.data, context=self.get_serializer_context())
         serializer.is_valid(raise_exception=True)
@@ -1247,9 +1270,8 @@ document_filters(AttendanceCalendarViewSet)
                 value={
                     "employee": 1,
                     "date": "2024-01-05",
-                    "delta_ot_regular_min": -30,
-                    "override_status": "present",
-                    "reason": "Reduce overtime by 30 minutes",
+                    "mark_full_attendance": True,
+                    "reason": "Grant full shift credit",
                 },
                 request_only=True,
             ),

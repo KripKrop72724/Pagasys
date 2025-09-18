@@ -583,10 +583,18 @@ class CapturePunchView(generics.GenericAPIView):
 
 
 @extend_schema_view(
-    list=extend_schema(description="List captured punch events."),
+    list=extend_schema(
+        description=(
+            "List captured punch events with compound filters including employee,"
+            " device, face match flags, and branch."
+        )
+    ),
     retrieve=extend_schema(description="Retrieve a captured punch event."),
 )
-@extend_schema(tags=["Capture"], description="Read-only access to captured punch events.")
+@extend_schema(
+    tags=["Capture"],
+    description="Read-only access to captured punch events with branch-aware filtering.",
+)
 class PunchEventViewSet(CompanyScopedQuerysetMixin, viewsets.ReadOnlyModelViewSet):
     permission_classes = [permissions.IsAuthenticated, IsCompanyMember, ActionRolePermission]
     serializer_class = PunchEventSerializer

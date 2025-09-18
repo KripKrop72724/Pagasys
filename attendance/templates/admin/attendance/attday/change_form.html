@@ -1,0 +1,42 @@
+{% extends "admin/change_form.html" %}
+{% load i18n %}
+
+{% block after_related_objects %}
+    {{ block.super }}
+    {% if quick_adjustment_form and quick_adjustment_url %}
+        <div class="inline-group" id="quick-adjustment-module">
+            <fieldset class="module aligned">
+                <h2>{% trans "Quick attendance adjustment" %}</h2>
+                <p class="help">
+                    {% blocktrans with employee=quick_adjustment_target.employee date=quick_adjustment_target.date %}
+                        Create an adjustment for {{ employee }} on {{ date }} without leaving this page.
+                    {% endblocktrans %}
+                </p>
+                <form method="post" action="{{ quick_adjustment_url }}" novalidate>
+                    {% csrf_token %}
+                    {{ quick_adjustment_form.non_field_errors }}
+                    {% for hidden in quick_adjustment_form.hidden_fields %}
+                        {{ hidden }}
+                    {% endfor %}
+                    {% for field in quick_adjustment_form.visible_fields %}
+                        <div class="form-row">
+                            {{ field.errors }}
+                            <div>
+                                <label for="{{ field.id_for_label }}">{{ field.label }}:</label>
+                                {{ field }}
+                                {% if field.help_text %}
+                                    <p class="help">{{ field.help_text }}</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                    {% endfor %}
+                    <div class="submit-row">
+                        <button type="submit" class="button default" name="_quick_adjustment">
+                            {% trans "Add adjustment" %}
+                        </button>
+                    </div>
+                </form>
+            </fieldset>
+        </div>
+    {% endif %}
+{% endblock %}
