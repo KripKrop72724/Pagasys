@@ -79,6 +79,21 @@ p {
   color: #475569;
 }
 
+.report-branch-name {
+  margin: 0;
+  font-size: 18pt;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: #0f172a;
+}
+
+.report-heading {
+  margin: 0;
+  font-size: 10.5pt;
+  letter-spacing: 0.01em;
+  color: #475569;
+}
+
 .report-meta {
   margin-left: auto;
   text-align: right;
@@ -97,6 +112,12 @@ p {
 
 .report-meta .timestamp {
   margin: 0.6mm 0 0;
+  font-variant-numeric: tabular-nums;
+  color: #475569;
+}
+
+.report-meta .report-generated {
+  margin: 0;
   font-variant-numeric: tabular-nums;
   color: #475569;
 }
@@ -308,29 +329,11 @@ p {
 .monthly-attendance-report table.monthly-grid td.employee-col {
   text-align: left;
   font-weight: 600;
-  width: 32mm;
-}
-
-.monthly-attendance-report table.monthly-grid th.code-col,
-.monthly-attendance-report table.monthly-grid td.code-col {
-  text-align: left;
-  width: 20mm;
-  font-variant-numeric: tabular-nums;
-}
-
-.monthly-attendance-report table.monthly-grid th.assignment-col,
-.monthly-attendance-report table.monthly-grid td.assignment-col {
-  text-align: left;
-  width: 32mm;
-  color: #475569;
-}
-
-.monthly-attendance-report table.monthly-grid td.assignment-col {
-  font-size: 8pt;
+  width: 45mm;
 }
 
 .monthly-attendance-report table.monthly-grid th.day-col {
-  width: 9mm;
+  width: 8mm;
 }
 
 .monthly-attendance-report table.monthly-grid--continued thead th {

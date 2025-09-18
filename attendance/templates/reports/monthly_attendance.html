@@ -8,15 +8,19 @@
 <body class="report-body monthly-attendance-report">
   <header class="report-header">
     <div class="report-header-primary">
-      <h1 class="report-title">{{ title|default:"Monthly attendance report" }}</h1>
-      <p class="report-period">{{ report.month_label }}</p>
-      {% if company %}
-        <p class="report-period">{{ company.name }}</p>
-      {% endif %}
+      <h1 class="report-branch-name">
+        {% if filters and filters.branch %}
+          {{ filters.branch|join:", " }}
+        {% elif report.branch_list %}
+          {% for branch in report.branch_list %}{% if not forloop.first %}, {% endif %}{{ branch.name }}{% endfor %}
+        {% else %}
+          All branches
+        {% endif %}
+      </h1>
+      <p class="report-heading">Attendance Report for Month of {{ report.month_label }}</p>
     </div>
     <div class="report-meta">
-      <p class="label">Generated</p>
-      <p class="timestamp">{{ generated_at|date:"d M Y H:i" }}</p>
+      <p class="report-generated">Generated at {{ generated_at|date:"d M Y H:i" }}</p>
     </div>
   </header>
 
@@ -28,6 +32,65 @@
   </footer>
 
   <main class="report-content">
+    {% if report.branch_list %}
+      {% for branch in report.branch_list %}
+        <section class="branch-section">
+          <div class="branch-header">
+            <div>
+              <h2 class="branch-title">{{ branch.name }}</h2>
+              <p class="branch-subtitle">{{ branch.employee_count }} employee{{ branch.employee_count|pluralize }}</p>
+            </div>
+            <div class="branch-totals">
+              {% for item in branch.legend_totals %}
+                <div class="total-item">
+                  <span class="total-glyph {{ item.css_class }}">{{ item.glyph }}</span>
+                  <span>{{ item.count }}</span>
+                </div>
+              {% endfor %}
+            </div>
+          </div>
+          {% if branch.employees %}
+            <div class="monthly-grid-group">
+              {% for table in branch.tables %}
+                <div class="monthly-grid-wrapper{% if not table.show_meta %} monthly-grid-wrapper--continued{% endif %}">
+                  <table class="monthly-grid{% if not table.show_meta %} monthly-grid--continued{% endif %}">
+                    <thead>
+                      <tr>
+                        <th class="employee-col{% if not table.show_meta %} meta-heading{% endif %}">Employee</th>
+                        {% for day in table.days %}
+                          <th class="day-col">{{ day.day }}</th>
+                        {% endfor %}
+                      </tr>
+                      <tr>
+                        <th></th>
+                        {% for day in table.days %}
+                          <th class="day-col">{{ day.weekday }}</th>
+                        {% endfor %}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {% for employee in table.employees %}
+                        <tr>
+                          <td class="employee-col{% if not table.show_meta %} repeated-meta{% endif %}">{{ employee.meta.display|default:"" }}</td>
+                          {% for cell in employee.cells %}
+                            <td class="day-cell {{ cell.css_class }}"><span class="glyph">{{ cell.glyph }}</span></td>
+                          {% endfor %}
+                        </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+              {% endfor %}
+            </div>
+          {% else %}
+            <p class="empty-state">No employees matched the selected filters for this branch.</p>
+          {% endif %}
+        </section>
+      {% endfor %}
+    {% else %}
+      <p class="empty-state">No employees matched the selected filters.</p>
+    {% endif %}
+
     <section class="report-overview">
       <div class="report-summary-card">
         <h2>Monthly totals</h2>
@@ -70,87 +133,6 @@
         </div>
       {% endif %}
     </section>
-
-    {% if report.branch_list %}
-      {% for branch in report.branch_list %}
-        <section class="branch-section">
-          <div class="branch-header">
-            <div>
-              <h2 class="branch-title">{{ branch.name }}</h2>
-              <p class="branch-subtitle">{{ branch.employee_count }} employee{{ branch.employee_count|pluralize }}</p>
-            </div>
-            <div class="branch-totals">
-              {% for item in branch.legend_totals %}
-                <div class="total-item">
-                  <span class="total-glyph {{ item.css_class }}">{{ item.glyph }}</span>
-                  <span>{{ item.count }}</span>
-                </div>
-              {% endfor %}
-            </div>
-          </div>
-          {% if branch.employees %}
-            <div class="monthly-grid-group">
-              {% for table in branch.tables %}
-                <div class="monthly-grid-wrapper{% if not table.show_meta %} monthly-grid-wrapper--continued{% endif %}">
-                  <table class="monthly-grid{% if not table.show_meta %} monthly-grid--continued{% endif %}">
-                    <thead>
-                      <tr>
-                        {% if table.show_meta %}
-                          <th class="employee-col">Employee</th>
-                          <th class="code-col">Code</th>
-                          <th class="assignment-col">Assignment</th>
-                        {% else %}
-                          <th class="employee-col meta-heading">Employee</th>
-                          <th class="code-col meta-heading">Code</th>
-                          <th class="assignment-col meta-heading">Assignment</th>
-                        {% endif %}
-                        {% for day in table.days %}
-                          <th class="day-col">{{ day.day }}</th>
-                        {% endfor %}
-                      </tr>
-                      <tr>
-                        <th></th>
-                        <th></th>
-                        <th></th>
-                        {% for day in table.days %}
-                          <th class="day-col">{{ day.weekday }}</th>
-                        {% endfor %}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {% for employee in table.employees %}
-                        <tr>
-                          <td class="employee-col{% if not table.show_meta %} repeated-meta{% endif %}">{{ employee.meta.display|default:"" }}</td>
-                          <td class="code-col{% if not table.show_meta %} repeated-meta{% endif %}">{{ employee.meta.code|default:"" }}</td>
-                          <td class="assignment-col{% if not table.show_meta %} repeated-meta{% endif %}">
-                            {% if employee.meta.department %}
-                              {{ employee.meta.department }}
-                            {% endif %}
-                            {% if employee.meta.department and employee.meta.project %}
-                              /
-                            {% endif %}
-                            {% if employee.meta.project %}
-                              {{ employee.meta.project }}
-                            {% endif %}
-                          </td>
-                          {% for cell in employee.cells %}
-                            <td class="day-cell {{ cell.css_class }}"><span class="glyph">{{ cell.glyph }}</span></td>
-                          {% endfor %}
-                        </tr>
-                      {% endfor %}
-                    </tbody>
-                  </table>
-                </div>
-              {% endfor %}
-            </div>
-          {% else %}
-            <p class="empty-state">No employees matched the selected filters for this branch.</p>
-          {% endif %}
-        </section>
-      {% endfor %}
-    {% else %}
-      <p class="empty-state">No employees matched the selected filters.</p>
-    {% endif %}
 
     <section class="legend-section">
       <h2 class="section-title">Legend</h2>
