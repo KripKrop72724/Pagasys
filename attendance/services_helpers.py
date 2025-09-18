@@ -330,7 +330,17 @@ def apply_att_adjustments(
 
     adjustments = AttAdjustment.objects.filter(employee_id=employee_id, date=day)
     if not adjustments:
-        return work_min, unpaid_break, paid_break, ot_reg, ot_night, ot_hol, status, anomalies
+        return (
+            work_min,
+            unpaid_break,
+            paid_break,
+            ot_reg,
+            ot_night,
+            ot_hol,
+            status,
+            anomalies,
+            False,
+        )
 
     deltas = {
         "delta_work_min": 0,
@@ -341,6 +351,7 @@ def apply_att_adjustments(
         "delta_ot_holiday_min": 0,
     }
     override = None
+    override_applied = False
     for adj in adjustments:
         deltas["delta_work_min"] += adj.delta_work_min
         deltas["delta_unpaid_break_min"] += adj.delta_unpaid_break_min
@@ -359,6 +370,17 @@ def apply_att_adjustments(
     ot_hol += deltas["delta_ot_holiday_min"]
     if override:
         status = override
+        override_applied = True
     anomalies["manual_adjustments_applied"] = True
 
-    return work_min, unpaid_break, paid_break, ot_reg, ot_night, ot_hol, status, anomalies
+    return (
+        work_min,
+        unpaid_break,
+        paid_break,
+        ot_reg,
+        ot_night,
+        ot_hol,
+        status,
+        anomalies,
+        override_applied,
+    )

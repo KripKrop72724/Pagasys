@@ -143,9 +143,35 @@ def render_late_comers_pdf(
     return HTML(string=html, base_url=base_url).write_pdf(stylesheets=stylesheets)
 
 
+def render_monthly_attendance_pdf(report, context=None):
+    """Render the monthly attendance grid as a PDF document."""
+
+    context = context or {}
+    request = context.get("request")
+    logo_url = context.get("logo_url") or static("images/logo.png")
+    base_url = None
+    if request and hasattr(request, "build_absolute_uri"):
+        logo_url = request.build_absolute_uri(logo_url)
+        base_url = request.build_absolute_uri("/")
+
+    template_context = {
+        "report": report,
+        "title": context.get("title", "Monthly attendance report"),
+        "company": context.get("company"),
+        "filters": context.get("filters", {}),
+        "generated_at": context.get("generated_at", timezone.now()),
+        "logo_url": logo_url,
+    }
+    html = render_to_string("reports/monthly_attendance.html", template_context)
+    stylesheet_path = finders.find("attendance/css/reports.css")
+    stylesheets = [CSS(filename=stylesheet_path)] if stylesheet_path else None
+    return HTML(string=html, base_url=base_url).write_pdf(stylesheets=stylesheets)
+
+
 __all__ = [
     "get_late_comers",
     "group_late_comers",
     "render_late_comers_pdf",
+    "render_monthly_attendance_pdf",
 ]
 

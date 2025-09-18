@@ -534,6 +534,23 @@ class AdjustmentTests(AttendanceBase):
         self.assertEqual(day.status, "leave")
         self.assertTrue(day.anomalies.get("manual_adjustments_applied"))
 
+    def test_adjustment_without_override_updates_status(self):
+        day = self.compute()
+        self.assertEqual(day.status, "absent")
+
+        AttAdjustment.objects.create(
+            employee=self.employee,
+            date=self.day,
+            delta_work_min=8 * 60,
+            reason="make_present",
+            created_by_id=1,
+        )
+
+        day = self.compute()
+        self.assertEqual(day.status, "present")
+        self.assertEqual(day.work_min, 8 * 60)
+        self.assertTrue(day.anomalies.get("manual_adjustments_applied"))
+
     def test_adjustment_idempotent(self):
         self.punch(time(9, 0), "in")
         self.punch(time(17, 0), "out")

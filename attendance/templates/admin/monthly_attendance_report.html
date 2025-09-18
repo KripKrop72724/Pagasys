@@ -1,0 +1,81 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">{% trans 'Home' %}</a>
+  › <a href="{% url 'admin:app_list' 'attendance' %}">{% trans 'Attendance' %}</a>
+  › {{ title }}
+</div>
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+  <h1>{{ title }}</h1>
+  <form method="post" class="form-horizontal">{% csrf_token %}
+    <div class="module aligned">
+      {{ form.non_field_errors }}
+      <fieldset class="form-section">
+        <legend>{% trans "Report month" %}</legend>
+        <div class="form-row">
+          <label for="{{ form.month.id_for_label }}">{{ form.month.label }}</label>
+          <div class="field">
+            {{ form.month.errors }}
+            {{ form.month }}
+            {% if form.month.help_text %}
+              <p class="help">{{ form.month.help_text }}</p>
+            {% endif %}
+          </div>
+        </div>
+      </fieldset>
+      <fieldset class="form-section optional-filters">
+        <legend>{% trans "Optional filters" %}</legend>
+        <p class="help">{% trans "Fine-tune the report by narrowing the employee set." %}</p>
+        <div class="form-row">
+          <label for="{{ form.branch.id_for_label }}">{{ form.branch.label }}</label>
+          <div class="field">
+            {{ form.branch.errors }}
+            {{ form.branch }}
+            <p class="help">{% trans "Limit the report to employees assigned to a branch." %}</p>
+          </div>
+        </div>
+        <div class="form-row">
+          <label for="{{ form.department.id_for_label }}">{{ form.department.label }}</label>
+          <div class="field">
+            {{ form.department.errors }}
+            {{ form.department }}
+            <p class="help">{% trans "Focus on a single department." %}</p>
+          </div>
+        </div>
+        <div class="form-row">
+          <label for="{{ form.project.id_for_label }}">{{ form.project.label }}</label>
+          <div class="field">
+            {{ form.project.errors }}
+            {{ form.project }}
+            <p class="help">{% trans "Filter employees by project assignment." %}</p>
+          </div>
+        </div>
+        <div class="form-row">
+          <label for="{{ form.status.id_for_label }}">{{ form.status.label }}</label>
+          <div class="field">
+            {{ form.status.errors }}
+            {{ form.status }}
+            <p class="help">{% trans "Choose one or more statuses to highlight specific outcomes." %}</p>
+          </div>
+        </div>
+        <div class="form-row">
+          <label for="{{ form.locked.id_for_label }}">{{ form.locked.label }}</label>
+          <div class="field">
+            {{ form.locked.errors }}
+            {{ form.locked }}
+            <p class="help">{% trans "Show only locked or unlocked days when needed." %}</p>
+          </div>
+        </div>
+      </fieldset>
+    </div>
+    <div class="submit-row">
+      <input type="submit" value="{% trans 'Generate' %}" class="default">
+    </div>
+  </form>
+</div>
+{% endblock %}

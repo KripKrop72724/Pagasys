@@ -57,9 +57,10 @@ comprehensive automated test suite.
   enrollment with Amazon Rekognition, and raw punch ingestion with geofence and
   scope validation. Raw events are stored for later summarization by the policy
   layer.
-* **Late comers reporting** – Generate PDF summaries of late arrivals via API or
-  the admin interface. See [docs/attendance_reports.md](docs/attendance_reports.md)
-  for usage and query parameters.
+* **Attendance reporting** – Generate PDF summaries for late arrivals and full
+  monthly attendance grids via the API or admin interface. See
+  [docs/attendance_reports.md](docs/attendance_reports.md) for usage and query
+  parameters.
 
 ### Attendance calendar API
 
