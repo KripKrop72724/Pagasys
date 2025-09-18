@@ -289,6 +289,9 @@ class AttDayAdmin(ScopedAdminMixin, admin.ModelAdmin):
         queryset = viewset._apply_sorting(queryset, drf_request)
 
         page = viewset.paginate_queryset(queryset)
+        paginator = getattr(viewset, "paginator", None)
+        all_requested = bool(getattr(paginator, "all_requested", False)) if paginator else False
+
         employees = []
         using_pagination = False
         if page is not None:
@@ -297,10 +300,12 @@ class AttDayAdmin(ScopedAdminMixin, admin.ModelAdmin):
             if not employees and queryset.exists():
                 employees = list(queryset[:CALENDAR_PAGE_SIZE])
                 using_pagination = False
+        elif all_requested:
+            employees = list(queryset)
         else:
             employees = list(queryset[:CALENDAR_PAGE_SIZE])
 
-        if not using_pagination and len(employees) > CALENDAR_PAGE_SIZE:
+        if not using_pagination and not all_requested and len(employees) > CALENDAR_PAGE_SIZE:
             employees = employees[:CALENDAR_PAGE_SIZE]
 
         calendar_result = build_monthly_calendar(

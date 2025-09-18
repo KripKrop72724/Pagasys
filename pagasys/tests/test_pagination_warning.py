@@ -109,6 +109,28 @@ class PaginationWarningTests(TestCase):
         for url in endpoints:
             self._check_endpoint(url)
 
+    def test_all_query_param_returns_full_collection(self):
+        base_url = "/api/companies/"
+        paginated = self.client.get(base_url, {"page_size": 1})
+        self.assertEqual(paginated.status_code, 200)
+        payload = paginated.json()
+        self.assertIn("results", payload)
+        self.assertEqual(len(payload["results"]), 1)
+        self.assertNotEqual(payload.get("next"), None)
+
+        unpaginated = self.client.get(base_url, {"page_size": 1, "all": "true"})
+        self.assertEqual(unpaginated.status_code, 200)
+        data = unpaginated.json()
+        self.assertIsInstance(data, list)
+        self.assertEqual(len(data), Company.objects.count())
+
+    def test_all_query_param_requires_boolean(self):
+        response = self.client.get("/api/companies/", {"all": "maybe"})
+        self.assertEqual(response.status_code, 400)
+        payload = response.json()
+        self.assertIn("errors", payload)
+        self.assertIn("all", payload["errors"])
+
 
 class ModelOrderingTests(TestCase):
     def test_meta_ordering_defined(self):

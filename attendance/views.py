@@ -25,6 +25,7 @@ from drf_spectacular.utils import (
 from pagasys.openapi_utils import document_filters
 from pagasys.utils import scope_queryset
 from pagasys.models import Employee, Company, Branch, Department, Project
+from pagasys.pagination import AllRecordsMixin
 from django.http import HttpResponse
 
 from .models import AttDay, AttPair, AttAdjustment
@@ -334,7 +335,7 @@ ATTENDANCE_CALENDAR_EXAMPLE = OpenApiExample(
 )
 
 
-class AttendanceCalendarPagination(CursorPagination):
+class AttendanceCalendarPagination(AllRecordsMixin, CursorPagination):
     page_size = CALENDAR_PAGE_SIZE
     ordering = ("first_name", "last_name", "username", "id")
 
@@ -1015,9 +1016,17 @@ class AttendanceCalendarViewSet(viewsets.GenericViewSet):
         queryset = self._apply_sorting(queryset, request)
 
         page = self.paginate_queryset(queryset)
-        employees = list(page if page is not None else queryset[:CALENDAR_PAGE_SIZE])
-        if page is None and len(employees) > CALENDAR_PAGE_SIZE:
-            employees = employees[:CALENDAR_PAGE_SIZE]
+        paginator = getattr(self, "paginator", None)
+        all_requested = bool(getattr(paginator, "all_requested", False)) if paginator else False
+
+        if page is not None:
+            employees = list(page)
+        elif all_requested:
+            employees = list(queryset)
+        else:
+            employees = list(queryset[:CALENDAR_PAGE_SIZE])
+            if len(employees) > CALENDAR_PAGE_SIZE:
+                employees = employees[:CALENDAR_PAGE_SIZE]
 
         calendar_result = build_monthly_calendar(
             employees,
