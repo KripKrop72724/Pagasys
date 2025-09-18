@@ -13,7 +13,7 @@
 
 @page monthly-attendance {
   size: A4 landscape;
-  margin: 18mm 14mm 20mm;
+  margin: 28mm 16mm 24mm;
   @top-center {
     content: element(report-header);
   }
@@ -170,6 +170,10 @@ p {
   gap: 8mm;
   align-items: flex-start;
   margin-bottom: 10mm;
+  break-before: page;
+  page-break-before: always;
+  break-inside: avoid;
+  page-break-inside: avoid;
 }
 
 .monthly-attendance-report .report-summary-card {
@@ -226,7 +230,6 @@ p {
 
 .monthly-attendance-report .branch-section {
   margin-bottom: 14mm;
-  page-break-inside: avoid;
 }
 
 .monthly-attendance-report .branch-header {
@@ -234,9 +237,12 @@ p {
   justify-content: space-between;
   align-items: flex-end;
   gap: 6mm;
+  flex-wrap: wrap;
   margin-bottom: 4mm;
   border-bottom: 1px solid #e2e8f0;
   padding-bottom: 2mm;
+  break-after: avoid;
+  page-break-after: avoid;
 }
 
 .monthly-attendance-report .branch-title {
@@ -267,8 +273,8 @@ p {
 }
 
 .monthly-attendance-report .monthly-grid-wrapper {
-  break-inside: avoid;
-  page-break-inside: avoid;
+  break-inside: auto;
+  page-break-inside: auto;
 }
 
 .monthly-attendance-report .monthly-grid-wrapper--continued {
@@ -299,7 +305,7 @@ p {
   table-layout: fixed;
   font-size: 8pt;
   border: 1px solid #e2e8f0;
-  break-inside: avoid;
+  break-inside: auto;
 }
 
 .monthly-attendance-report table.monthly-grid thead {
@@ -399,6 +405,7 @@ p {
 
 .monthly-attendance-report .legend-section {
   page-break-inside: avoid;
+  break-inside: avoid;
   margin-top: 12mm;
   border-top: 1px solid #e2e8f0;
   padding-top: 6mm;
