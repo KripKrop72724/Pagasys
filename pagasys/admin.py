@@ -430,6 +430,13 @@ class EmployeeAdmin(CleanSaveModelMixin, ScopedAdminMixin, UserAdmin):
     list_display = ("id",) + UserAdmin.list_display
     ordering = ("id",)
     actions = ["delete_selected", "download_enrollment_links_csv"]
+    search_fields = (
+        "username",
+        "first_name",
+        "middle_name",
+        "last_name",
+        "email",
+    )
 
     list_filter = UserAdmin.list_filter + (
         "visa_type",
