@@ -820,9 +820,8 @@ paths:
                 value:
                   employee: 1
                   date: '2024-01-05'
-                  delta_ot_regular_min: -30
-                  override_status: present
-                  reason: Reduce overtime by 30 minutes
+                  mark_full_attendance: true
+                  reason: Grant full shift credit
           application/x-www-form-urlencoded:
             schema:
               $ref: '#/components/schemas/AttAdjustment'
@@ -1028,6 +1027,14 @@ paths:
       operationId: companies_att_days_list
       description: 'Compound filtering is supported. Example: ?employee=<value>&date=<value>'
       parameters:
+      - in: query
+        name: branch
+        schema:
+          type: string
+        description: Filter by branch. Combine multiple parameters for compound filtering.
+        examples:
+          Example:
+            value: <value>
       - in: path
         name: company_id
         schema:
@@ -1054,29 +1061,29 @@ paths:
       - in: query
         name: is_holiday
         schema:
-          type: string
+          type: boolean
         description: Filter by is_holiday. Combine multiple parameters for compound
           filtering.
         examples:
           Example:
-            value: <value>
+            value: 'true'
       - in: query
         name: is_rest_day
         schema:
-          type: string
+          type: boolean
         description: Filter by is_rest_day. Combine multiple parameters for compound
           filtering.
         examples:
           Example:
-            value: <value>
+            value: 'true'
       - in: query
         name: locked
         schema:
-          type: string
+          type: boolean
         description: Filter by locked. Combine multiple parameters for compound filtering.
         examples:
           Example:
-            value: <value>
+            value: 'true'
       - in: query
         name: ordering
         schema:
@@ -1345,6 +1352,14 @@ paths:
       operationId: companies_att_pairs_list
       description: 'Compound filtering is supported. Example: ?employee=<value>&date=<value>'
       parameters:
+      - in: query
+        name: branch
+        schema:
+          type: string
+        description: Filter by branch. Combine multiple parameters for compound filtering.
+        examples:
+          Example:
+            value: <value>
       - in: path
         name: company_id
         schema:
@@ -2249,6 +2264,7 @@ paths:
         summaries, raw pairs, and manual adjustments for each employee in scope. Use
         the optional lock and adjustment actions to manage period finalisation without
         leaving the calendar view.
+      summary: Proxy to create a manual attendance adjustment
       parameters:
       - in: path
         name: company_id
@@ -2258,11 +2274,43 @@ paths:
         required: true
       tags:
       - Attendance
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttAdjustment'
+            examples:
+              CreateAdjustment:
+                value:
+                  employee: 42
+                  date: '2024-05-01'
+                  delta_work_min: -15
+                  override_status: null
+                  reason: Late arrival waiver
+                summary: Create adjustment
+              MarkFullAttendance:
+                value:
+                  employee: 42
+                  date: '2024-05-01'
+                  mark_full_attendance: true
+                  reason: Auto-fill to full shift
+                summary: Mark full attendance
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AttAdjustment'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AttAdjustment'
+        required: true
       security:
       - jwtAuth: []
       responses:
-        '200':
-          description: No response body
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttAdjustment'
+          description: Created adjustment
   /api/companies/{company_id}/attendance-calendar/lock/:
     post:
       operationId: companies_attendance_calendar_lock_create
@@ -2270,6 +2318,7 @@ paths:
         summaries, raw pairs, and manual adjustments for each employee in scope. Use
         the optional lock and adjustment actions to manage period finalisation without
         leaving the calendar view.
+      summary: Lock or unlock computed attendance days
       parameters:
       - in: path
         name: company_id
@@ -2279,11 +2328,115 @@ paths:
         required: true
       tags:
       - Attendance
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LockDays'
+            examples:
+              LockMay2024:
+                value:
+                  start: '2024-05-01'
+                  end: '2024-05-31'
+                  employee_ids:
+                  - 42
+                  - 43
+                  locked: true
+                summary: Lock May 2024
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LockDays'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/LockDays'
+        required: true
       security:
       - jwtAuth: []
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttendanceCalendarLockResponse'
+              examples:
+                LockResponse:
+                  value:
+                    updated: 62
+                  summary: Lock response
+          description: Number of AttDay rows updated
+  /api/companies/{company_id}/attendance-calendar/monthly-report/:
+    get:
+      operationId: companies_attendance_calendar_monthly_report_retrieve
+      description: Generate a landscape PDF that groups employees by branch and renders
+        a day-by-day attendance grid using compact glyphs. The report honours the
+        same filtering options as the calendar API (branch, department, project, status,
+        locked).
+      summary: Download a monthly attendance PDF report
+      parameters:
+      - in: query
+        name: branch
+        schema:
+          type: string
+        description: Restrict employees by branch via their department or project
+          relationship. Accepts repeated parameters or a comma separated list of branch
+          IDs.
+      - in: path
+        name: company_id
+        schema:
+          type: string
+          pattern: ^\d+$
+        required: true
+      - in: query
+        name: department
+        schema:
+          type: string
+        description: Restrict employees by department IDs (repeated or comma separated)
+      - in: query
+        name: employee
+        schema:
+          type: string
+        description: Restrict the calendar to specific employees. Accepts repeated
+          parameters or a comma separated list of employee IDs.
+      - in: query
+        name: locked
+        schema:
+          type: boolean
+        description: Filter days by lock state before aggregation
+      - in: query
+        name: month
+        schema:
+          type: string
+        description: Target month in YYYY-MM format. The API expands this to the first
+          and last day of the month to guarantee a 28–31 day window.
+        required: true
+        examples:
+          May2024:
+            value: 2024-05
+            summary: May 2024
+      - in: query
+        name: project
+        schema:
+          type: string
+        description: Restrict employees by project IDs (repeated or comma separated)
+      - in: query
+        name: status
+        schema:
+          type: string
+        description: Comma separated list of AttDay.status values to include (e.g.
+          present,absent,leave). Only matching days appear in the grid and summary
+          counts.
+      tags:
+      - Attendance
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+          description: PDF file containing the monthly attendance grid.
   /api/companies/{company_id}/devices/:
     get:
       operationId: companies_devices_list
@@ -3206,6 +3359,14 @@ paths:
       operationId: companies_punch_events_list
       description: 'Compound filtering is supported. Example: ?employee=<value>&device=<value>'
       parameters:
+      - in: query
+        name: branch
+        schema:
+          type: string
+        description: Filter by branch. Combine multiple parameters for compound filtering.
+        examples:
+          Example:
+            value: <value>
       - in: path
         name: company_id
         schema:
@@ -9319,6 +9480,12 @@ components:
         employee:
           type: integer
           description: Employee ID
+        mark_full_attendance:
+          type: boolean
+          writeOnly: true
+          default: false
+          description: When true, delta_work_min is set to the minutes needed to meet
+            the scheduled shift total.
         date:
           type: string
           format: date
@@ -9656,6 +9823,13 @@ components:
           description: Employee code/username
       required:
       - code
+    AttendanceCalendarLockResponse:
+      type: object
+      properties:
+        updated:
+          type: integer
+      required:
+      - updated
     AttendanceCalendarMetricsDoc:
       type: object
       properties:
@@ -12112,6 +12286,12 @@ components:
         employee:
           type: integer
           description: Employee ID
+        mark_full_attendance:
+          type: boolean
+          writeOnly: true
+          default: false
+          description: When true, delta_work_min is set to the minutes needed to meet
+            the scheduled shift total.
         date:
           type: string
           format: date

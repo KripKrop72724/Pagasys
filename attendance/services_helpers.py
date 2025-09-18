@@ -384,3 +384,41 @@ def apply_att_adjustments(
         anomalies,
         override_applied,
     )
+
+
+def compute_full_attendance_delta(employee_id: int, day: datetime.date) -> int:
+    """Return minutes needed to reach the scheduled requirement for a day.
+
+    Looks up the computed ``AttDay`` record, determines the active shift, and
+    returns the positive difference between the scheduled minutes and the
+    currently recorded ``work_min``. Raises ``ValueError`` when the prerequisite
+    data (attendance day or shift) is missing.
+    """
+
+    from .models import AttDay  # imported lazily to avoid circular import
+
+    try:
+        att_day = (
+            AttDay.objects.select_related("shift", "roster__shift")
+            .get(employee_id=employee_id, date=day)
+        )
+    except AttDay.DoesNotExist as exc:
+        raise ValueError(
+            "No attendance day found for the employee and date."
+        ) from exc
+
+    shift = att_day.shift
+    if shift is None and att_day.roster_id:
+        shift = att_day.roster.shift
+    if shift is None:
+        raise ValueError(
+            "Assign a shift before marking full attendance for this day."
+        )
+
+    rules = active_rules(shift, att_day.date)
+    leave_portion = float(att_day.leave_portion or 0)
+    required = scheduled_required_minutes(
+        shift, rules, leave_portion, att_day.is_rest_day
+    )
+    missing = required - att_day.work_min
+    return max(0, int(missing))

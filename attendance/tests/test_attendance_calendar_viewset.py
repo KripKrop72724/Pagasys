@@ -1,11 +1,11 @@
-from datetime import date, datetime
+from datetime import date, datetime, time
 
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from pagasys.models import Company, Branch, Department, Project, Employee
+from pagasys.models import Company, Branch, Department, Project, Employee, ShiftTemplate
 from attendance.models import AttDay, AttPair, AttAdjustment
 from attendance.services import build_monthly_calendar
 
@@ -50,6 +50,13 @@ class AttendanceCalendarViewSetTests(TestCase):
             employment_type="permanent",
             visa_type="personal",
         )
+
+        self.shift = ShiftTemplate.objects.create(
+            company=self.company,
+            name="Day",
+            start_time=time(9, 0),
+            end_time=time(17, 0),
+        )
         self.day_one = date(2024, 5, 1)
         self.day_two = date(2024, 5, 2)
 
@@ -62,22 +69,26 @@ class AttendanceCalendarViewSetTests(TestCase):
             status="present",
             locked=False,
             anomalies={"missing_out_closed_at_next_in": 1},
+            shift=self.shift,
         )
         AttDay.objects.create(
             employee=self.employee_dept,
             date=self.day_two,
             status="absent",
+            shift=self.shift,
         )
         AttDay.objects.create(
             employee=self.employee_proj,
             date=self.day_one,
             work_min=420,
             status="present",
+            shift=self.shift,
         )
         AttDay.objects.create(
             employee=self.employee_proj,
             date=self.day_two,
             status="rest",
+            shift=self.shift,
         )
 
         AttPair.objects.create(
@@ -266,6 +277,23 @@ class AttendanceCalendarViewSetTests(TestCase):
         created = AttAdjustment.objects.filter(employee=self.employee_proj).latest("id")
         assert created.delta_work_min == 15
         assert created.created_by_id == self.admin.id
+
+    def test_calendar_adjustments_action_marks_full_attendance(self):
+        response = self.client.post(
+            self._adjustments_url(),
+            {
+                "employee": self.employee_proj.id,
+                "date": "2024-05-01",
+                "mark_full_attendance": True,
+                "reason": "Grant full shift credit",
+            },
+            format="json",
+        )
+        assert response.status_code == 201
+        payload = response.json()
+        assert payload["delta_work_min"] == 60
+        created = AttAdjustment.objects.filter(employee=self.employee_proj).latest("id")
+        assert created.delta_work_min == 60
 
     def test_build_monthly_calendar_report_structure(self):
         result = build_monthly_calendar(

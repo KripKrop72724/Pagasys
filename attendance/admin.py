@@ -7,9 +7,11 @@ from django.utils.safestring import mark_safe
 from django import forms
 from django.template.response import TemplateResponse
 from django.shortcuts import redirect
-from django.urls import path
+from django.urls import path, reverse
 from django.http import HttpResponse, QueryDict
 from django.utils import timezone
+from django.core.exceptions import PermissionDenied, ValidationError
+from django.db.models import Q
 
 from rest_framework import serializers
 from rest_framework.request import Request
@@ -32,10 +34,19 @@ from .views import (
     parse_month,
 )
 from .services import build_monthly_calendar
+from .services_helpers import compute_full_attendance_delta
 from .forms import MonthlyAttendanceReportForm
 
 
 class AttAdjustmentForm(forms.ModelForm):
+    mark_full_attendance = forms.BooleanField(
+        required=False,
+        label="Mark full attendance",
+        help_text=(
+            "When selected, delta_work_min is auto-filled with the minutes "
+            "needed to reach the scheduled shift total."
+        ),
+    )
     class Meta:
         model = AttAdjustment
         exclude = ["created_by_id"]
@@ -49,17 +60,94 @@ class AttAdjustmentForm(forms.ModelForm):
             "override_status": "Override final status (e.g. 'present')",
         }
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        optional_fields = [
+            "delta_work_min",
+            "delta_unpaid_break_min",
+            "delta_paid_break_min",
+            "delta_ot_regular_min",
+            "delta_ot_night_min",
+            "delta_ot_holiday_min",
+        ]
+        for name in optional_fields:
+            if name in self.fields:
+                self.fields[name].required = False
+
+    def clean(self):
+        cleaned = super().clean()
+        if cleaned.get("mark_full_attendance"):
+            employee = cleaned.get("employee") or getattr(
+                self.instance, "employee", None
+            )
+            date_value = cleaned.get("date") or getattr(
+                self.instance, "date", None
+            )
+            if not employee or not date_value:
+                raise forms.ValidationError(
+                    {
+                        "mark_full_attendance": (
+                            "Employee and date are required to mark full attendance."
+                        )
+                    }
+                )
+            try:
+                delta = compute_full_attendance_delta(employee.id, date_value)
+            except ValueError as exc:
+                raise forms.ValidationError(
+                    {"mark_full_attendance": str(exc)}
+                ) from exc
+            cleaned["delta_work_min"] = delta
+            self.cleaned_data["delta_work_min"] = delta
+            self.instance.delta_work_min = delta
+        return cleaned
+
+
+class QuickAttAdjustmentForm(AttAdjustmentForm):
+    class Meta(AttAdjustmentForm.Meta):
+        exclude = [*AttAdjustmentForm.Meta.exclude, "employee", "date"]
+
+
+class EmployeeBranchListFilter(admin.SimpleListFilter):
+    title = "branch"
+    parameter_name = "branch"
+
+    def lookups(self, request, model_admin):
+        qs = scope_queryset(Branch.objects.all(), request.user)
+        return [(branch.pk, branch.name) for branch in qs.order_by("name")]
+
+    def queryset(self, request, queryset):
+        value = self.value()
+        if not value:
+            return queryset
+        try:
+            branch_id = int(value)
+        except (TypeError, ValueError):
+            return queryset
+        branch_filter = Q(employee__department__branch_id=branch_id) | Q(
+            employee__project__branch_id=branch_id
+        )
+        return queryset.filter(branch_filter)
+
 
 @admin.register(AttDay)
 class AttDayAdmin(ScopedAdminMixin, admin.ModelAdmin):
     """Admin interface for computed daily attendance results."""
 
     list_display = ("employee", "date", "status", "work_min", "locked")
-    list_filter = ("date", "status", "is_holiday", "is_rest_day", "locked")
+    list_filter = (
+        "date",
+        "status",
+        "is_holiday",
+        "is_rest_day",
+        "locked",
+        EmployeeBranchListFilter,
+    )
     date_hierarchy = "date"
     search_fields = ("employee__first_name", "employee__last_name")
     readonly_fields = ("computed_at",)
     change_list_template = "admin/attendance/attday/change_list.html"
+    change_form_template = "admin/attendance/attday/change_form.html"
     actions = [
         "recompute_selected",
         "lock_selected",
@@ -394,6 +482,94 @@ class AttDayAdmin(ScopedAdminMixin, admin.ModelAdmin):
                     raise forms.ValidationError("Employee IDs must be integers")
             return ids
 
+    def _message_form_errors(self, request, form):
+        for field, errors in form.errors.items():
+            label = field
+            if field in form.fields:
+                label = form.fields[field].label or field
+            for error in errors:
+                if field == "__all__":
+                    self.message_user(request, error, level=messages.ERROR)
+                else:
+                    self.message_user(
+                        request, f"{label}: {error}", level=messages.ERROR
+                    )
+
+    def _report_validation_errors(self, request, exc):
+        handled = False
+        if hasattr(exc, "message_dict"):
+            for field, messages_list in exc.message_dict.items():
+                for message in messages_list:
+                    handled = True
+                    if field and field != "__all__":
+                        self.message_user(
+                            request,
+                            f"{field.replace('_', ' ').title()}: {message}",
+                            level=messages.ERROR,
+                        )
+                    else:
+                        self.message_user(request, message, level=messages.ERROR)
+        if not handled:
+            for message in getattr(exc, "messages", [str(exc)]):
+                self.message_user(request, message, level=messages.ERROR)
+
+    def changeform_view(self, request, object_id=None, form_url="", extra_context=None):
+        extra_context = extra_context or {}
+        day = None
+        if object_id is not None:
+            day = self.get_object(request, object_id)
+        if day is not None:
+            extra_context.setdefault("quick_adjustment_form", QuickAttAdjustmentForm())
+            extra_context["quick_adjustment_target"] = day
+            extra_context["quick_adjustment_url"] = reverse(
+                "admin:attendance_attday_add_adjustment", args=[day.pk]
+            )
+        else:
+            extra_context.setdefault("quick_adjustment_form", None)
+            extra_context["quick_adjustment_target"] = None
+            extra_context["quick_adjustment_url"] = None
+        return super().changeform_view(request, object_id, form_url, extra_context)
+
+    def add_adjustment_view(self, request, object_id):
+        day = self.get_object(request, object_id)
+        if day is None:
+            return self._get_obj_does_not_exist_redirect(
+                request, request.path, object_id
+            )
+        if not self.has_change_permission(request, day):
+            raise PermissionDenied
+        if request.method != "POST":
+            return redirect(reverse("admin:attendance_attday_change", args=[object_id]))
+
+        form = QuickAttAdjustmentForm(request.POST)
+        # Ensure model-level validation sees the scoped employee/date before
+        # ``is_valid`` triggers ``AttAdjustment.clean`` checks.
+        form.instance.employee = day.employee
+        form.instance.date = day.date
+        form.instance.created_by_id = request.user.id
+        if form.is_valid():
+            adjustment = form.save(commit=False)
+            adjustment.employee = day.employee
+            adjustment.date = day.date
+            adjustment.created_by_id = request.user.id
+            try:
+                adjustment.save()
+            except ValidationError as exc:
+                self._report_validation_errors(request, exc)
+            else:
+                self.message_user(
+                    request,
+                    "Attendance adjustment added successfully.",
+                    level=messages.SUCCESS,
+                )
+                return redirect(
+                    reverse("admin:attendance_attday_change", args=[object_id])
+                )
+        else:
+            self._message_form_errors(request, form)
+
+        return redirect(reverse("admin:attendance_attday_change", args=[object_id]))
+
     def manual_recompute_view(self, request):
         return self.manual_recompute(request, AttDay.objects.none())
 
@@ -517,6 +693,11 @@ class AttDayAdmin(ScopedAdminMixin, admin.ModelAdmin):
     def get_urls(self):
         urls = super().get_urls()
         custom = [
+            path(
+                "<path:object_id>/add-adjustment/",
+                self.admin_site.admin_view(self.add_adjustment_view),
+                name="attendance_attday_add_adjustment",
+            ),
             path(
                 "calendar/",
                 self.admin_site.admin_view(self.calendar_view),
