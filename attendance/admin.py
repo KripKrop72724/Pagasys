@@ -145,7 +145,7 @@ class AttDayAdmin(ScopedAdminMixin, admin.ModelAdmin):
     )
     date_hierarchy = "date"
     search_fields = ("employee__first_name", "employee__last_name")
-    autocomplete_fields = ["employee"]
+    autocomplete_fields = ["employee", "roster"]
     readonly_fields = ("computed_at",)
     change_list_template = "admin/attendance/attday/change_list.html"
     change_form_template = "admin/attendance/attday/change_form.html"
