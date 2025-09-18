@@ -1,4 +1,5 @@
 from datetime import date, datetime, time
+from unittest import mock
 
 from django.test import TestCase
 from django.urls import reverse
@@ -220,6 +221,47 @@ class AttendanceCalendarViewSetTests(TestCase):
         payload = response.json()
         ids = [emp["id"] for emp in payload["employees"]]
         assert ids == [self.employee_proj.id]
+
+    def test_calendar_list_all_param_disables_pagination(self):
+        extra_employees = [
+            Employee.objects.create_user(
+                username=f"bulk{i}",
+                password="pass",
+                first_name=f"Extra{i}",
+                last_name="User",
+                department=self.department,
+                hire_date=date(2024, 1, 1),
+                employment_type="permanent",
+                visa_type="personal",
+            )
+            for i in range(3)
+        ]
+
+        with mock.patch("attendance.views.CALENDAR_PAGE_SIZE", 1), mock.patch(
+            "attendance.views.AttendanceCalendarPagination.page_size",
+            1,
+        ):
+            paginated = self.client.get(
+                self._list_url(),
+                {"month": "2024-05"},
+            )
+            assert paginated.status_code == 200
+            payload = paginated.json()
+            assert len(payload["employees"]) == 1
+            assert payload.get("next")
+
+            unpaginated = self.client.get(
+                self._list_url(),
+                {"month": "2024-05", "all": "true"},
+            )
+            assert unpaginated.status_code == 200
+            payload_all = unpaginated.json()
+            expected_count = Employee.objects.filter(is_superuser=False).count()
+            assert len(payload_all["employees"]) == expected_count
+            assert "next" not in payload_all
+
+        for employee in extra_employees:
+            employee.delete()
 
     def test_calendar_stats_only_returns_empty_rows(self):
         response = self.client.get(
