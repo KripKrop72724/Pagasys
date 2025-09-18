@@ -931,7 +931,12 @@ class RosterEntryAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
         "is_holiday",
         "was_holiday",
     ]
-    search_fields = ["employee__username", "shift__name"]
+    search_fields = [
+        "employee__username",
+        "employee__first_name",
+        "employee__last_name",
+        "shift__name",
+    ]
     date_hierarchy = "date"
     change_list_template = "admin/pagasys/rosterentry/change_list.html"
     readonly_fields = ["was_holiday"]
