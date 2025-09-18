@@ -54,6 +54,13 @@ class Company(models.Model):
         blank=True,
         help_text="Bank account number used for payroll transactions",
     )
+    is_only_company = models.BooleanField(
+        default=False,
+        help_text=(
+            "When enabled, this instance represents the sole company and "
+            "blocks creation of any additional companies."
+        ),
+    )
 
     class Meta:
         verbose_name_plural = "companies"
@@ -68,6 +75,25 @@ class Company(models.Model):
             ZoneInfo(self.timezone)
         except ZoneInfoNotFoundError:
             raise ValidationError({"timezone": "Invalid IANA time zone (e.g., 'Asia/Dubai')"})
+        other_companies = Company.objects.exclude(pk=self.pk)
+        if self.is_only_company and other_companies.exists():
+            raise ValidationError(
+                {
+                    "is_only_company": (
+                        "Cannot mark this company as the only company while other companies exist. "
+                        "Delete or archive the others first."
+                    )
+                }
+            )
+        if not self.is_only_company and other_companies.filter(is_only_company=True).exists():
+            raise ValidationError(
+                {
+                    "is_only_company": (
+                        "Another company is marked as the only company. "
+                        "Unset that flag before adding or updating additional companies."
+                    )
+                }
+            )
 
     def __str__(self) -> str:
         return self.name
