@@ -1,12 +1,16 @@
-from datetime import datetime, date, time
+import calendar
+from collections import Counter, defaultdict, OrderedDict
+from datetime import datetime, date, time, timedelta
 from zoneinfo import ZoneInfo
 
 from django.db import transaction
 from django.utils import timezone
 
 from capture.models import PunchEvent, PunchException
-from .models import AttPair, AttDay, LeaveDay
+from .models import AttPair, AttDay, LeaveDay, AttAdjustment
+from .serializers import AttPairSerializer, AttAdjustmentSerializer
 from pagasys.models import RosterEntry, ShiftRule
+from pagasys.utils import scope_queryset
 from .services_helpers import (
     _close_open_pairs_with_shift,
     _collect_pair_anomalies,
@@ -30,6 +34,86 @@ REJECTION_KEYS = {
     "geofence_rule_violation",
     "outside_scope",
 }
+
+
+LOCKED_DAY_REASON = "Attendance day is locked; adjustments are disabled."
+UNASSIGNED_BRANCH_LABEL = "Unassigned"
+
+MONTHLY_STATUS_LEGEND = OrderedDict(
+    [
+        (
+            "present",
+            {
+                "glyph": "P",
+                "css_class": "status-present",
+                "label": "Present",
+            },
+        ),
+        (
+            "absent",
+            {
+                "glyph": "A",
+                "css_class": "status-absent",
+                "label": "Absent / Leave",
+            },
+        ),
+        (
+            "rest",
+            {
+                "glyph": "R",
+                "css_class": "status-rest",
+                "label": "Rest / Holiday",
+            },
+        ),
+        (
+            "partial",
+            {
+                "glyph": "T",
+                "css_class": "status-partial",
+                "label": "Partial",
+            },
+        ),
+        (
+            "empty",
+            {
+                "glyph": "-",
+                "css_class": "status-empty",
+                "label": "No data",
+            },
+        ),
+    ]
+)
+
+STATUS_TO_LEGEND = {
+    "present": "present",
+    "absent": "absent",
+    "leave": "absent",
+    "rest": "rest",
+    "holiday": "rest",
+    "partial": "partial",
+}
+
+
+def _resolve_day_status(
+    *,
+    total_work: int,
+    sched_req: int,
+    on_leave: bool,
+    leave_portion: float,
+    is_hol: bool,
+    is_rest: bool,
+) -> str:
+    if on_leave and leave_portion >= 1:
+        return "leave"
+    if is_hol and total_work == 0:
+        return "holiday"
+    if is_rest and total_work == 0:
+        return "rest"
+    if sched_req > 0 and total_work >= sched_req:
+        return "present" if not on_leave else "partial"
+    if total_work > 0 or (on_leave and leave_portion > 0):
+        return "partial"
+    return "leave" if on_leave else "absent"
 
 
 def _eligible(ev: PunchEvent):
@@ -331,18 +415,14 @@ def compute_att_day(employee_id: int, day: date) -> int:
         ot_hol = _round_minutes(ot_hol, shift.rounding_min)
 
     total_work = work_min + ot_reg + ot_night + ot_hol
-    if on_leave and leave_portion >= 1:
-        status = "leave"
-    elif is_hol and total_work == 0:
-        status = "holiday"
-    elif is_rest and total_work == 0:
-        status = "rest"
-    elif sched_req > 0 and total_work >= sched_req:
-        status = "present" if not on_leave else "partial"
-    elif total_work > 0 or (on_leave and leave_portion > 0):
-        status = "partial"
-    else:
-        status = "leave" if on_leave else "absent"
+    status = _resolve_day_status(
+        total_work=total_work,
+        sched_req=sched_req,
+        on_leave=on_leave,
+        leave_portion=leave_portion,
+        is_hol=is_hol,
+        is_rest=is_rest,
+    )
 
     (
         work_min,
@@ -353,6 +433,7 @@ def compute_att_day(employee_id: int, day: date) -> int:
         ot_hol,
         status,
         anomalies_all,
+        override_applied,
     ) = apply_att_adjustments(
         employee_id,
         day,
@@ -365,6 +446,17 @@ def compute_att_day(employee_id: int, day: date) -> int:
         status,
         anomalies_all,
     )
+
+    if not override_applied:
+        total_work = work_min + ot_reg + ot_night + ot_hol
+        status = _resolve_day_status(
+            total_work=total_work,
+            sched_req=sched_req,
+            on_leave=on_leave,
+            leave_portion=leave_portion,
+            is_hol=is_hol,
+            is_rest=is_rest,
+        )
 
     for k, v in dict(
         shift_id=shift.id if shift else None,
@@ -389,3 +481,304 @@ def compute_att_day(employee_id: int, day: date) -> int:
         setattr(obj, k, v)
     obj.save()
     return 1
+
+
+def _resolve_month_range(month):
+    """Return the first and last day for a month representation."""
+
+    if isinstance(month, tuple) and len(month) == 2:
+        start, end = month
+        if not isinstance(start, date) or not isinstance(end, date):
+            raise ValueError("Month tuple must contain date objects")
+    elif isinstance(month, date):
+        start = month.replace(day=1)
+        days_in_month = calendar.monthrange(start.year, start.month)[1]
+        end = start.replace(day=days_in_month)
+    elif isinstance(month, str):
+        try:
+            year, month_value = month.split("-")
+            start = date(int(year), int(month_value), 1)
+        except (TypeError, ValueError) as exc:  # pragma: no cover - defensive guard
+            raise ValueError("Expected YYYY-MM formatted string") from exc
+        days_in_month = calendar.monthrange(start.year, start.month)[1]
+        end = start.replace(day=days_in_month)
+    else:  # pragma: no cover - defensive guard
+        raise ValueError("Unsupported month type")
+    if end < start:  # pragma: no cover - invalid ranges guarded upstream
+        raise ValueError("Month end must be on or after start")
+    return start, end
+
+
+def _legend_key_for_status(status: str | None) -> str:
+    if not status:
+        return "empty"
+    return STATUS_TO_LEGEND.get(status, "empty")
+
+
+def _cell_classnames(raw_status: str | None, legend_key: str, locked: bool) -> str:
+    classes = [MONTHLY_STATUS_LEGEND[legend_key]["css_class"]]
+    if raw_status and raw_status not in STATUS_TO_LEGEND:
+        classes.append(f"status-{raw_status}")
+    if locked:
+        classes.append("is-locked")
+    return " ".join(classes)
+
+
+def build_monthly_calendar(
+    employees,
+    month,
+    *,
+    user,
+    include_pairs=False,
+    include_adjustments=False,
+    include_anomalies=True,
+    stats_only=False,
+    status_filters=None,
+    locked_filter=None,
+    serializer_context=None,
+):
+    """Aggregate AttDay data into calendar payloads and PDF-friendly groups."""
+
+    status_filters = status_filters or []
+    serializer_context = serializer_context or {}
+    start, end = _resolve_month_range(month)
+    days = [start + timedelta(days=offset) for offset in range((end - start).days + 1)]
+
+    employees = list(employees)
+    employee_ids = [employee.id for employee in employees]
+
+    day_map = defaultdict(dict)
+    if employee_ids:
+        day_qs = (
+            AttDay.objects.filter(employee_id__in=employee_ids, date__range=(start, end))
+            .select_related("shift", "roster")
+            .order_by("employee_id", "date")
+        )
+        if user is not None:
+            day_qs = scope_queryset(day_qs, user)
+        if status_filters:
+            day_qs = day_qs.filter(status__in=status_filters)
+        if locked_filter is not None:
+            day_qs = day_qs.filter(locked=locked_filter)
+        for day in day_qs:
+            day_map[day.employee_id][day.date] = day
+
+    valid_keys = {
+        (emp_id, day_date)
+        for emp_id, entries in day_map.items()
+        for day_date in entries.keys()
+    }
+
+    pairs_data = {}
+    if include_pairs and not stats_only and valid_keys:
+        pair_qs = AttPair.objects.filter(
+            employee_id__in=employee_ids, date__range=(start, end)
+        ).order_by("in_ts")
+        if user is not None:
+            pair_qs = scope_queryset(pair_qs, user)
+        valid_dates = {key[1] for key in valid_keys}
+        pair_qs = pair_qs.filter(date__in=valid_dates)
+        grouped_pairs = defaultdict(list)
+        for pair in pair_qs:
+            key = (pair.employee_id, pair.date)
+            if key in valid_keys:
+                grouped_pairs[key].append(pair)
+        for key, records in grouped_pairs.items():
+            pairs_data[key] = AttPairSerializer(
+                records, many=True, context=serializer_context
+            ).data
+
+    adjustments_data = {}
+    if include_adjustments and not stats_only and valid_keys:
+        adjustment_qs = AttAdjustment.objects.filter(
+            employee_id__in=employee_ids, date__range=(start, end)
+        ).order_by("created_at")
+        if user is not None:
+            adjustment_qs = scope_queryset(adjustment_qs, user)
+        valid_dates = {key[1] for key in valid_keys}
+        adjustment_qs = adjustment_qs.filter(date__in=valid_dates)
+        grouped_adjustments = defaultdict(list)
+        for adjustment in adjustment_qs:
+            key = (adjustment.employee_id, adjustment.date)
+            if key in valid_keys:
+                grouped_adjustments[key].append(adjustment)
+        for key, records in grouped_adjustments.items():
+            adjustments_data[key] = AttAdjustmentSerializer(
+                records, many=True, context=serializer_context
+            ).data
+
+    payload_employees = []
+    branch_employee_map = defaultdict(list)
+    branch_totals = defaultdict(Counter)
+    overall_totals = Counter()
+    legend_keys = list(MONTHLY_STATUS_LEGEND.keys())
+    legend_entries = [
+        {"key": key, **MONTHLY_STATUS_LEGEND[key]} for key in legend_keys
+    ]
+
+    for employee in employees:
+        employee_days = day_map.get(employee.id, {})
+        summary_counts = Counter()
+        locked_days = 0
+        total_ot = 0
+        rows = []
+        report_rows = []
+        report_counts = Counter()
+
+        for current_day in days:
+            att_day = employee_days.get(current_day)
+            raw_status = att_day.status if att_day else None
+            legend_key = _legend_key_for_status(raw_status)
+            locked = bool(att_day.locked) if att_day else False
+
+            if att_day:
+                summary_counts[raw_status] += 1
+                if locked:
+                    locked_days += 1
+                total_ot += (
+                    att_day.ot_regular_min
+                    + att_day.ot_night_min
+                    + att_day.ot_holiday_min
+                )
+            report_counts[legend_key] += 1
+
+            if not stats_only:
+                key = (employee.id, current_day)
+                row = {
+                    "date": current_day.isoformat(),
+                    "status": raw_status,
+                    "locked": locked,
+                    "locked_reason": LOCKED_DAY_REASON if locked else None,
+                    "metrics": {
+                        "work_min": att_day.work_min if att_day else 0,
+                        "unpaid_break_min": att_day.unpaid_break_min if att_day else 0,
+                        "paid_break_min": att_day.paid_break_min if att_day else 0,
+                        "late_min": att_day.late_min if att_day else 0,
+                        "early_leave_min": att_day.early_leave_min if att_day else 0,
+                        "ot_regular_min": att_day.ot_regular_min if att_day else 0,
+                        "ot_night_min": att_day.ot_night_min if att_day else 0,
+                        "ot_holiday_min": att_day.ot_holiday_min if att_day else 0,
+                        "on_leave": att_day.on_leave if att_day else False,
+                        "leave_portion": float(att_day.leave_portion) if att_day else 0.0,
+                        "is_holiday": att_day.is_holiday if att_day else False,
+                        "is_rest_day": att_day.is_rest_day if att_day else False,
+                        "pairs_count": att_day.pairs_count if att_day else 0,
+                        "punches_used": att_day.punches_used if att_day else 0,
+                    },
+                }
+                if include_anomalies:
+                    row["anomalies"] = att_day.anomalies if att_day else {}
+                if include_pairs:
+                    row["pairs"] = pairs_data.get(key, [])
+                if include_adjustments:
+                    row["adjustments"] = adjustments_data.get(key, [])
+                rows.append(row)
+
+            report_rows.append(
+                {
+                    "date": current_day,
+                    "iso": current_day.isoformat(),
+                    "status": raw_status,
+                    "legend_key": legend_key,
+                    "glyph": MONTHLY_STATUS_LEGEND[legend_key]["glyph"],
+                    "css_class": _cell_classnames(raw_status, legend_key, locked),
+                    "locked": locked,
+                }
+            )
+
+        summary = {
+            "present": summary_counts.get("present", 0),
+            "absent": summary_counts.get("absent", 0),
+            "leave": summary_counts.get("leave", 0),
+            "holiday": summary_counts.get("holiday", 0),
+            "rest": summary_counts.get("rest", 0),
+            "partial": summary_counts.get("partial", 0),
+            "locked_days": locked_days,
+            "total_ot_min": total_ot,
+        }
+
+        branch = None
+        if employee.department and employee.department.branch:
+            branch = employee.department.branch
+        elif employee.project and employee.project.branch:
+            branch = employee.project.branch
+        branch_name = branch.name if branch else UNASSIGNED_BRANCH_LABEL
+
+        display_name = employee.get_full_name().strip() or employee.username
+        metadata = {
+            "department": employee.department.name if employee.department else None,
+            "project": employee.project.name if employee.project else None,
+            "branch": branch_name if branch_name else None,
+            "code": employee.username,
+        }
+
+        payload_employees.append(
+            {
+                "id": employee.id,
+                "display": display_name,
+                "metadata": metadata,
+                "rows": [] if stats_only else rows,
+                "summary": summary,
+            }
+        )
+
+        branch_employee_map[branch_name].append(
+            {
+                "id": employee.id,
+                "display": display_name,
+                "metadata": metadata,
+                "rows": report_rows,
+                "counts": {key: report_counts.get(key, 0) for key in legend_keys},
+            }
+        )
+        branch_totals[branch_name].update(report_counts)
+        overall_totals.update(report_counts)
+
+    branch_sections = OrderedDict()
+    for branch_name in sorted(branch_employee_map):
+        employees_for_branch = branch_employee_map[branch_name]
+        employees_for_branch.sort(key=lambda item: item["display"].casefold())
+        totals = branch_totals.get(branch_name, Counter())
+        branch_sections[branch_name] = {
+            "name": branch_name,
+            "employees": employees_for_branch,
+            "totals": {key: totals.get(key, 0) for key in legend_keys},
+            "legend_totals": [
+                {**entry, "count": totals.get(entry["key"], 0)}
+                for entry in legend_entries
+            ],
+            "employee_count": len(employees_for_branch),
+        }
+
+    payload = {
+        "month": start.strftime("%Y-%m"),
+        "days": [day.isoformat() for day in days],
+        "employees": payload_employees,
+    }
+
+    report_days = [
+        {
+            "date": day,
+            "iso": day.isoformat(),
+            "day": day.day,
+            "weekday": day.strftime("%a"),
+        }
+        for day in days
+    ]
+
+    report = {
+        "month": start.strftime("%Y-%m"),
+        "month_label": start.strftime("%B %Y"),
+        "days": report_days,
+        "branches": branch_sections,
+        "branch_list": list(branch_sections.values()),
+        "legend": legend_entries,
+        "totals": {key: overall_totals.get(key, 0) for key in legend_keys},
+        "legend_totals": [
+            {**entry, "count": overall_totals.get(entry["key"], 0)}
+            for entry in legend_entries
+        ],
+        "employee_count": len(payload_employees),
+    }
+
+    return {"payload": payload, "report": report}

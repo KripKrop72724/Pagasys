@@ -123,3 +123,23 @@ class AttendanceCalendarAdminViewTests(TestCase):
         assert may_first["pairs"]
         assert may_first["adjustments"]
         assert may_first["anomalies"] == {"missing_out_closed_at_next_in": 1}
+
+    def test_monthly_report_form_renders(self):
+        request = self.factory.get("/admin/attendance/attday/monthly-attendance-report/")
+        request.user = self.admin
+        request._cached_user = self.admin
+        response = self.attday_admin.monthly_attendance_report(request)
+        response.render()
+        assert response.status_code == 200
+        assert b"Monthly attendance report" in response.content
+
+    def test_monthly_report_generates_pdf(self):
+        request = self.factory.post(
+            "/admin/attendance/attday/monthly-attendance-report/",
+            {"month": "2024-05"},
+        )
+        request.user = self.admin
+        request._cached_user = self.admin
+        response = self.attday_admin.monthly_attendance_report(request)
+        assert response.status_code == 200
+        assert response["Content-Type"] == "application/pdf"

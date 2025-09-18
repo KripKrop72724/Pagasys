@@ -1,5 +1,6 @@
 from datetime import date, timedelta
 from urllib.parse import urlsplit
+from types import SimpleNamespace
 
 from django.contrib import admin, messages
 from django.utils.safestring import mark_safe
@@ -7,7 +8,7 @@ from django import forms
 from django.template.response import TemplateResponse
 from django.shortcuts import redirect
 from django.urls import path
-from django.http import HttpResponse
+from django.http import HttpResponse, QueryDict
 from django.utils import timezone
 
 from rest_framework import serializers
@@ -18,13 +19,20 @@ from pagasys.models import Branch, Department, Employee, Project, ShiftTemplate
 from pagasys.utils import scope_queryset
 from .models import AttDay, AttPair, AttAdjustment, LeaveRequest, LeaveDay
 from .tasks import compute_employee_day_task, recompute_range_task
-from .reports import get_late_comers, group_late_comers, render_late_comers_pdf
+from .reports import (
+    get_late_comers,
+    group_late_comers,
+    render_late_comers_pdf,
+    render_monthly_attendance_pdf,
+)
 from .views import (
     AttendanceCalendarViewSet,
     CALENDAR_PAGE_SIZE,
     parse_bool,
     parse_month,
 )
+from .services import build_monthly_calendar
+from .forms import MonthlyAttendanceReportForm
 
 
 class AttAdjustmentForm(forms.ModelForm):
@@ -206,17 +214,19 @@ class AttDayAdmin(ScopedAdminMixin, admin.ModelAdmin):
         if not using_pagination and len(employees) > CALENDAR_PAGE_SIZE:
             employees = employees[:CALENDAR_PAGE_SIZE]
 
-        payload = viewset._build_calendar_response(
+        calendar_result = build_monthly_calendar(
             employees,
-            start,
-            end,
+            (start, end),
+            user=request.user,
             include_pairs=include_pairs,
             include_adjustments=include_adjustments,
             include_anomalies=include_anomalies,
             stats_only=stats_only,
             status_filters=status_filters,
             locked_filter=locked_filter,
+            serializer_context=viewset.get_serializer_context(),
         )
+        payload = calendar_result["payload"]
 
         paginator = getattr(viewset, "paginator", None)
         next_link = previous_link = None
@@ -522,11 +532,19 @@ class AttDayAdmin(ScopedAdminMixin, admin.ModelAdmin):
                 self.admin_site.admin_view(self.late_comers_report_view),
                 name="attendance_attday_late_comers_report",
             ),
+            path(
+                "monthly-attendance-report/",
+                self.admin_site.admin_view(self.monthly_attendance_report_view),
+                name="attendance_attday_monthly_report",
+            ),
         ]
         return custom + urls
 
     def late_comers_report_view(self, request):  # pragma: no cover - admin view
         return self.late_comers_report(request)
+
+    def monthly_attendance_report_view(self, request):  # pragma: no cover - admin view
+        return self.monthly_attendance_report(request)
 
     def late_comers_report(self, request):  # pragma: no cover - admin view
         if request.method == "POST":
@@ -551,6 +569,86 @@ class AttDayAdmin(ScopedAdminMixin, admin.ModelAdmin):
             form = self.LateComersReportForm(request=request)
         context = {"form": form, "title": "Late comers report"}
         return TemplateResponse(request, "admin/late_comers_report.html", context)
+
+    def monthly_attendance_report(self, request):  # pragma: no cover - admin view
+        form_kwargs = {"request": request}
+        status_choices = dict(AttDay._meta.get_field("status").choices)
+        if request.method == "POST":
+            form = MonthlyAttendanceReportForm(request.POST, **form_kwargs)
+            if form.is_valid():
+                month_value = form.cleaned_data["month"]
+                start, end = parse_month(month_value)
+
+                viewset = AttendanceCalendarViewSet()
+                drf_request = Request(request)
+                drf_request.user = request.user
+                viewset.request = drf_request
+                viewset.args = []
+                viewset.kwargs = {}
+                viewset.action = "monthly_report"
+                viewset.format_kwarg = None
+
+                params = QueryDict(mutable=True)
+                branch = form.cleaned_data.get("branch")
+                department = form.cleaned_data.get("department")
+                project = form.cleaned_data.get("project")
+                statuses = form.cleaned_statuses()
+                locked_value = form.cleaned_locked_value()
+
+                if branch:
+                    params.setlist("branch", [str(branch.pk)])
+                if department:
+                    params.setlist("department", [str(department.pk)])
+                if project:
+                    params.setlist("project", [str(project.pk)])
+                if statuses:
+                    params["status"] = ",".join(statuses)
+                if locked_value is not None:
+                    params["locked"] = "true" if locked_value else "false"
+
+                filter_request = SimpleNamespace(query_params=params)
+                queryset = viewset._filter_employees(viewset.get_queryset(), filter_request, None)
+                queryset = viewset._apply_sorting(queryset, filter_request)
+                employees = list(queryset)
+
+                calendar_result = build_monthly_calendar(
+                    employees,
+                    (start, end),
+                    user=request.user,
+                    include_pairs=False,
+                    include_adjustments=False,
+                    include_anomalies=False,
+                    stats_only=False,
+                    status_filters=statuses,
+                    locked_filter=locked_value,
+                    serializer_context=viewset.get_serializer_context(),
+                )
+
+                filters_summary = {
+                    "branch": [branch.name] if branch else [],
+                    "department": [department.name] if department else [],
+                    "project": [project.name] if project else [],
+                    "status": [status_choices.get(code, code) for code in statuses],
+                    "locked": (
+                        "Locked only" if locked_value is True else "Unlocked only" if locked_value is False else ""
+                    ),
+                }
+
+                pdf_context = {
+                    "request": request,
+                    "filters": filters_summary,
+                    "title": "Monthly attendance report",
+                }
+                pdf = render_monthly_attendance_pdf(calendar_result["report"], pdf_context)
+                filename = f"monthly_attendance_{month_value}.pdf"
+                response = HttpResponse(pdf, content_type="application/pdf")
+                response["Content-Disposition"] = f"attachment; filename={filename}"
+                return response
+        else:
+            form = MonthlyAttendanceReportForm(**form_kwargs)
+
+        context = {"form": form, "title": "Monthly attendance report"}
+        return TemplateResponse(request, "admin/monthly_attendance_report.html", context)
 @admin.register(AttPair)
 class AttPairAdmin(ScopedAdminMixin, admin.ModelAdmin):
     """Review paired IN/OUT punch sessions."""

@@ -1,5 +1,4 @@
 import calendar
-from collections import Counter, defaultdict
 from datetime import date, timedelta
 
 from rest_framework import serializers, status, viewsets
@@ -25,14 +24,16 @@ from drf_spectacular.utils import (
 
 from pagasys.openapi_utils import document_filters
 from pagasys.utils import scope_queryset
-from pagasys.models import Employee
+from pagasys.models import Employee, Company, Branch, Department, Project
 from django.http import HttpResponse
 
 from .models import AttDay, AttPair, AttAdjustment
+from .services import build_monthly_calendar
 from .reports import (
     get_late_comers,
     group_late_comers,
     render_late_comers_pdf,
+    render_monthly_attendance_pdf,
 )
 from .serializers import (
     AttDaySerializer,
@@ -51,9 +52,6 @@ from .tasks import (
 MAX_RANGE_DAYS = 31
 MAX_EMPLOYEES = 50
 CALENDAR_PAGE_SIZE = 200
-LOCKED_REASON = "Attendance day is locked; adjustments are disabled."
-
-
 class AttendanceCalendarMetricsDocSerializer(serializers.Serializer):
     work_min = serializers.IntegerField(help_text="Computed work minutes for the day")
     unpaid_break_min = serializers.IntegerField(help_text="Unpaid break minutes deducted")
@@ -243,6 +241,13 @@ ATTENDANCE_CALENDAR_QUERY_PARAMS = [
     ),
 ]
 
+MONTHLY_REPORT_QUERY_PARAMS = [
+    param
+    for param in ATTENDANCE_CALENDAR_QUERY_PARAMS
+    if param.name
+    in {"month", "employee", "branch", "department", "project", "status", "locked"}
+]
+
 ATTENDANCE_CALENDAR_EXAMPLE = OpenApiExample(
     "Calendar grid",
     value={
@@ -384,6 +389,15 @@ def parse_int_list(value):
 
 
 class LateComersPDFRenderer(BaseRenderer):
+    media_type = "application/pdf"
+    format = "pdf"
+    charset = None
+
+    def render(self, data, accepted_media_type=None, renderer_context=None):
+        return data
+
+
+class MonthlyAttendancePDFRenderer(BaseRenderer):
     media_type = "application/pdf"
     format = "pdf"
     charset = None
@@ -611,6 +625,7 @@ class AttDayViewSet(viewsets.ReadOnlyModelViewSet):
         response = HttpResponse(pdf, content_type="application/pdf")
         response["Content-Disposition"] = f"attachment; filename={filename}"
         return response
+
 
 
 @extend_schema_view(
@@ -913,160 +928,54 @@ class AttendanceCalendarViewSet(viewsets.GenericViewSet):
         self.cursor_ordering = ordering
         return queryset
 
-    def _build_calendar_response(
-        self,
-        employees,
-        start,
-        end,
-        *,
-        include_pairs,
-        include_adjustments,
-        include_anomalies,
-        stats_only,
-        status_filters,
-        locked_filter,
-    ):
-        days = [start + timedelta(days=offset) for offset in range((end - start).days + 1)]
-        employee_ids = [employee.id for employee in employees]
-        request = self.request
-        context = self.get_serializer_context()
-
-        day_map = defaultdict(dict)
-        if employee_ids:
-            day_qs = (
-                AttDay.objects.filter(employee_id__in=employee_ids, date__range=(start, end))
-                .select_related("shift", "roster")
-            )
-            day_qs = scope_queryset(day_qs, request.user)
-            if status_filters:
-                day_qs = day_qs.filter(status__in=status_filters)
-            if locked_filter is not None:
-                day_qs = day_qs.filter(locked=locked_filter)
-            for day in day_qs:
-                day_map[day.employee_id][day.date] = day
-
-        valid_keys = {(emp_id, day) for emp_id, entries in day_map.items() for day in entries.keys()}
-
-        pairs_data = {}
-        if include_pairs and not stats_only and valid_keys:
-            pair_qs = AttPair.objects.filter(
-                employee_id__in=employee_ids, date__range=(start, end)
-            ).order_by("in_ts")
-            pair_qs = scope_queryset(pair_qs, request.user)
-            grouped_pairs = defaultdict(list)
-            valid_dates = {key[1] for key in valid_keys}
-            pair_qs = pair_qs.filter(date__in=valid_dates)
-            for pair in pair_qs:
-                key = (pair.employee_id, pair.date)
-                if key in valid_keys:
-                    grouped_pairs[key].append(pair)
-            for key, records in grouped_pairs.items():
-                pairs_data[key] = AttPairSerializer(records, many=True, context=context).data
-
-        adjustments_data = {}
-        if include_adjustments and not stats_only and valid_keys:
-            adjustment_qs = AttAdjustment.objects.filter(
-                employee_id__in=employee_ids, date__range=(start, end)
-            ).order_by("created_at")
-            adjustment_qs = scope_queryset(adjustment_qs, request.user)
-            grouped_adjustments = defaultdict(list)
-            valid_dates = {key[1] for key in valid_keys}
-            adjustment_qs = adjustment_qs.filter(date__in=valid_dates)
-            for adjustment in adjustment_qs:
-                key = (adjustment.employee_id, adjustment.date)
-                if key in valid_keys:
-                    grouped_adjustments[key].append(adjustment)
-            for key, records in grouped_adjustments.items():
-                adjustments_data[key] = AttAdjustmentSerializer(
-                    records, many=True, context=context
-                ).data
-
-        employees_payload = []
-        for employee in employees:
-            employee_days = day_map.get(employee.id, {})
-            summary_counts = Counter()
-            locked_days = 0
-            total_ot = 0
-            rows = []
-
-            for current_day in days:
-                day = employee_days.get(current_day)
-                if day:
-                    summary_counts[day.status] += 1
-                    if day.locked:
-                        locked_days += 1
-                    total_ot += day.ot_regular_min + day.ot_night_min + day.ot_holiday_min
-                if stats_only:
-                    continue
-
-                key = (employee.id, current_day)
-                row = {
-                    "date": current_day.isoformat(),
-                    "status": day.status if day else None,
-                    "locked": bool(day.locked) if day else False,
-                    "locked_reason": LOCKED_REASON if day and day.locked else None,
-                    "metrics": {
-                        "work_min": day.work_min if day else 0,
-                        "unpaid_break_min": day.unpaid_break_min if day else 0,
-                        "paid_break_min": day.paid_break_min if day else 0,
-                        "late_min": day.late_min if day else 0,
-                        "early_leave_min": day.early_leave_min if day else 0,
-                        "ot_regular_min": day.ot_regular_min if day else 0,
-                        "ot_night_min": day.ot_night_min if day else 0,
-                        "ot_holiday_min": day.ot_holiday_min if day else 0,
-                        "on_leave": day.on_leave if day else False,
-                        "leave_portion": float(day.leave_portion) if day else 0.0,
-                        "is_holiday": day.is_holiday if day else False,
-                        "is_rest_day": day.is_rest_day if day else False,
-                        "pairs_count": day.pairs_count if day else 0,
-                        "punches_used": day.punches_used if day else 0,
-                    },
-                }
-                if include_anomalies:
-                    row["anomalies"] = day.anomalies if day else {}
-                if include_pairs:
-                    row["pairs"] = pairs_data.get(key, [])
-                if include_adjustments:
-                    row["adjustments"] = adjustments_data.get(key, [])
-                rows.append(row)
-
-            summary = {
-                "present": summary_counts.get("present", 0),
-                "absent": summary_counts.get("absent", 0),
-                "leave": summary_counts.get("leave", 0),
-                "holiday": summary_counts.get("holiday", 0),
-                "rest": summary_counts.get("rest", 0),
-                "partial": summary_counts.get("partial", 0),
-                "locked_days": locked_days,
-                "total_ot_min": total_ot,
-            }
-
-            branch = None
-            if employee.department and employee.department.branch:
-                branch = employee.department.branch
-            elif employee.project and employee.project.branch:
-                branch = employee.project.branch
-
-            employees_payload.append(
-                {
-                    "id": employee.id,
-                    "display": employee.get_full_name().strip() or employee.username,
-                    "metadata": {
-                        "department": employee.department.name if employee.department else None,
-                        "project": employee.project.name if employee.project else None,
-                        "branch": branch.name if branch else None,
-                        "code": employee.username,
-                    },
-                    "rows": [] if stats_only else rows,
-                    "summary": summary,
-                }
-            )
-
-        return {
-            "month": start.strftime("%Y-%m"),
-            "days": [day.isoformat() for day in days],
-            "employees": employees_payload,
+    def _summarise_report_filters(self, request, company_id, status_filters, locked_filter):
+        summary = {
+            "branch": [],
+            "department": [],
+            "project": [],
+            "status": [],
+            "locked": "",
         }
+
+        branch_ids = parse_int_list(request.query_params.getlist("branch"))
+        if branch_ids:
+            branch_qs = Branch.objects.filter(id__in=branch_ids)
+            if company_id:
+                branch_qs = branch_qs.filter(company_id=company_id)
+            branch_qs = scope_queryset(branch_qs, request.user)
+            summary["branch"] = list(branch_qs.order_by("name").values_list("name", flat=True))
+
+        department_ids = parse_int_list(request.query_params.getlist("department"))
+        if department_ids:
+            dept_qs = Department.objects.filter(id__in=department_ids)
+            if company_id:
+                dept_qs = dept_qs.filter(branch__company_id=company_id)
+            dept_qs = scope_queryset(dept_qs, request.user)
+            summary["department"] = list(
+                dept_qs.order_by("name").values_list("name", flat=True)
+            )
+
+        project_ids = parse_int_list(request.query_params.getlist("project"))
+        if project_ids:
+            project_qs = Project.objects.filter(id__in=project_ids)
+            if company_id:
+                project_qs = project_qs.filter(branch__company_id=company_id)
+            project_qs = scope_queryset(project_qs, request.user)
+            summary["project"] = list(
+                project_qs.order_by("name").values_list("name", flat=True)
+            )
+
+        status_labels = dict(AttDay._meta.get_field("status").choices)
+        if status_filters:
+            summary["status"] = [status_labels.get(code, code) for code in status_filters]
+
+        if locked_filter is True:
+            summary["locked"] = "Locked only"
+        elif locked_filter is False:
+            summary["locked"] = "Unlocked only"
+
+        return summary
+
 
     def list(self, request, company_id=None):
         start, end = parse_month(request.query_params.get("month"))
@@ -1097,17 +1006,19 @@ class AttendanceCalendarViewSet(viewsets.GenericViewSet):
         if page is None and len(employees) > CALENDAR_PAGE_SIZE:
             employees = employees[:CALENDAR_PAGE_SIZE]
 
-        payload = self._build_calendar_response(
+        calendar_result = build_monthly_calendar(
             employees,
-            start,
-            end,
+            (start, end),
+            user=request.user,
             include_pairs=include_pairs,
             include_adjustments=include_adjustments,
             include_anomalies=include_anomalies,
             stats_only=stats_only,
             status_filters=status_filters,
             locked_filter=locked_filter,
+            serializer_context=self.get_serializer_context(),
         )
+        payload = calendar_result["payload"]
 
         if getattr(self, "paginator", None) and getattr(self.paginator, "page", None) is not None:
             payload["next"] = self.paginator.get_next_link()
@@ -1141,18 +1052,93 @@ class AttendanceCalendarViewSet(viewsets.GenericViewSet):
         if not employee:
             raise NotFound("Employee not found")
 
-        payload = self._build_calendar_response(
+        calendar_result = build_monthly_calendar(
             [employee],
-            start,
-            end,
+            (start, end),
+            user=request.user,
             include_pairs=include_pairs,
             include_adjustments=include_adjustments,
             include_anomalies=include_anomalies,
             stats_only=stats_only,
             status_filters=status_filters,
             locked_filter=locked_filter,
+            serializer_context=self.get_serializer_context(),
         )
+        payload = calendar_result["payload"]
         return Response(payload)
+
+    @extend_schema(
+        summary="Download a monthly attendance PDF report",
+        description=(
+            "Generate a landscape PDF that groups employees by branch and renders a day-by-day "
+            "attendance grid using compact glyphs. The report honours the same filtering options "
+            "as the calendar API (branch, department, project, status, locked)."
+        ),
+        parameters=MONTHLY_REPORT_QUERY_PARAMS,
+        responses={
+            200: OpenApiResponse(
+                response=OpenApiTypes.BINARY,
+                description="PDF file containing the monthly attendance grid.",
+            )
+        },
+    )
+    @action(
+        detail=False,
+        methods=["get"],
+        url_path="monthly-report",
+        renderer_classes=[MonthlyAttendancePDFRenderer],
+    )
+    def monthly_report(self, request, company_id=None):
+        start, end = parse_month(request.query_params.get("month"))
+
+        status_param = request.query_params.get("status")
+        status_filters = (
+            [value.strip() for value in status_param.split(",") if value.strip()]
+            if status_param
+            else []
+        )
+
+        locked_filter = None
+        if "locked" in request.query_params:
+            locked_filter = parse_bool(request.query_params.get("locked"))
+
+        queryset = self._filter_employees(self.get_queryset(), request, company_id)
+        queryset = self._apply_sorting(queryset, request)
+        employees = list(queryset)
+
+        calendar_result = build_monthly_calendar(
+            employees,
+            (start, end),
+            user=request.user,
+            include_pairs=False,
+            include_adjustments=False,
+            include_anomalies=False,
+            stats_only=False,
+            status_filters=status_filters,
+            locked_filter=locked_filter,
+            serializer_context=self.get_serializer_context(),
+        )
+        report_data = calendar_result["report"]
+
+        filters_summary = self._summarise_report_filters(
+            request, company_id, status_filters, locked_filter
+        )
+
+        company = None
+        if company_id:
+            company = Company.objects.filter(pk=company_id).first()
+
+        pdf_context = {
+            "request": request,
+            "company": company,
+            "filters": filters_summary,
+        }
+        pdf = render_monthly_attendance_pdf(report_data, pdf_context)
+        filename = f"monthly_attendance_{report_data['month']}.pdf"
+        return Response(
+            pdf,
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
+        )
 
     @action(detail=False, methods=["post"], url_path="lock")
     @extend_schema(

@@ -11,6 +11,17 @@
   }
 }
 
+@page monthly-attendance {
+  size: A4 landscape;
+  margin: 18mm 14mm 20mm;
+  @top-center {
+    content: element(report-header);
+  }
+  @bottom-center {
+    content: element(report-footer);
+  }
+}
+
 body.report-body {
   font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-size: 10.5pt;
@@ -18,6 +29,11 @@ body.report-body {
   color: #1f2933;
   background: #ffffff;
   margin: 0;
+}
+
+.monthly-attendance-report {
+  page: monthly-attendance;
+  font-size: 9.5pt;
 }
 
 p {
@@ -121,6 +137,262 @@ p {
 
 .report-footer .page-number::after {
   content: "Page " counter(page) " of " counter(pages);
+}
+
+.monthly-attendance-report main.report-content {
+  margin-top: 6mm;
+}
+
+.monthly-attendance-report .report-overview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8mm;
+  align-items: flex-start;
+  margin-bottom: 10mm;
+}
+
+.monthly-attendance-report .report-summary-card {
+  min-width: 60mm;
+  padding: 4mm 5mm;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  background: #f8fafc;
+}
+
+.monthly-attendance-report .report-summary-card h2 {
+  margin: 0 0 2mm;
+  font-size: 11pt;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.monthly-attendance-report .report-summary-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 9pt;
+}
+
+.monthly-attendance-report .report-summary-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 4mm;
+  padding: 1mm 0;
+  border-bottom: 1px dotted #cbd5f5;
+}
+
+.monthly-attendance-report .report-summary-list li:last-child {
+  border-bottom: none;
+}
+
+.monthly-attendance-report .filters-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 8.5pt;
+  color: #475569;
+}
+
+.monthly-attendance-report .filters-list li {
+  margin-bottom: 1.5mm;
+}
+
+.monthly-attendance-report .filters-list .label {
+  font-weight: 600;
+  color: #1e293b;
+  margin-right: 2mm;
+}
+
+.monthly-attendance-report .branch-section {
+  margin-bottom: 14mm;
+  page-break-inside: avoid;
+}
+
+.monthly-attendance-report .branch-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 6mm;
+  margin-bottom: 4mm;
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 2mm;
+}
+
+.monthly-attendance-report .branch-title {
+  margin: 0;
+  font-size: 14pt;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.monthly-attendance-report .branch-subtitle {
+  margin: 0;
+  font-size: 9pt;
+  color: #475569;
+}
+
+.monthly-attendance-report .branch-totals {
+  display: flex;
+  gap: 5mm;
+  flex-wrap: wrap;
+  align-items: center;
+  font-size: 8.5pt;
+}
+
+.monthly-attendance-report .branch-totals .total-item {
+  display: flex;
+  align-items: center;
+  gap: 1.5mm;
+}
+
+.monthly-attendance-report .legend-glyph,
+.monthly-attendance-report .total-glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 10mm;
+  height: 6mm;
+  border-radius: 3px;
+  font-weight: 600;
+  font-size: 8pt;
+}
+
+.monthly-attendance-report table.monthly-grid {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 8.5pt;
+  border: 1px solid #e2e8f0;
+}
+
+.monthly-attendance-report table.monthly-grid thead {
+  background: #f1f5f9;
+  border-bottom: 1px solid #cbd5f5;
+}
+
+.monthly-attendance-report table.monthly-grid thead th {
+  padding: 3mm 2mm;
+  font-weight: 600;
+  font-size: 8pt;
+  color: #0f172a;
+  text-align: center;
+  border-right: 1px solid #e2e8f0;
+  font-variant-numeric: tabular-nums;
+}
+
+.monthly-attendance-report table.monthly-grid tbody td {
+  padding: 2.5mm 2mm;
+  text-align: center;
+  border-right: 1px solid #f1f5f9;
+  border-bottom: 1px solid #f1f5f9;
+  font-variant-numeric: tabular-nums;
+}
+
+.monthly-attendance-report table.monthly-grid th.employee-col,
+.monthly-attendance-report table.monthly-grid td.employee-col {
+  text-align: left;
+  font-weight: 600;
+  width: 32mm;
+}
+
+.monthly-attendance-report table.monthly-grid th.code-col,
+.monthly-attendance-report table.monthly-grid td.code-col {
+  text-align: left;
+  width: 20mm;
+  font-variant-numeric: tabular-nums;
+}
+
+.monthly-attendance-report table.monthly-grid th.assignment-col,
+.monthly-attendance-report table.monthly-grid td.assignment-col {
+  text-align: left;
+  width: 32mm;
+  color: #475569;
+}
+
+.monthly-attendance-report table.monthly-grid td.assignment-col {
+  font-size: 8pt;
+}
+
+.monthly-attendance-report table.monthly-grid th.day-col {
+  width: 9mm;
+}
+
+.monthly-attendance-report table.monthly-grid tbody tr:last-child td {
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.monthly-attendance-report .day-cell {
+  position: relative;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.monthly-attendance-report .day-cell .glyph {
+  display: inline-block;
+  min-width: 6mm;
+}
+
+.monthly-attendance-report .status-present {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.monthly-attendance-report .status-absent {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.monthly-attendance-report .status-rest {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.monthly-attendance-report .status-partial {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.monthly-attendance-report .status-empty {
+  background: #f8fafc;
+  color: #64748b;
+}
+
+.monthly-attendance-report .day-cell.is-locked::after {
+  content: "";
+  position: absolute;
+  right: 1mm;
+  top: 1mm;
+  width: 2mm;
+  height: 2mm;
+  border-radius: 50%;
+  background: #1e293b;
+}
+
+.monthly-attendance-report .legend-section {
+  page-break-inside: avoid;
+  margin-top: 12mm;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 6mm;
+}
+
+.monthly-attendance-report .legend-grid {
+  display: flex;
+  gap: 6mm;
+  flex-wrap: wrap;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.monthly-attendance-report .legend-grid li {
+  display: flex;
+  align-items: center;
+  gap: 2mm;
+  font-size: 8.5pt;
+}
+
+.monthly-attendance-report .legend-label {
+  color: #334155;
 }
 
 main.report-content {

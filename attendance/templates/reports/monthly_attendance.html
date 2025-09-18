@@ -1,0 +1,162 @@
+{% load static %}
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>{{ title|default:"Monthly Attendance Report" }}</title>
+</head>
+<body class="report-body monthly-attendance-report">
+  <header class="report-header">
+    <div class="report-header-primary">
+      <h1 class="report-title">{{ title|default:"Monthly attendance report" }}</h1>
+      <p class="report-period">{{ report.month_label }}</p>
+      {% if company %}
+        <p class="report-period">{{ company.name }}</p>
+      {% endif %}
+    </div>
+    <div class="report-meta">
+      <p class="label">Generated</p>
+      <p class="timestamp">{{ generated_at|date:"d M Y H:i" }}</p>
+    </div>
+    {% if logo_url %}
+      <div class="report-logo">
+        <img src="{{ logo_url }}" alt="Company logo" width="120" />
+      </div>
+    {% endif %}
+  </header>
+
+  <footer class="report-footer">
+    <div class="footer-content">
+      <span class="footer-report-title">{{ title|default:"Monthly attendance report" }}</span>
+      <span class="footer-pagination"><span class="page-number"></span></span>
+    </div>
+  </footer>
+
+  <main class="report-content">
+    <section class="report-overview">
+      <div class="report-summary-card">
+        <h2>Monthly totals</h2>
+        <ul class="report-summary-list">
+          {% for item in report.legend_totals %}
+            <li>
+              <span>{{ item.label }}</span>
+              <span>{{ item.count }}</span>
+            </li>
+          {% endfor %}
+          <li>
+            <span>Employees</span>
+            <span>{{ report.employee_count }}</span>
+          </li>
+        </ul>
+      </div>
+      {% if filters %}
+        <div class="report-summary-card">
+          <h2>Filters</h2>
+          <ul class="filters-list">
+            {% if filters.branch %}
+              <li><span class="label">Branch</span>{{ filters.branch|join:", " }}</li>
+            {% endif %}
+            {% if filters.department %}
+              <li><span class="label">Department</span>{{ filters.department|join:", " }}</li>
+            {% endif %}
+            {% if filters.project %}
+              <li><span class="label">Project</span>{{ filters.project|join:", " }}</li>
+            {% endif %}
+            {% if filters.status %}
+              <li><span class="label">Status</span>{{ filters.status|join:", " }}</li>
+            {% endif %}
+            {% if filters.locked %}
+              <li><span class="label">Lock state</span>{{ filters.locked }}</li>
+            {% endif %}
+            {% if not filters.branch and not filters.department and not filters.project and not filters.status and not filters.locked %}
+              <li>All employees in scope</li>
+            {% endif %}
+          </ul>
+        </div>
+      {% endif %}
+    </section>
+
+    {% if report.branch_list %}
+      {% for branch in report.branch_list %}
+        <section class="branch-section">
+          <div class="branch-header">
+            <div>
+              <h2 class="branch-title">{{ branch.name }}</h2>
+              <p class="branch-subtitle">{{ branch.employee_count }} employee{{ branch.employee_count|pluralize }}</p>
+            </div>
+            <div class="branch-totals">
+              {% for item in branch.legend_totals %}
+                <div class="total-item">
+                  <span class="total-glyph {{ item.css_class }}">{{ item.glyph }}</span>
+                  <span>{{ item.count }}</span>
+                </div>
+              {% endfor %}
+            </div>
+          </div>
+          {% if branch.employees %}
+            <table class="monthly-grid">
+              <thead>
+                <tr>
+                  <th class="employee-col">Employee</th>
+                  <th class="code-col">Code</th>
+                  <th class="assignment-col">Assignment</th>
+                  {% for day in report.days %}
+                    <th class="day-col">{{ day.day }}</th>
+                  {% endfor %}
+                </tr>
+                <tr>
+                  <th></th>
+                  <th></th>
+                  <th></th>
+                  {% for day in report.days %}
+                    <th class="day-col">{{ day.weekday }}</th>
+                  {% endfor %}
+                </tr>
+              </thead>
+              <tbody>
+                {% for employee in branch.employees %}
+                  <tr>
+                    <td class="employee-col">{{ employee.display }}</td>
+                    <td class="code-col">{{ employee.metadata.code }}</td>
+                    <td class="assignment-col">
+                      {% if employee.metadata.department %}
+                        {{ employee.metadata.department }}
+                      {% endif %}
+                      {% if employee.metadata.department and employee.metadata.project %}
+                        /
+                      {% endif %}
+                      {% if employee.metadata.project %}
+                        {{ employee.metadata.project }}
+                      {% endif %}
+                    </td>
+                    {% for cell in employee.rows %}
+                      <td class="day-cell {{ cell.css_class }}"><span class="glyph">{{ cell.glyph }}</span></td>
+                    {% endfor %}
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          {% else %}
+            <p class="empty-state">No employees matched the selected filters for this branch.</p>
+          {% endif %}
+        </section>
+      {% endfor %}
+    {% else %}
+      <p class="empty-state">No employees matched the selected filters.</p>
+    {% endif %}
+
+    <section class="legend-section">
+      <h2 class="section-title">Legend</h2>
+      <ul class="legend-grid">
+        {% for item in report.legend %}
+          <li>
+            <span class="legend-glyph {{ item.css_class }}">{{ item.glyph }}</span>
+            <span class="legend-label">{{ item.label }}</span>
+          </li>
+        {% endfor %}
+      </ul>
+      <p class="muted">Locked days are marked with a dot in the top-right corner of each cell.</p>
+    </section>
+  </main>
+</body>
+</html>

@@ -7,6 +7,7 @@ from rest_framework.test import APIClient
 
 from pagasys.models import Company, Branch, Department, Project, Employee
 from attendance.models import AttDay, AttPair, AttAdjustment
+from attendance.services import build_monthly_calendar
 
 
 class AttendanceCalendarViewSetTests(TestCase):
@@ -72,6 +73,11 @@ class AttendanceCalendarViewSetTests(TestCase):
             date=self.day_one,
             work_min=420,
             status="present",
+        )
+        AttDay.objects.create(
+            employee=self.employee_proj,
+            date=self.day_two,
+            status="rest",
         )
 
         AttPair.objects.create(
@@ -241,7 +247,7 @@ class AttendanceCalendarViewSetTests(TestCase):
             format="json",
         )
         assert response.status_code == 200
-        assert response.json()["updated"] == 1
+        assert response.json()["updated"] == 2
         day.refresh_from_db()
         assert day.locked is True
 
@@ -260,3 +266,71 @@ class AttendanceCalendarViewSetTests(TestCase):
         created = AttAdjustment.objects.filter(employee=self.employee_proj).latest("id")
         assert created.delta_work_min == 15
         assert created.created_by_id == self.admin.id
+
+    def test_build_monthly_calendar_report_structure(self):
+        result = build_monthly_calendar(
+            [self.employee_dept, self.employee_proj],
+            "2024-05",
+            user=self.admin,
+            include_pairs=True,
+            include_adjustments=True,
+            include_anomalies=True,
+        )
+        payload = result["payload"]
+        assert payload["month"] == "2024-05"
+        assert len(payload["days"]) == 31
+        report = result["report"]
+        assert report["month_label"] == "May 2024"
+        assert report["legend_totals"]
+        branch_names = [branch["name"] for branch in report["branch_list"]]
+        assert self.branch.name in branch_names
+        branch = report["branch_list"][branch_names.index(self.branch.name)]
+        first_employee = branch["employees"][0]
+        glyphs = {cell["glyph"] for cell in first_employee["rows"]}
+        assert "P" in glyphs
+        assert "-" in glyphs
+        classes = {cell["css_class"] for cell in first_employee["rows"]}
+        assert any("status-present" in value for value in classes)
+        assert branch["legend_totals"][0]["count"] >= 0
+
+    def test_monthly_report_pdf_endpoint(self):
+        url = reverse(
+            "attendance-calendar-monthly-report",
+            kwargs={"company_id": self.company.id},
+        )
+        response = self.client.get(url, {"month": "2024-05"})
+        assert response.status_code == 200
+        assert response["Content-Type"] == "application/pdf"
+        assert "monthly_attendance_2024-05.pdf" in response["Content-Disposition"]
+        assert len(response.content) > 500
+
+    def test_monthly_report_rejects_invalid_month(self):
+        url = reverse(
+            "attendance-calendar-monthly-report",
+            kwargs={"company_id": self.company.id},
+        )
+        response = self.client.get(url, {"month": "not-a-month"})
+        assert response.status_code == 400
+
+    def test_monthly_report_handles_many_employees(self):
+        for idx in range(15):
+            employee = Employee.objects.create_user(
+                username=f"bulk{idx}",
+                password="pass",
+                department=self.department,
+                hire_date=date(2024, 1, 1),
+                employment_type="permanent",
+                visa_type="personal",
+            )
+            AttDay.objects.create(
+                employee=employee,
+                date=self.day_one,
+                status="present",
+            )
+        url = reverse(
+            "attendance-calendar-monthly-report",
+            kwargs={"company_id": self.company.id},
+        )
+        response = self.client.get(url, {"month": "2024-05"})
+        assert response.status_code == 200
+        assert len(response.content) > 1500
