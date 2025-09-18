@@ -10719,12 +10719,18 @@ components:
         special_notes:
           type: string
           description: Special notes about the employee
+        branch:
+          type: integer
+          nullable: true
+          readOnly: true
+          description: Branch derived from the employee's department or project
         groups:
           type: array
           items:
             type: integer
           description: Group IDs for this employee
       required:
+      - branch
       - employment_type
       - hire_date
       - id
@@ -12965,6 +12971,11 @@ components:
         special_notes:
           type: string
           description: Special notes about the employee
+        branch:
+          type: integer
+          nullable: true
+          readOnly: true
+          description: Branch derived from the employee's department or project
         groups:
           type: array
           items:

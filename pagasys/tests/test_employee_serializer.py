@@ -332,6 +332,20 @@ class EmployeeSerializerBranchScopeTests(TestCase):
         ser = EmployeeSerializer(data=data)
         self.assertTrue(ser.is_valid(), ser.errors)
 
+    def test_representation_includes_branch_id(self):
+        emp = Employee.objects.create_user(
+            username="branch_repr",
+            password="pass",
+            trade_license=self.scoped_license,
+            department=self.department1,
+            hire_date="2024-01-02",
+            employment_type="permanent",
+            visa_type="company",
+        )
+
+        data = EmployeeSerializer(emp).data
+        self.assertEqual(data["branch"], self.branch1.id)
+
 
 class EmployeeSerializerPaymentTests(TestCase):
     def setUp(self):
