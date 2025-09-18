@@ -358,6 +358,9 @@ class EmployeeSerializer(ScopedSerializerMixin, serializers.ModelSerializer):
     """Serializer for Employee"""
 
     username = serializers.CharField(help_text="Login name")
+    branch = serializers.SerializerMethodField(
+        help_text="Branch derived from the employee's department or project",
+    )
     password = serializers.CharField(
         write_only=True,
         required=False,
@@ -456,11 +459,17 @@ class EmployeeSerializer(ScopedSerializerMixin, serializers.ModelSerializer):
             'wps_id',
             'c3_id',
             'special_notes',
+            'branch',
             'groups',
         ]
         extra_kwargs = {
             'password': {'write_only': True},
         }
+
+    @extend_schema_field(serializers.IntegerField(allow_null=True))
+    def get_branch(self, obj):
+        branch = obj.branch
+        return branch.pk if branch else None
 
     def validate_is_superuser(self, value):
         request = self.context.get('request')
