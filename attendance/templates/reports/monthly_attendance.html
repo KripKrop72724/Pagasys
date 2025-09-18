@@ -27,18 +27,8 @@
       {% for branch in report.branch_list %}
         <section class="branch-section">
           <div class="branch-header">
-            <div>
-              <h2 class="branch-title">{{ branch.name }}</h2>
-              <p class="branch-subtitle">{{ branch.employee_count }} employee{{ branch.employee_count|pluralize }}</p>
-            </div>
-            <div class="branch-totals">
-              {% for item in branch.legend_totals %}
-                <div class="total-item">
-                  <span class="total-glyph {{ item.css_class }}">{{ item.glyph }}</span>
-                  <span>{{ item.count }}</span>
-                </div>
-              {% endfor %}
-            </div>
+            <h2 class="branch-title">{{ branch.name }}</h2>
+            <p class="branch-subtitle">{{ branch.employee_count }} employee{{ branch.employee_count|pluralize }}</p>
           </div>
           {% if branch.employees %}
             <div class="monthly-grid-group">
