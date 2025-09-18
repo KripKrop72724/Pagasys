@@ -37,6 +37,10 @@ comprehensive automated test suite.
 * **Company bank accounts** – Each company can record a bank account number for
   payroll deposits. The field is exposed through the API and a dedicated
   "Financial details" section in the admin.
+* **Single company mode** – Toggle the `is_only_company` flag to lock the
+  tenant into a single-company configuration. When enabled, creating additional
+  companies through the API or admin is blocked to keep the deployment scoped
+  to one organisation.
 * **Employee notes** – Special notes about employees can be stored and
   managed via the API and Django admin.
 * **Employee full names** – Employee records now support separate first,
