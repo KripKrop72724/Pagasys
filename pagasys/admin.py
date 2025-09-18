@@ -212,7 +212,7 @@ class CompanyAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
 
     list_filter = ["name"]
     fieldsets = (
-        (None, {"fields": ("name", "timezone")}),
+        (None, {"fields": ("name", "timezone", "is_only_company")}),
         (
             "Contact details",
             {

@@ -116,6 +116,17 @@ class CompanySerializer(ScopedSerializerMixin, serializers.ModelSerializer):
         model = Company
         fields = '__all__'
 
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        if self.instance is not None:
+            data = {f.name: getattr(self.instance, f.name) for f in Company._meta.fields}
+            data.update(attrs)
+        else:
+            data = attrs
+        instance = Company(**data)
+        instance.clean()
+        return attrs
+
 
 class BranchSerializer(ScopedSerializerMixin, serializers.ModelSerializer):
     """Serializer for Branch"""

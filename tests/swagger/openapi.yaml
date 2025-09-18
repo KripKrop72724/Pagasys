@@ -643,6 +643,15 @@ paths:
           Example:
             value: <value>
       - in: query
+        name: is_only_company
+        schema:
+          type: string
+        description: Filter by is_only_company. Combine multiple parameters for compound
+          filtering.
+        examples:
+          Example:
+            value: <value>
+      - in: query
         name: name
         schema:
           type: string
@@ -10205,6 +10214,10 @@ components:
           type: string
           description: Bank account number used for payroll transactions
           maxLength: 64
+        is_only_company:
+          type: boolean
+          description: When enabled, this instance represents the sole company and
+            blocks creation of any additional companies.
       required:
       - id
       - name
@@ -12552,6 +12565,10 @@ components:
           type: string
           description: Bank account number used for payroll transactions
           maxLength: 64
+        is_only_company:
+          type: boolean
+          description: When enabled, this instance represents the sole company and
+            blocks creation of any additional companies.
     PatchedDepartment:
       type: object
       description: Serializer for Department

@@ -231,6 +231,7 @@ class CompanyViewSet(BulkCreateMixin, BulkUpdateMixin, BulkDeleteMixin, viewsets
     filterset_fields = [
         "name",
         "timezone",
+        "is_only_company",
         "address",
         "email",
         "phone",
