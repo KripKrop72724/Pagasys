@@ -7,7 +7,9 @@ from rest_framework.test import APIClient
 
 from pagasys.models import Company, Branch, Department, Project, Employee, ShiftTemplate
 from attendance.models import AttDay, AttPair, AttAdjustment
-from attendance.services import build_monthly_calendar
+import math
+
+from attendance.services import PDF_DAY_COLUMNS, build_monthly_calendar
 
 
 class AttendanceCalendarViewSetTests(TestCase):
@@ -320,6 +322,16 @@ class AttendanceCalendarViewSetTests(TestCase):
         classes = {cell["css_class"] for cell in first_employee["rows"]}
         assert any("status-present" in value for value in classes)
         assert branch["legend_totals"][0]["count"] >= 0
+        tables = branch.get("tables")
+        assert tables
+        expected_tables = math.ceil(len(report["days"]) / PDF_DAY_COLUMNS)
+        assert len(tables) == expected_tables
+        assert all(len(table["days"]) <= PDF_DAY_COLUMNS for table in tables)
+        total_days = sum(len(table["days"]) for table in tables)
+        assert total_days == len(report["days"])
+        for table in tables:
+            for employee in table["employees"]:
+                assert len(employee["cells"]) == len(table["days"])
 
     def test_monthly_report_pdf_endpoint(self):
         url = reverse(

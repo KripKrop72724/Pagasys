@@ -148,10 +148,8 @@ def render_monthly_attendance_pdf(report, context=None):
 
     context = context or {}
     request = context.get("request")
-    logo_url = context.get("logo_url") or static("images/logo.png")
     base_url = None
     if request and hasattr(request, "build_absolute_uri"):
-        logo_url = request.build_absolute_uri(logo_url)
         base_url = request.build_absolute_uri("/")
 
     template_context = {
@@ -160,7 +158,6 @@ def render_monthly_attendance_pdf(report, context=None):
         "company": context.get("company"),
         "filters": context.get("filters", {}),
         "generated_at": context.get("generated_at", timezone.now()),
-        "logo_url": logo_url,
     }
     html = render_to_string("reports/monthly_attendance.html", template_context)
     stylesheet_path = finders.find("attendance/css/reports.css")

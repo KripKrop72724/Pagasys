@@ -39,6 +39,8 @@ REJECTION_KEYS = {
 LOCKED_DAY_REASON = "Attendance day is locked; adjustments are disabled."
 UNASSIGNED_BRANCH_LABEL = "Unassigned"
 
+PDF_DAY_COLUMNS = 14
+
 MONTHLY_STATUS_LEGEND = OrderedDict(
     [
         (
@@ -509,6 +511,15 @@ def _resolve_month_range(month):
     return start, end
 
 
+def _chunked(sequence, size):
+    """Yield successive slices from *sequence* with *size* length."""
+
+    if size <= 0:  # pragma: no cover - defensive guard
+        raise ValueError("Chunk size must be positive")
+    for index in range(0, len(sequence), size):
+        yield sequence[index : index + size]
+
+
 def _legend_key_for_status(status: str | None) -> str:
     if not status:
         return "empty"
@@ -734,28 +745,6 @@ def build_monthly_calendar(
         branch_totals[branch_name].update(report_counts)
         overall_totals.update(report_counts)
 
-    branch_sections = OrderedDict()
-    for branch_name in sorted(branch_employee_map):
-        employees_for_branch = branch_employee_map[branch_name]
-        employees_for_branch.sort(key=lambda item: item["display"].casefold())
-        totals = branch_totals.get(branch_name, Counter())
-        branch_sections[branch_name] = {
-            "name": branch_name,
-            "employees": employees_for_branch,
-            "totals": {key: totals.get(key, 0) for key in legend_keys},
-            "legend_totals": [
-                {**entry, "count": totals.get(entry["key"], 0)}
-                for entry in legend_entries
-            ],
-            "employee_count": len(employees_for_branch),
-        }
-
-    payload = {
-        "month": start.strftime("%Y-%m"),
-        "days": [day.isoformat() for day in days],
-        "employees": payload_employees,
-    }
-
     report_days = [
         {
             "date": day,
@@ -765,7 +754,58 @@ def build_monthly_calendar(
         }
         for day in days
     ]
+    day_chunks = list(_chunked(report_days, PDF_DAY_COLUMNS))
+    if not day_chunks:
+        day_chunks = [report_days]
 
+    branch_sections = OrderedDict()
+    for branch_name in sorted(branch_employee_map):
+        employees_for_branch = branch_employee_map[branch_name]
+        employees_for_branch.sort(key=lambda item: item["display"].casefold())
+        totals = branch_totals.get(branch_name, Counter())
+        tables = []
+        for index, day_chunk in enumerate(day_chunks):
+            start_index = index * PDF_DAY_COLUMNS
+            end_index = start_index + len(day_chunk)
+            table_employees = []
+            for employee in employees_for_branch:
+                metadata = employee.get("metadata", {})
+                table_employees.append(
+                    {
+                        "meta": {
+                            "display": employee.get("display"),
+                            "code": metadata.get("code"),
+                            "department": metadata.get("department"),
+                            "project": metadata.get("project"),
+                        },
+                        "cells": employee.get("rows", [])[start_index:end_index],
+                    }
+                )
+            tables.append(
+                {
+                    "days": day_chunk,
+                    "employees": table_employees,
+                    "show_meta": index == 0,
+                }
+            )
+
+        branch_sections[branch_name] = {
+            "name": branch_name,
+            "employees": employees_for_branch,
+            "totals": {key: totals.get(key, 0) for key in legend_keys},
+            "legend_totals": [
+                {**entry, "count": totals.get(entry["key"], 0)}
+                for entry in legend_entries
+            ],
+            "employee_count": len(employees_for_branch),
+            "tables": tables if employees_for_branch else [],
+        }
+
+    payload = {
+        "month": start.strftime("%Y-%m"),
+        "days": [day.isoformat() for day in days],
+        "employees": payload_employees,
+    }
     report = {
         "month": start.strftime("%Y-%m"),
         "month_label": start.strftime("%B %Y"),
