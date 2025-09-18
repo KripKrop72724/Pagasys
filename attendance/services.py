@@ -39,7 +39,17 @@ REJECTION_KEYS = {
 LOCKED_DAY_REASON = "Attendance day is locked; adjustments are disabled."
 UNASSIGNED_BRANCH_LABEL = "Unassigned"
 
-PDF_DAY_COLUMNS = 14
+PDF_DAY_LAYOUTS = {
+    31: (16, 15),
+    30: (15, 15),
+    29: (15, 14),
+    28: (14, 14),
+}
+
+# Maximum number of day columns that can appear in a single PDF table. The
+# layout above covers the normal calendar month lengths, but callers still rely
+# on this constant to express the upper bound for assertions.
+PDF_DAY_COLUMNS = max(max(layout) for layout in PDF_DAY_LAYOUTS.values())
 
 MONTHLY_STATUS_LEGEND = OrderedDict(
     [
@@ -510,14 +520,45 @@ def _resolve_month_range(month):
         raise ValueError("Month end must be on or after start")
     return start, end
 
+def _pdf_day_chunk_sizes(total_days):
+    """Return the desired chunk sizes for the monthly PDF grid."""
 
-def _chunked(sequence, size):
-    """Yield successive slices from *sequence* with *size* length."""
+    if total_days <= 0:
+        return []
+    layout = list(PDF_DAY_LAYOUTS.get(total_days, ()))
+    if layout:
+        return layout
 
-    if size <= 0:  # pragma: no cover - defensive guard
-        raise ValueError("Chunk size must be positive")
-    for index in range(0, len(sequence), size):
-        yield sequence[index : index + size]
+    # Fallback for non-standard ranges: keep each table within the maximum
+    # allowed columns while distributing the remaining days as evenly as
+    # possible.
+    sizes = []
+    remaining = total_days
+    while remaining > 0:
+        take = min(PDF_DAY_COLUMNS, remaining)
+        sizes.append(take)
+        remaining -= take
+    return sizes
+
+
+def _build_pdf_day_chunks(days):
+    """Split *days* into slices following the PDF day column layout."""
+
+    total_days = len(days)
+    chunk_sizes = _pdf_day_chunk_sizes(total_days)
+    if not chunk_sizes:
+        return [days]
+
+    chunks = []
+    offset = 0
+    for size in chunk_sizes:
+        if offset >= total_days:
+            break
+        chunks.append(days[offset : offset + size])
+        offset += size
+    if offset < total_days:
+        chunks.append(days[offset:])
+    return chunks
 
 
 def _legend_key_for_status(status: str | None) -> str:
@@ -754,9 +795,7 @@ def build_monthly_calendar(
         }
         for day in days
     ]
-    day_chunks = list(_chunked(report_days, PDF_DAY_COLUMNS))
-    if not day_chunks:
-        day_chunks = [report_days]
+    day_chunks = _build_pdf_day_chunks(report_days)
 
     branch_sections = OrderedDict()
     for branch_name in sorted(branch_employee_map):
@@ -764,8 +803,8 @@ def build_monthly_calendar(
         employees_for_branch.sort(key=lambda item: item["display"].casefold())
         totals = branch_totals.get(branch_name, Counter())
         tables = []
+        start_index = 0
         for index, day_chunk in enumerate(day_chunks):
-            start_index = index * PDF_DAY_COLUMNS
             end_index = start_index + len(day_chunk)
             table_employees = []
             for employee in employees_for_branch:
@@ -788,6 +827,7 @@ def build_monthly_calendar(
                     "show_meta": index == 0,
                 }
             )
+            start_index = end_index
 
         branch_sections[branch_name] = {
             "name": branch_name,
@@ -810,6 +850,7 @@ def build_monthly_calendar(
         "month": start.strftime("%Y-%m"),
         "month_label": start.strftime("%B %Y"),
         "days": report_days,
+        "day_column_layout": [len(chunk) for chunk in day_chunks],
         "branches": branch_sections,
         "branch_list": list(branch_sections.values()),
         "legend": legend_entries,

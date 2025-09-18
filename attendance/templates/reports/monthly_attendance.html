@@ -10,24 +10,10 @@
     type="text/css"
   />
 </head>
-<body class="report-body monthly-attendance-report">
-  <header class="report-header">
-    <div class="report-header-primary">
-      <h1 class="report-branch-name">
-        {% if filters and filters.branch %}
-          {{ filters.branch|join:", " }}
-        {% elif report.branch_list %}
-          {% for branch in report.branch_list %}{% if not forloop.first %}, {% endif %}{{ branch.name }}{% endfor %}
-        {% else %}
-          All branches
-        {% endif %}
-      </h1>
-      <p class="report-heading">Attendance Report for Month of {{ report.month_label }}</p>
-    </div>
-    <div class="report-meta">
-      <p class="report-generated">Generated at {{ generated_at|date:"d M Y H:i" }}</p>
-    </div>
-  </header>
+<body class="report-body monthly-attendance-report{% if report.branch_list %} monthly-attendance-report--has-branches{% endif %}">
+  <div class="report-title-block">
+    <h1 class="report-title-block__title">Monthly Attendance Report {{ report.month_label }}</h1>
+  </div>
 
   <footer class="report-footer">
     <div class="footer-content">

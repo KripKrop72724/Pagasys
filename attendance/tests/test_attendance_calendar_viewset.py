@@ -7,7 +7,6 @@ from rest_framework.test import APIClient
 
 from pagasys.models import Company, Branch, Department, Project, Employee, ShiftTemplate
 from attendance.models import AttDay, AttPair, AttAdjustment
-import math
 
 from attendance.services import PDF_DAY_COLUMNS, build_monthly_calendar
 
@@ -324,14 +323,32 @@ class AttendanceCalendarViewSetTests(TestCase):
         assert branch["legend_totals"][0]["count"] >= 0
         tables = branch.get("tables")
         assert tables
-        expected_tables = math.ceil(len(report["days"]) / PDF_DAY_COLUMNS)
-        assert len(tables) == expected_tables
+        layout = report["day_column_layout"]
+        assert len(tables) == len(layout)
+        assert layout == [16, 15]
+        assert all(len(table["days"]) == expected for table, expected in zip(tables, layout))
         assert all(len(table["days"]) <= PDF_DAY_COLUMNS for table in tables)
         total_days = sum(len(table["days"]) for table in tables)
         assert total_days == len(report["days"])
-        for table in tables:
+        for table, expected in zip(tables, layout):
             for employee in table["employees"]:
-                assert len(employee["cells"]) == len(table["days"])
+                assert len(employee["cells"]) == expected
+
+    def test_monthly_calendar_uses_two_pages_for_month_lengths(self):
+        scenarios = [
+            ("2024-04", [15, 15]),
+            ("2024-02", [15, 14]),
+            ("2023-02", [14, 14]),
+        ]
+        for month, expected_layout in scenarios:
+            result = build_monthly_calendar(
+                [self.employee_dept, self.employee_proj],
+                month,
+                user=self.admin,
+            )
+            report = result["report"]
+            assert report["day_column_layout"] == expected_layout
+            assert len(report["day_column_layout"]) <= 2
 
     def test_monthly_report_pdf_endpoint(self):
         url = reverse(
