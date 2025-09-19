@@ -208,6 +208,26 @@ def test_compute_roster_date_same_day_fallback(company, employees):
     assert d == date(2024, 7, 1) and entry is not None and fb is True
 
 
+def test_compute_roster_date_prefers_previous_cross_midnight(company, employees):
+    """Late punches before the next shift start stick to the overnight roster."""
+    e1 = employees[0]
+    tz = ZoneInfo("Asia/Dubai")
+    shift = ShiftTemplate.objects.create(
+        company=company,
+        name="Night",
+        start_time=time(22, 0),
+        end_time=time(6, 0),
+        cross_midnight=True,
+    )
+    RosterEntry.objects.create(employee=e1, date=date(2024, 7, 1), shift=shift)
+    RosterEntry.objects.create(employee=e1, date=date(2024, 7, 2), shift=shift)
+    late = datetime(2024, 7, 2, 7, 0, tzinfo=tz)
+    d, entry, fb = compute_roster_date(e1, late)
+    assert d == date(2024, 7, 1)
+    assert entry is not None
+    assert fb is False
+
+
 def test_within_device_scope(company, branches, departments, projects, employees):
     b1, b2 = branches
     d1, d2 = departments
