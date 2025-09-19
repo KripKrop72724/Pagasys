@@ -1,5 +1,7 @@
 from datetime import date, datetime, time, timedelta
 
+from unittest.mock import patch
+
 from django.test import TestCase
 from django.utils import timezone
 from django.core.exceptions import ValidationError
@@ -8,6 +10,7 @@ from zoneinfo import ZoneInfo
 from attendance.services import build_pairs_for, compute_att_day
 from attendance.services_helpers import active_rules
 from capture.models import AttendanceDevice, PunchEvent
+from capture.utils import compute_roster_date
 from pagasys.models import (
     Company,
     Branch,
@@ -161,6 +164,72 @@ class AfterShiftPunchTests(AttendanceBase):
             AttPair.objects.filter(
                 employee=self.employee, date=self.day, out_ts__isnull=True
             ).count(),
+            0,
+        )
+
+
+class CrossMidnightLateOutRegressionTests(AttendanceBase):
+    def setUp(self):
+        super().setUp()
+        self.pair_patch = patch("capture.signals.pair_employee_day_task.delay")
+        self.compute_patch = patch("capture.signals.compute_employee_day_task.delay")
+        self.pair_patch.start()
+        self.compute_patch.start()
+        self.addCleanup(self.pair_patch.stop)
+        self.addCleanup(self.compute_patch.stop)
+        self.shift.start_time = time(22, 0)
+        self.shift.end_time = time(6, 0)
+        self.shift.cross_midnight = True
+        self.shift.save()
+        self.next_day = self.day + timedelta(days=1)
+        RosterEntry.objects.create(
+            employee=self.employee, date=self.next_day, shift=self.shift
+        )
+
+    def _create_event(self, ts: datetime, action: str):
+        roster_day, _, fallback = compute_roster_date(self.employee, ts)
+        return PunchEvent.objects.create(
+            device=self.device,
+            company=self.company,
+            employee=self.employee,
+            matched_employee=self.employee,
+            action=action,
+            device_ts=ts,
+            roster_date=roster_day,
+            roster_fallback=fallback,
+        )
+
+    def test_late_out_after_midnight_stays_with_previous_day(self):
+        tz = ZoneInfo(self.company.timezone)
+        in_dt = datetime.combine(self.day, time(22, 0), tzinfo=tz)
+        out_dt = datetime.combine(self.next_day, time(7, 0), tzinfo=tz)
+
+        in_event = self._create_event(in_dt, "in")
+        out_event = self._create_event(out_dt, "out")
+
+        self.assertEqual(in_event.roster_date, self.day)
+        self.assertFalse(in_event.roster_fallback)
+        self.assertEqual(out_event.roster_date, self.day)
+        self.assertFalse(out_event.roster_fallback)
+
+        build_pairs_for(self.employee.id, self.day, self.shift)
+        compute_att_day(self.employee.id, self.day)
+        day = AttDay.objects.get(employee=self.employee, date=self.day)
+        pair = AttPair.objects.get(employee=self.employee, date=self.day)
+
+        self.assertEqual(pair.in_event_id, in_event.id)
+        self.assertEqual(pair.out_event_id, out_event.id)
+        self.assertEqual(day.work_min, 8 * 60)
+        self.assertEqual(day.ot_regular_min, 60)
+        self.assertNotIn("unpaired_out", day.anomalies)
+
+        build_pairs_for(self.employee.id, self.next_day, self.shift)
+        compute_att_day(self.employee.id, self.next_day)
+        day_two = AttDay.objects.get(employee=self.employee, date=self.next_day)
+
+        self.assertNotIn("unpaired_out", day_two.anomalies)
+        self.assertEqual(
+            AttPair.objects.filter(employee=self.employee, date=self.next_day).count(),
             0,
         )
 

@@ -59,14 +59,51 @@ def compute_roster_date(employee, company_local_dt: datetime):
     candidates = list(
         RosterEntry.objects.filter(employee=employee, date__in=[d0, d0 - timedelta(days=1)]).select_related("shift")
     )
+    tzinfo = company_local_dt.tzinfo
+    prev_day = d0 - timedelta(days=1)
+    same_day_entries: list[RosterEntry] = []
+    prev_day_cross: list[RosterEntry] = []
     for cand in sorted(candidates, key=lambda x: x.date, reverse=True):
         s = cand.shift
-        start = datetime.combine(cand.date, s.start_time, tzinfo=company_local_dt.tzinfo)
+        start = datetime.combine(cand.date, s.start_time, tzinfo=tzinfo)
         end_date = cand.date + timedelta(days=1 if s.cross_midnight and s.end_time <= s.start_time else 0)
-        end = datetime.combine(end_date, s.end_time, tzinfo=company_local_dt.tzinfo)
+        end = datetime.combine(end_date, s.end_time, tzinfo=tzinfo)
         if start <= company_local_dt <= end:
             return cand.date, cand, False
-    same = next((c for c in candidates if c.date == d0), None)
+        if cand.date == d0:
+            same_day_entries.append(cand)
+        elif cand.date == prev_day and s.cross_midnight:
+            prev_day_cross.append(cand)
+
+    next_start: datetime | None = None
+    for cand in same_day_entries:
+        start = datetime.combine(cand.date, cand.shift.start_time, tzinfo=tzinfo)
+        if company_local_dt <= start and (next_start is None or start < next_start):
+            next_start = start
+
+    if next_start and prev_day_cross:
+        next_gap = next_start - company_local_dt
+        best_prev: RosterEntry | None = None
+        best_gap: timedelta | None = None
+        for cand in prev_day_cross:
+            shift = cand.shift
+            prev_start = datetime.combine(cand.date, shift.start_time, tzinfo=tzinfo)
+            if company_local_dt < prev_start:
+                continue
+            prev_end_date = cand.date + timedelta(
+                days=1 if shift.cross_midnight and shift.end_time <= shift.start_time else 0
+            )
+            prev_end = datetime.combine(prev_end_date, shift.end_time, tzinfo=tzinfo)
+            prev_gap = company_local_dt - prev_end
+            if prev_gap.total_seconds() < 0:
+                prev_gap = timedelta(0)
+            if prev_gap <= next_gap and (best_gap is None or prev_gap < best_gap):
+                best_prev = cand
+                best_gap = prev_gap
+        if best_prev:
+            return best_prev.date, best_prev, False
+
+    same = same_day_entries[0] if same_day_entries else None
     return (same.date if same else None), (same or None), True
 
 
