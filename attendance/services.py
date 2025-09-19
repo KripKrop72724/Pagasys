@@ -378,8 +378,22 @@ def compute_att_day(employee_id: int, day: date) -> int:
     )
 
     if shift and not on_leave:
-        first_in = next((p.in_ts for p in pairs if p.in_ts), None)
-        last_out = next((p.out_ts for p in reversed(pairs) if p.out_ts), None)
+        first_in = next(
+            (
+                p.in_ts
+                for p in pairs
+                if p.in_ts and not bool((p.anomaly or {}).get("unpaired_out"))
+            ),
+            None,
+        )
+        last_out = next(
+            (
+                p.out_ts
+                for p in reversed(pairs)
+                if p.out_ts and not bool((p.anomaly or {}).get("unpaired_out"))
+            ),
+            None,
+        )
         if first_in:
             first_in = timezone.localtime(first_in, tz)
             sched_start = datetime.combine(day, shift.start_time, tzinfo=tz)

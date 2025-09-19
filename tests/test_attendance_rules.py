@@ -7,6 +7,7 @@ from django.utils import timezone
 from django.core.exceptions import ValidationError
 from zoneinfo import ZoneInfo
 
+from attendance.reports import get_late_comers
 from attendance.services import build_pairs_for, compute_att_day
 from attendance.services_helpers import active_rules
 from capture.models import AttendanceDevice, PunchEvent
@@ -116,6 +117,17 @@ class AutoEventSequenceAnomalyTests(AttendanceBase):
         self.punch(time(17, 0), "out")
         day = self.compute()
         self.assertEqual(day.anomalies.get("unpaired_out"), 1)
+
+    def test_stray_out_before_in_does_not_trigger_late(self):
+        self.punch(time(8, 30), "out")
+        self.punch(time(9, 0), "in")
+        self.punch(time(17, 0), "out")
+
+        day = self.compute()
+
+        self.assertEqual(day.late_min, 0)
+        self.assertEqual(day.anomalies.get("unpaired_out"), 1)
+        self.assertEqual(get_late_comers(self.day, self.day), [])
 
 
 class AutoClosureRegressionTests(AttendanceBase):
