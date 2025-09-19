@@ -19,6 +19,8 @@ from rest_framework.request import Request
 from pagasys.admin import ScopedAdminMixin
 from pagasys.models import Branch, Department, Employee, Project, ShiftTemplate
 from pagasys.utils import scope_queryset
+from capture.models import PunchEvent
+
 from .models import AttDay, AttPair, AttAdjustment, LeaveRequest, LeaveDay
 from .tasks import compute_employee_day_task, recompute_range_task
 from .reports import (
@@ -519,6 +521,194 @@ class AttDayAdmin(ScopedAdminMixin, admin.ModelAdmin):
             for message in getattr(exc, "messages", [str(exc)]):
                 self.message_user(request, message, level=messages.ERROR)
 
+    def get_queryset(self, request):
+        queryset = super().get_queryset(request)
+        return queryset.select_related(
+            "shift", "roster", "roster__shift", "employee"
+        )
+
+    @staticmethod
+    def _format_pair_anomalies(anomalies):
+        if not anomalies:
+            return []
+        results = []
+        for name, value in anomalies.items():
+            if isinstance(value, bool):
+                if value:
+                    results.append(name)
+            elif value:
+                results.append(f"{name}: {value}")
+        return sorted(results)
+
+    @staticmethod
+    def _format_day_anomalies(anomalies):
+        if not anomalies:
+            return []
+        items = []
+        for name, count in anomalies.items():
+            if not count:
+                continue
+            items.append({"name": name, "count": count})
+        return sorted(items, key=lambda item: item["name"])
+
+    def _build_pair_context(self, day):
+        pairs = []
+        for pair in (
+            AttPair.objects.filter(employee=day.employee, date=day.date)
+            .order_by("in_ts")
+            .only(
+                "id",
+                "in_ts",
+                "out_ts",
+                "duration_min",
+                "cross_midnight",
+                "source",
+                "anomaly",
+                "in_event_id",
+                "out_event_id",
+            )
+        ):
+            pairs.append(
+                {
+                    "id": pair.id,
+                    "in_ts": pair.in_ts,
+                    "out_ts": pair.out_ts,
+                    "duration_min": pair.duration_min,
+                    "cross_midnight": pair.cross_midnight,
+                    "source": pair.get_source_display(),
+                    "source_value": pair.source,
+                    "anomalies": self._format_pair_anomalies(pair.anomaly),
+                    "in_event_id": pair.in_event_id,
+                    "out_event_id": pair.out_event_id,
+                    "admin_url": reverse(
+                        "admin:attendance_attpair_change", args=[pair.pk]
+                    ),
+                    "in_event_admin_url": (
+                        reverse("admin:capture_punchevent_change", args=[pair.in_event_id])
+                        if pair.in_event_id
+                        else None
+                    ),
+                    "out_event_admin_url": (
+                        reverse(
+                            "admin:capture_punchevent_change", args=[pair.out_event_id]
+                        )
+                        if pair.out_event_id
+                        else None
+                    ),
+                }
+            )
+        return pairs
+
+    def _build_punch_context(self, day):
+        punches = []
+        punch_qs = (
+            PunchEvent.objects.filter(
+                Q(employee_id=day.employee_id)
+                | Q(matched_employee_id=day.employee_id)
+            )
+            .filter(Q(roster_date=day.date) | Q(device_ts__date=day.date))
+            .select_related(
+                "device",
+                "device__company",
+                "device__branch",
+                "device__department",
+                "device__project",
+                "exception",
+            )
+            .order_by("device_ts")
+        )
+        for event in punch_qs:
+            exception = getattr(event, "exception", None)
+            punches.append(
+                {
+                    "id": event.id,
+                    "device_ts": event.device_ts,
+                    "server_ts": event.server_ts,
+                    "action": event.action,
+                    "device": event.device,
+                    "device_label": str(event.device),
+                    "device_id": event.device_id,
+                    "face_matched": event.face_matched,
+                    "requires_face": event.requires_face,
+                    "geofence_ok": event.geofence_ok,
+                    "geofence_rule_violation": event.geofence_rule_violation,
+                    "out_of_scope": event.out_of_scope,
+                    "roster_fallback": event.roster_fallback,
+                    "roster_date": event.roster_date,
+                    "notes": event.notes,
+                    "exception": (
+                        {
+                            "kind": exception.kind,
+                            "details": exception.details,
+                        }
+                        if exception
+                        else None
+                    ),
+                    "admin_url": reverse(
+                        "admin:capture_punchevent_change", args=[event.pk]
+                    ),
+                }
+            )
+        return punches
+
+    def _build_roster_overview(self, day):
+        shift = day.shift or (day.roster.shift if day.roster else None)
+        roster = day.roster
+        overview = {
+            "employee": day.employee,
+            "date": day.date,
+            "status": day.get_status_display(),
+            "status_value": day.status,
+            "work_min": day.work_min,
+            "unpaid_break_min": day.unpaid_break_min,
+            "paid_break_min": day.paid_break_min,
+            "late_min": day.late_min,
+            "early_leave_min": day.early_leave_min,
+            "ot_regular_min": day.ot_regular_min,
+            "ot_night_min": day.ot_night_min,
+            "ot_holiday_min": day.ot_holiday_min,
+            "locked": day.locked,
+            "anomalies": self._format_day_anomalies(day.anomalies),
+        }
+        if shift:
+            overview["shift"] = {
+                "id": shift.id,
+                "name": shift.name,
+                "start_time": shift.start_time,
+                "end_time": shift.end_time,
+                "cross_midnight": shift.cross_midnight,
+                "requires_face": shift.requires_face,
+                "break_minutes": shift.break_minutes,
+            }
+            overview["shift_admin_url"] = reverse(
+                "admin:pagasys_shifttemplate_change", args=[shift.pk]
+            )
+        else:
+            overview["shift"] = None
+            overview["shift_admin_url"] = None
+        if roster:
+            overview["roster"] = {
+                "id": roster.id,
+                "is_rest_day": roster.is_rest_day,
+                "is_holiday": roster.is_holiday,
+                "override_start": roster.override_start,
+                "override_end": roster.override_end,
+            }
+            overview["roster_admin_url"] = reverse(
+                "admin:pagasys_rosterentry_change", args=[roster.pk]
+            )
+        else:
+            overview["roster"] = None
+            overview["roster_admin_url"] = None
+        return overview
+
+    def _build_day_related_context(self, day):
+        return {
+            "roster_overview": self._build_roster_overview(day),
+            "pair_sessions": self._build_pair_context(day),
+            "punch_events": self._build_punch_context(day),
+        }
+
     def changeform_view(self, request, object_id=None, form_url="", extra_context=None):
         extra_context = extra_context or {}
         day = None
@@ -530,10 +720,14 @@ class AttDayAdmin(ScopedAdminMixin, admin.ModelAdmin):
             extra_context["quick_adjustment_url"] = reverse(
                 "admin:attendance_attday_add_adjustment", args=[day.pk]
             )
+            extra_context.update(self._build_day_related_context(day))
         else:
             extra_context.setdefault("quick_adjustment_form", None)
             extra_context["quick_adjustment_target"] = None
             extra_context["quick_adjustment_url"] = None
+            extra_context.setdefault("roster_overview", None)
+            extra_context.setdefault("pair_sessions", [])
+            extra_context.setdefault("punch_events", [])
         return super().changeform_view(request, object_id, form_url, extra_context)
 
     def add_adjustment_view(self, request, object_id):

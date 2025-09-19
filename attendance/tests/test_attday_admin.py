@@ -5,7 +5,16 @@ from django.utils import timezone
 from django.contrib import admin
 from django.contrib.messages.storage.fallback import FallbackStorage
 
-from pagasys.models import Company, Branch, Department, Project, Employee, ShiftTemplate
+from pagasys.models import (
+    Company,
+    Branch,
+    Department,
+    Project,
+    Employee,
+    ShiftTemplate,
+    RosterEntry,
+)
+from capture.models import AttendanceDevice, PunchEvent, PunchException
 from attendance.models import AttDay, AttPair, AttAdjustment
 from attendance.admin import AttDayAdmin, EmployeeBranchListFilter
 
@@ -56,6 +65,14 @@ class AttendanceCalendarAdminViewTests(TestCase):
             end_time=time(17, 0),
         )
 
+        self.roster_entry = RosterEntry.objects.create(
+            employee=self.employee,
+            date=date(2024, 5, 1),
+            shift=self.shift,
+            override_start=time(9, 0),
+            override_end=time(17, 0),
+        )
+
         self.day_one = date(2024, 5, 1)
         self.day_two = date(2024, 5, 2)
 
@@ -68,6 +85,7 @@ class AttendanceCalendarAdminViewTests(TestCase):
             status="present",
             anomalies={"missing_out_closed_at_next_in": 1},
             shift=self.shift,
+            roster=self.roster_entry,
         )
         AttDay.objects.create(
             employee=self.employee,
@@ -77,14 +95,52 @@ class AttendanceCalendarAdminViewTests(TestCase):
             shift=self.shift,
         )
 
+        self.device = AttendanceDevice.objects.create(
+            company=self.company,
+            name="North Gate",
+            api_key="device-key-1",
+        )
+
+        self.punch_in = PunchEvent.objects.create(
+            id=100,
+            device=self.device,
+            company=self.company,
+            employee=self.employee,
+            action="in",
+            device_ts=timezone.make_aware(datetime(2024, 5, 1, 8, 0)),
+            face_matched=True,
+            requires_face=True,
+            geofence_ok=True,
+            roster_date=self.day_one,
+        )
+        self.punch_out = PunchEvent.objects.create(
+            id=101,
+            device=self.device,
+            company=self.company,
+            employee=self.employee,
+            action="out",
+            device_ts=timezone.make_aware(datetime(2024, 5, 1, 16, 0)),
+            face_matched=False,
+            requires_face=True,
+            geofence_ok=False,
+            geofence_rule_violation=True,
+            roster_fallback=True,
+            roster_date=self.day_one,
+            notes="Left early",
+        )
+        PunchException.objects.create(
+            event=self.punch_out, kind="geofence", details={"reason": "Outside"}
+        )
+
         AttPair.objects.create(
             employee=self.employee,
             date=self.day_one,
-            in_event_id=100,
-            out_event_id=101,
-            in_ts=timezone.make_aware(datetime(2024, 5, 1, 8, 0)),
-            out_ts=timezone.make_aware(datetime(2024, 5, 1, 16, 0)),
+            in_event_id=self.punch_in.id,
+            out_event_id=self.punch_out.id,
+            in_ts=self.punch_in.device_ts,
+            out_ts=self.punch_out.device_ts,
             duration_min=480,
+            anomaly={"missing_out_closed_at_next_in": True},
         )
 
         AttAdjustment.objects.create(
@@ -172,6 +228,36 @@ class AttendanceCalendarAdminViewTests(TestCase):
         assert form is not None
         url = response.context_data["quick_adjustment_url"]
         assert url.endswith(f"/{day.pk}/add-adjustment/")
+
+    def test_change_view_includes_related_context(self):
+        day = AttDay.objects.get(employee=self.employee, date=self.day_one)
+        request = self.factory.get(f"/admin/attendance/attday/{day.pk}/change/")
+        request.user = self.admin
+        request._cached_user = self.admin
+        day_with_select = self.attday_admin.get_queryset(request).get(pk=day.pk)
+
+        with self.assertNumQueries(2):
+            related = self.attday_admin._build_day_related_context(day_with_select)
+
+        assert "roster_overview" in related
+        assert related["roster_overview"]["shift"]["name"] == self.shift.name
+        assert related["roster_overview"]["roster"]["id"] == self.roster_entry.id
+
+        pairs = related["pair_sessions"]
+        assert len(pairs) == 1
+        assert pairs[0]["in_event_id"] == self.punch_in.id
+        assert pairs[0]["anomalies"] == ["missing_out_closed_at_next_in"]
+
+        punches = related["punch_events"]
+        assert [event["id"] for event in punches] == [self.punch_in.id, self.punch_out.id]
+        assert punches[-1]["exception"]["kind"] == "geofence"
+
+        response = self.attday_admin.changeform_view(request, str(day.pk))
+        response.render()
+        context = response.context_data
+        assert context["roster_overview"]["shift"]["name"] == self.shift.name
+        assert context["pair_sessions"][0]["out_event_id"] == self.punch_out.id
+        assert context["punch_events"][0]["device_label"] == str(self.device)
 
     def test_add_adjustment_view_creates_record(self):
         day = AttDay.objects.get(employee=self.employee, date=self.day_two)

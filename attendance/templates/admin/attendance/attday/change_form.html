@@ -3,6 +3,236 @@
 
 {% block content %}
     {{ block.super }}
+    {% if roster_overview %}
+        <div id="roster-overview-module" class="inline-group">
+            <fieldset class="module aligned">
+                <h2>{% trans "Roster overview" %}</h2>
+                <div class="grp-row">
+                    <table class="grp-table">
+                        <tbody>
+                            <tr>
+                                <th scope="row">{% trans "Employee" %}</th>
+                                <td>{{ roster_overview.employee }}</td>
+                                <th scope="row">{% trans "Date" %}</th>
+                                <td>{{ roster_overview.date }}</td>
+                            </tr>
+                            <tr>
+                                <th scope="row">{% trans "Status" %}</th>
+                                <td class="status {{ roster_overview.status_value }}">{{ roster_overview.status }}</td>
+                                <th scope="row">{% trans "Locked" %}</th>
+                                <td>{{ roster_overview.locked|yesno:_("Yes,No") }}</td>
+                            </tr>
+                            <tr>
+                                <th scope="row">{% trans "Work minutes" %}</th>
+                                <td>{{ roster_overview.work_min }}</td>
+                                <th scope="row">{% trans "Unpaid / Paid breaks" %}</th>
+                                <td>{{ roster_overview.unpaid_break_min }} / {{ roster_overview.paid_break_min }}</td>
+                            </tr>
+                            <tr>
+                                <th scope="row">{% trans "Late / Early leave" %}</th>
+                                <td>{{ roster_overview.late_min }} / {{ roster_overview.early_leave_min }}</td>
+                                <th scope="row">{% trans "Overtime (reg / night / holiday)" %}</th>
+                                <td>{{ roster_overview.ot_regular_min }} / {{ roster_overview.ot_night_min }} / {{ roster_overview.ot_holiday_min }}</td>
+                            </tr>
+                            <tr>
+                                <th scope="row">{% trans "Shift" %}</th>
+                                <td>
+                                    {% if roster_overview.shift %}
+                                        <strong>{{ roster_overview.shift.name }}</strong>
+                                        <br>
+                                        {{ roster_overview.shift.start_time }}
+                                        –
+                                        {{ roster_overview.shift.end_time }}
+                                        {% if roster_overview.shift.cross_midnight %}
+                                            <span class="grp-tag">{% trans "Cross-midnight" %}</span>
+                                        {% endif %}
+                                        {% if roster_overview.shift.requires_face %}
+                                            <span class="grp-tag">{% trans "Face required" %}</span>
+                                        {% endif %}
+                                        {% if roster_overview.shift.break_minutes %}
+                                            <span class="grp-tag">{% blocktrans with minutes=roster_overview.shift.break_minutes %}Break {{ minutes }} min{% endblocktrans %}</span>
+                                        {% endif %}
+                                        {% if roster_overview.shift_admin_url %}
+                                            <br>
+                                            <a href="{{ roster_overview.shift_admin_url }}" class="grp-link">{% trans "Open shift" %}</a>
+                                        {% endif %}
+                                    {% else %}
+                                        <span class="grp-description">{% trans "No shift assigned" %}</span>
+                                    {% endif %}
+                                </td>
+                                <th scope="row">{% trans "Roster entry" %}</th>
+                                <td>
+                                    {% if roster_overview.roster %}
+                                        <span class="grp-tag">{% if roster_overview.roster.is_rest_day %}{% trans "Rest day" %}{% else %}{% trans "Working day" %}{% endif %}</span>
+                                        {% if roster_overview.roster.is_holiday %}
+                                            <span class="grp-tag">{% trans "Holiday" %}</span>
+                                        {% endif %}
+                                        {% if roster_overview.roster.override_start or roster_overview.roster.override_end %}
+                                            <div class="grp-description">
+                                                {% trans "Override" %}: {{ roster_overview.roster.override_start|default:"—" }} – {{ roster_overview.roster.override_end|default:"—" }}
+                                            </div>
+                                        {% endif %}
+                                        {% if roster_overview.roster_admin_url %}
+                                            <a href="{{ roster_overview.roster_admin_url }}" class="grp-link">{% trans "Open roster" %}</a>
+                                        {% endif %}
+                                    {% else %}
+                                        <span class="grp-description">{% trans "No roster entry linked" %}</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="grp-row">
+                    <h3>{% trans "Day anomalies" %}</h3>
+                    {% if roster_overview.anomalies %}
+                        <ul class="grp-listing">
+                            {% for anomaly in roster_overview.anomalies %}
+                                <li><strong>{{ anomaly.name }}</strong>: {{ anomaly.count }}</li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <p class="grp-description">{% trans "No anomalies recorded for this day." %}</p>
+                    {% endif %}
+                </div>
+            </fieldset>
+        </div>
+    {% endif %}
+
+    <div id="pair-sessions-module" class="inline-group">
+        <fieldset class="module aligned">
+            <h2>{% trans "Paired sessions" %}</h2>
+            {% if pair_sessions %}
+                <div class="grp-row">
+                    <table class="grp-table">
+                        <thead>
+                            <tr>
+                                <th>{% trans "In" %}</th>
+                                <th>{% trans "Out" %}</th>
+                                <th>{% trans "Duration (min)" %}</th>
+                                <th>{% trans "Source" %}</th>
+                                <th>{% trans "Cross midnight" %}</th>
+                                <th>{% trans "Anomalies" %}</th>
+                                <th>{% trans "In punch" %}</th>
+                                <th>{% trans "Out punch" %}</th>
+                                <th>{% trans "Actions" %}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for pair in pair_sessions %}
+                                <tr>
+                                    <td>{{ pair.in_ts|date:"Y-m-d H:i" }}</td>
+                                    <td>
+                                        {% if pair.out_ts %}
+                                            {{ pair.out_ts|date:"Y-m-d H:i" }}
+                                        {% else %}
+                                            <span class="grp-description">{% trans "Open" %}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ pair.duration_min }}</td>
+                                    <td>
+                                        <span class="grp-tag">{{ pair.source }}</span>
+                                    </td>
+                                    <td>{{ pair.cross_midnight|yesno:_("Yes,No") }}</td>
+                                    <td>
+                                        {% if pair.anomalies %}
+                                            <ul class="grp-listing">
+                                                {% for entry in pair.anomalies %}
+                                                    <li>{{ entry }}</li>
+                                                {% endfor %}
+                                            </ul>
+                                        {% else %}
+                                            <span class="grp-description">{% trans "None" %}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if pair.in_event_admin_url %}
+                                            <a href="{{ pair.in_event_admin_url }}" class="grp-link">{{ pair.in_event_id }}</a>
+                                        {% else %}
+                                            {{ pair.in_event_id|default:"—" }}
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if pair.out_event_admin_url %}
+                                            <a href="{{ pair.out_event_admin_url }}" class="grp-link">{{ pair.out_event_id }}</a>
+                                        {% else %}
+                                            {{ pair.out_event_id|default:"—" }}
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <a href="{{ pair.admin_url }}" class="grp-link">{% trans "Open pair" %}</a>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <p class="grp-description">{% trans "No paired sessions were computed for this day." %}</p>
+            {% endif %}
+        </fieldset>
+    </div>
+
+    <div id="punch-events-module" class="inline-group">
+        <fieldset class="module aligned">
+            <h2>{% trans "Punch events" %}</h2>
+            {% if punch_events %}
+                <div class="grp-row">
+                    <table class="grp-table">
+                        <thead>
+                            <tr>
+                                <th>{% trans "Device time" %}</th>
+                                <th>{% trans "Server time" %}</th>
+                                <th>{% trans "Action" %}</th>
+                                <th>{% trans "Device" %}</th>
+                                <th>{% trans "Face matched" %}</th>
+                                <th>{% trans "Requires face" %}</th>
+                                <th>{% trans "Geofence OK" %}</th>
+                                <th>{% trans "Geofence violation" %}</th>
+                                <th>{% trans "Out of scope" %}</th>
+                                <th>{% trans "Roster fallback" %}</th>
+                                <th>{% trans "Roster date" %}</th>
+                                <th>{% trans "Exception" %}</th>
+                                <th>{% trans "Notes" %}</th>
+                                <th>{% trans "Actions" %}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for event in punch_events %}
+                                <tr>
+                                    <td>{{ event.device_ts|date:"Y-m-d H:i" }}</td>
+                                    <td>{{ event.server_ts|date:"Y-m-d H:i" }}</td>
+                                    <td><span class="grp-tag">{{ event.action }}</span></td>
+                                    <td>{{ event.device_label }}</td>
+                                    <td>{{ event.face_matched|yesno:_("Yes,No,–") }}</td>
+                                    <td>{{ event.requires_face|yesno:_("Yes,No") }}</td>
+                                    <td>{{ event.geofence_ok|yesno:_("Yes,No,–") }}</td>
+                                    <td>{{ event.geofence_rule_violation|yesno:_("Yes,No") }}</td>
+                                    <td>{{ event.out_of_scope|yesno:_("Yes,No") }}</td>
+                                    <td>{{ event.roster_fallback|yesno:_("Yes,No") }}</td>
+                                    <td>{{ event.roster_date|default:"—" }}</td>
+                                    <td>
+                                        {% if event.exception %}
+                                            <strong>{{ event.exception.kind }}</strong>
+                                            {% if event.exception.details %}
+                                                <div class="grp-description">{{ event.exception.details }}</div>
+                                            {% endif %}
+                                        {% else %}
+                                            <span class="grp-description">{% trans "None" %}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ event.notes|default:"—" }}</td>
+                                    <td><a href="{{ event.admin_url }}" class="grp-link">{% trans "Open event" %}</a></td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <p class="grp-description">{% trans "No punch events matched this day." %}</p>
+            {% endif %}
+        </fieldset>
+    </div>
     {% if quick_adjustment_form and quick_adjustment_url %}
         <div id="quick-adjustment-module" class="inline-group">
             <fieldset class="module aligned">
