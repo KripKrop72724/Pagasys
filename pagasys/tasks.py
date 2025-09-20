@@ -4,6 +4,7 @@ from typing import Iterable, Sequence
 from celery import shared_task
 from django.utils import timezone
 from zoneinfo import ZoneInfo
+from django.db import transaction
 
 from .models import (
     RosterEntry,
@@ -13,6 +14,8 @@ from .models import (
     effective_calendar_for,
     holiday_flags,
 )
+
+from attendance.tasks import pair_employee_day_task, compute_employee_day_task
 
 
 @shared_task
@@ -76,6 +79,7 @@ def schedule_range_bulk(
     rest = set(rest_weekdays or [])
     num_days = (end_date - start_date).days + 1
     entries = []
+    touched_pairs: set[tuple[int, date]] = set()
     codes = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]
     for emp in employees:
         for i in range(num_days):
@@ -89,18 +93,29 @@ def schedule_range_bulk(
             entry.is_holiday, entry.was_holiday = holiday_flags(emp, current, None)
             entry.full_clean(validate_unique=False)
             entries.append(entry)
+            touched_pairs.add((entry.employee_id, current))
+
+    def enqueue_pairs(pairs=touched_pairs):
+        for emp_id, day in pairs:
+            day_iso = day.isoformat()
+            pair_employee_day_task.delay(emp_id, day_iso)
+            compute_employee_day_task.delay(emp_id, day_iso)
+
     if entries:
-        RosterEntry.objects.bulk_create(
-            entries,
-            update_conflicts=True,
-            update_fields=[
-                "shift",
-                "override_start",
-                "override_end",
-                "is_rest_day",
-                "is_holiday",
-                "was_holiday",
-            ],
-            unique_fields=["employee", "date"],
-        )
+        with transaction.atomic():
+            RosterEntry.objects.bulk_create(
+                entries,
+                update_conflicts=True,
+                update_fields=[
+                    "shift",
+                    "override_start",
+                    "override_end",
+                    "is_rest_day",
+                    "is_holiday",
+                    "was_holiday",
+                ],
+                unique_fields=["employee", "date"],
+            )
+            if touched_pairs:
+                transaction.on_commit(enqueue_pairs)
     return len(entries)
