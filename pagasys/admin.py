@@ -18,6 +18,11 @@ from copy import deepcopy
 from django.forms.models import construct_instance
 from django.utils import timezone
 
+from attendance.tasks import (
+    pair_employee_day_task,
+    compute_employee_day_task,
+)
+
 from .excel_import import (
     import_company_visa_workbook,
     import_employee_workbook,
@@ -1133,6 +1138,7 @@ class RosterEntryAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
             return
 
         entries = []
+        touched_pairs: set[tuple[int, date]] = set()
         for emp in employees:
             current = start
             while current <= end:
@@ -1149,7 +1155,17 @@ class RosterEntryAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
                 )
                 entry.full_clean(validate_unique=False)
                 entries.append(entry)
+                touched_pairs.add((entry.employee_id, current))
                 current += timedelta(days=1)
+        if not entries:
+            return
+
+        def enqueue_pairs(pairs=touched_pairs):
+            for emp_id, day in pairs:
+                day_iso = day.isoformat()
+                pair_employee_day_task.delay(emp_id, day_iso)
+                compute_employee_day_task.delay(emp_id, day_iso)
+
         with transaction.atomic():
             RosterEntry.objects.bulk_create(
                 entries,
@@ -1164,6 +1180,8 @@ class RosterEntryAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
                 ],
                 unique_fields=["employee", "date"],
             )
+            if touched_pairs:
+                transaction.on_commit(enqueue_pairs)
 
 
 @admin.register(LeaveType)

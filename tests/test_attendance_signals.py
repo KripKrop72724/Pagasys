@@ -39,25 +39,57 @@ class AttendanceSignalTests(TransactionTestCase):
             break_minutes=0,
         )
 
-    @patch("attendance.signals.compute_employee_day_task.delay")
-    def test_roster_entry_save_triggers_compute(self, mock_delay):
-        RosterEntry.objects.create(employee=self.employee, date=self.day, shift=self.shift)
-        mock_delay.assert_called_once_with(self.employee.id, self.day.isoformat())
+    def test_roster_entry_save_triggers_pair_and_compute(self):
+        with patch("attendance.signals.pair_employee_day_task.delay") as mock_pair, patch(
+            "attendance.signals.compute_employee_day_task.delay"
+        ) as mock_compute:
+            RosterEntry.objects.create(
+                employee=self.employee, date=self.day, shift=self.shift
+            )
+            day_iso = self.day.isoformat()
+            mock_pair.assert_called_once_with(self.employee.id, day_iso)
+            mock_compute.assert_called_once_with(self.employee.id, day_iso)
 
-    @patch("attendance.signals.compute_employee_day_task.delay")
-    def test_holiday_flag_updates_trigger_compute(self, mock_delay):
-        entry = RosterEntry.objects.create(
-            employee=self.employee, date=self.day, shift=self.shift
-        )
-        mock_delay.assert_called_once_with(self.employee.id, self.day.isoformat())
-        for fields in (["is_holiday"], ["was_holiday"], ["is_holiday", "was_holiday"]):
-            mock_delay.reset_mock()
-            if "is_holiday" in fields:
-                entry.is_holiday = not entry.is_holiday
-            if "was_holiday" in fields:
-                entry.was_holiday = not entry.was_holiday
-            entry.save(update_fields=fields)
-            mock_delay.assert_called_once_with(self.employee.id, self.day.isoformat())
+    def test_roster_entry_delete_triggers_pair_and_compute(self):
+        with patch("attendance.signals.pair_employee_day_task.delay") as mock_pair, patch(
+            "attendance.signals.compute_employee_day_task.delay"
+        ) as mock_compute:
+            entry = RosterEntry.objects.create(
+                employee=self.employee, date=self.day, shift=self.shift
+            )
+            day_iso = self.day.isoformat()
+            mock_pair.assert_called_once_with(self.employee.id, day_iso)
+            mock_compute.assert_called_once_with(self.employee.id, day_iso)
+            mock_pair.reset_mock()
+            mock_compute.reset_mock()
+            entry.delete()
+            mock_pair.assert_called_once_with(self.employee.id, day_iso)
+            mock_compute.assert_called_once_with(self.employee.id, day_iso)
+
+    def test_holiday_flag_updates_trigger_compute(self):
+        with patch("attendance.signals.pair_employee_day_task.delay") as mock_pair, patch(
+            "attendance.signals.compute_employee_day_task.delay"
+        ) as mock_compute:
+            entry = RosterEntry.objects.create(
+                employee=self.employee, date=self.day, shift=self.shift
+            )
+            day_iso = self.day.isoformat()
+            mock_pair.assert_called_once_with(self.employee.id, day_iso)
+            mock_compute.assert_called_once_with(self.employee.id, day_iso)
+            for fields in (
+                ["is_holiday"],
+                ["was_holiday"],
+                ["is_holiday", "was_holiday"],
+            ):
+                mock_pair.reset_mock()
+                mock_compute.reset_mock()
+                if "is_holiday" in fields:
+                    entry.is_holiday = not entry.is_holiday
+                if "was_holiday" in fields:
+                    entry.was_holiday = not entry.was_holiday
+                entry.save(update_fields=fields)
+                mock_pair.assert_called_once_with(self.employee.id, day_iso)
+                mock_compute.assert_called_once_with(self.employee.id, day_iso)
 
     @patch("attendance.signals.compute_employee_day_task.delay")
     def test_leave_day_creation_triggers_compute(self, mock_delay):

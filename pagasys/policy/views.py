@@ -1,7 +1,7 @@
 from django.db import transaction
 from django.utils.dateparse import parse_date
 from django.db.models import Q, Count
-from datetime import timedelta
+from datetime import timedelta, date
 from rest_framework import viewsets, status, serializers
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -53,6 +53,7 @@ from .permissions import IsCompanyMember, CompanyScopedQuerysetMixin, ActionRole
 from pagasys.openapi_utils import document_filters, _generate_parameters
 from pagasys.utils import scope_queryset
 from pagasys.tasks import schedule_range_bulk
+from attendance.tasks import pair_employee_day_task, compute_employee_day_task
 
 ASYNC_BULK_THRESHOLD = 50
 
@@ -299,6 +300,16 @@ class RosterViewSet(BasePolicyViewSet):
                 status=403,
             )
         to_create = [RosterEntry(**v) for v in validated]
+        touched_pairs = {
+            (entry.employee_id, entry.date) for entry in to_create
+        }
+
+        def enqueue_pairs(pairs=touched_pairs):
+            for emp_id, day in pairs:
+                day_iso = day.isoformat()
+                pair_employee_day_task.delay(emp_id, day_iso)
+                compute_employee_day_task.delay(emp_id, day_iso)
+
         with transaction.atomic():
             RosterEntry.objects.bulk_create(
                 to_create,
@@ -313,6 +324,8 @@ class RosterViewSet(BasePolicyViewSet):
                 ],
                 unique_fields=["employee", "date"],
             )
+            if touched_pairs:
+                transaction.on_commit(enqueue_pairs)
         payload = {"upserted": len(to_create)}
         return Response(RosterBulkUpsertResponseSerializer(payload).data, status=200)
 
@@ -454,6 +467,7 @@ class RosterViewSet(BasePolicyViewSet):
             }
         weekday_codes = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]
         entries = []
+        touched_pairs: set[tuple[int, date]] = set()
         for emp, current in schedule_pairs:
             weekday_code = weekday_codes[current.weekday()]
             item = {
@@ -470,6 +484,14 @@ class RosterViewSet(BasePolicyViewSet):
                 v["employee"], v["date"], v.get("is_holiday")
             )
             entries.append(RosterEntry(**v))
+            touched_pairs.add((v["employee"].id, v["date"]))
+
+        def enqueue_pairs(pairs=touched_pairs):
+            for emp_id, day in pairs:
+                day_iso = day.isoformat()
+                pair_employee_day_task.delay(emp_id, day_iso)
+                compute_employee_day_task.delay(emp_id, day_iso)
+
         with transaction.atomic():
             RosterEntry.objects.bulk_create(
                 entries,
@@ -484,6 +506,8 @@ class RosterViewSet(BasePolicyViewSet):
                 ],
                 unique_fields=["employee", "date"],
             )
+            if touched_pairs:
+                transaction.on_commit(enqueue_pairs)
         return Response({"count": len(entries)}, status=200)
 
     @extend_schema(
