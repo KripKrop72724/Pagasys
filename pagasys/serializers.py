@@ -257,9 +257,15 @@ class HolidayAuditLogSerializer(ScopedSerializerMixin, serializers.ModelSerializ
 class ShiftTemplateSerializer(ScopedSerializerMixin, serializers.ModelSerializer):
     """Serializer for ShiftTemplate"""
 
+    total_minutes = serializers.IntegerField(
+        read_only=True,
+        help_text="Net scheduled minutes after unpaid breaks",
+    )
+
     class Meta:
         model = ShiftTemplate
         fields = '__all__'
+        read_only_fields = ("total_minutes",)
 
     def validate(self, attrs):
         attrs = super().validate(attrs)

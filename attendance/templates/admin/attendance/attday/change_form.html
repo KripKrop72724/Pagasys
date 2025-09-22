@@ -91,6 +91,9 @@
                                         {% if roster_overview.shift.break_minutes %}
                                             <span class="grp-tag">{% blocktrans with minutes=roster_overview.shift.break_minutes %}Break {{ minutes }} min{% endblocktrans %}</span>
                                         {% endif %}
+                                        {% if roster_overview.shift.total_minutes is not None %}
+                                            <span class="grp-tag">{% blocktrans with minutes=roster_overview.shift.total_minutes %}Total {{ minutes }} min{% endblocktrans %}</span>
+                                        {% endif %}
                                         {% if roster_overview.shift_admin_url %}
                                             <br>
                                             <a href="{{ roster_overview.shift_admin_url }}" class="grp-link">{% trans "Open shift" %}</a>

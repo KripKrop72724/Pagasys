@@ -1,13 +1,16 @@
 from datetime import datetime, timedelta, time
 from functools import lru_cache
-from typing import List, Tuple, Iterable, Optional
+from typing import Iterable, List, Optional, Tuple
 
 from django.db.models import Q
 from django.utils import timezone
+from django.urls import reverse
 
 from pagasys.models import ShiftRule, _minutes_between
 
-from .models import AttPair
+from capture.models import PunchEvent
+
+from .models import AttAdjustment, AttPair
 
 
 # Canonical pair-level anomaly keys surfaced on AttDay
@@ -326,8 +329,6 @@ def apply_att_adjustments(
     status: str,
     anomalies: dict,
 ):
-    from .models import AttAdjustment
-
     adjustments = AttAdjustment.objects.filter(employee_id=employee_id, date=day)
     if not adjustments:
         return (
@@ -422,3 +423,265 @@ def compute_full_attendance_delta(employee_id: int, day: datetime.date) -> int:
     )
     missing = required - att_day.work_min
     return max(0, int(missing))
+
+
+def format_pair_anomalies(anomalies: Optional[dict]) -> List[str]:
+    """Return a sorted list of anomaly labels for display."""
+
+    if not anomalies:
+        return []
+    results: List[str] = []
+    for name, value in anomalies.items():
+        if isinstance(value, bool):
+            if value:
+                results.append(name)
+        elif value:
+            results.append(f"{name}: {value}")
+    return sorted(results)
+
+
+def format_day_anomalies(anomalies: Optional[dict]) -> List[dict]:
+    """Canonicalise day-level anomalies into ``[{name, count}, …]``."""
+
+    if not anomalies:
+        return []
+    items: List[dict] = []
+    for name, count in anomalies.items():
+        if not count:
+            continue
+        items.append({"name": name, "count": count, "key": name})
+    return sorted(items, key=lambda item: item["name"])
+
+
+def build_roster_overview(day, *, include_admin_urls: bool = False) -> dict:
+    """Summarise roster and shift metadata for an ``AttDay``."""
+
+    employee = getattr(day, "employee", None)
+    shift = day.shift or (day.roster.shift if day.roster else None)
+    roster = day.roster
+
+    overview = {
+        "employee": employee,
+        "employee_id": getattr(day, "employee_id", None),
+        "employee_display": str(employee) if employee else "",
+        "date": day.date,
+        "status": day.get_status_display(),
+        "status_value": day.status,
+        "locked": day.locked,
+        "work_min": day.work_min,
+        "unpaid_break_min": day.unpaid_break_min,
+        "paid_break_min": day.paid_break_min,
+        "late_min": day.late_min,
+        "early_leave_min": day.early_leave_min,
+        "ot_regular_min": day.ot_regular_min,
+        "ot_night_min": day.ot_night_min,
+        "ot_holiday_min": day.ot_holiday_min,
+        "anomalies": format_day_anomalies(getattr(day, "anomalies", None)),
+        "is_holiday": day.is_holiday,
+        "is_rest_day": day.is_rest_day,
+        "on_leave": day.on_leave,
+        "leave_portion": day.leave_portion,
+    }
+
+    if shift:
+        shift_summary = {
+            "id": shift.id,
+            "name": shift.name,
+            "start_time": shift.start_time,
+            "end_time": shift.end_time,
+            "cross_midnight": shift.cross_midnight,
+            "requires_face": shift.requires_face,
+            "break_minutes": shift.break_minutes,
+            "total_minutes": shift.total_minutes,
+        }
+        overview["shift"] = shift_summary
+        if include_admin_urls:
+            overview["shift_admin_url"] = reverse(
+                "admin:pagasys_shifttemplate_change", args=[shift.pk]
+            )
+    else:
+        overview["shift"] = None
+        if include_admin_urls:
+            overview["shift_admin_url"] = None
+
+    if roster:
+        roster_summary = {
+            "id": roster.id,
+            "is_rest_day": roster.is_rest_day,
+            "is_holiday": roster.is_holiday,
+            "override_start": roster.override_start,
+            "override_end": roster.override_end,
+        }
+        overview["roster"] = roster_summary
+        if include_admin_urls:
+            overview["roster_admin_url"] = reverse(
+                "admin:pagasys_rosterentry_change", args=[roster.pk]
+            )
+    else:
+        overview["roster"] = None
+        if include_admin_urls:
+            overview["roster_admin_url"] = None
+
+    return overview
+
+
+def build_pair_sessions(
+    day,
+    *,
+    pair_queryset=None,
+    include_admin_urls: bool = False,
+) -> List[dict]:
+    """Return ordered paired session context for an ``AttDay``."""
+
+    if pair_queryset is None:
+        pair_queryset = AttPair.objects.filter(
+            employee_id=day.employee_id, date=day.date
+        )
+    pair_queryset = pair_queryset.order_by("in_ts")
+
+    sessions: List[dict] = []
+    for pair in pair_queryset:
+        session = {
+            "id": pair.id,
+            "in_ts": pair.in_ts,
+            "out_ts": pair.out_ts,
+            "duration_min": pair.duration_min,
+            "cross_midnight": pair.cross_midnight,
+            "source": pair.get_source_display(),
+            "source_value": pair.source,
+            "anomalies": format_pair_anomalies(pair.anomaly),
+            "in_event_id": pair.in_event_id,
+            "out_event_id": pair.out_event_id,
+        }
+        if include_admin_urls:
+            session["admin_url"] = reverse(
+                "admin:attendance_attpair_change", args=[pair.pk]
+            )
+            session["in_event_admin_url"] = (
+                reverse("admin:capture_punchevent_change", args=[pair.in_event_id])
+                if pair.in_event_id
+                else None
+            )
+            session["out_event_admin_url"] = (
+                reverse("admin:capture_punchevent_change", args=[pair.out_event_id])
+                if pair.out_event_id
+                else None
+            )
+        sessions.append(session)
+    return sessions
+
+
+def build_punch_events(
+    day,
+    *,
+    punch_queryset=None,
+    include_admin_urls: bool = False,
+) -> List[dict]:
+    """Return ordered punch event context for an ``AttDay``."""
+
+    if punch_queryset is None:
+        employee_id = day.employee_id
+        punch_queryset = PunchEvent.objects.filter(
+            Q(employee_id=employee_id) | Q(matched_employee_id=employee_id)
+        )
+        punch_queryset = punch_queryset.filter(
+            Q(roster_date=day.date) | Q(device_ts__date=day.date)
+        )
+        employee_company = getattr(getattr(day, "employee", None), "company", None)
+        if employee_company:
+            punch_queryset = punch_queryset.filter(company_id=employee_company.id)
+        punch_queryset = punch_queryset.select_related("device", "exception")
+    punch_queryset = punch_queryset.order_by("device_ts")
+
+    punches: List[dict] = []
+    for event in punch_queryset:
+        device = getattr(event, "device", None)
+        exception = getattr(event, "exception", None)
+        punch = {
+            "id": event.id,
+            "device_ts": event.device_ts,
+            "server_ts": event.server_ts,
+            "action": event.action,
+            "device": device,
+            "device_id": event.device_id,
+            "device_label": str(device) if device else "",
+            "face_matched": event.face_matched,
+            "requires_face": event.requires_face,
+            "geofence_ok": event.geofence_ok,
+            "geofence_rule_violation": event.geofence_rule_violation,
+            "out_of_scope": event.out_of_scope,
+            "roster_fallback": event.roster_fallback,
+            "roster_date": event.roster_date,
+            "notes": event.notes,
+            "exception": (
+                {
+                    "kind": exception.kind,
+                    "details": exception.details,
+                }
+                if exception
+                else None
+            ),
+        }
+        if include_admin_urls:
+            punch["admin_url"] = reverse(
+                "admin:capture_punchevent_change", args=[event.pk]
+            )
+        punches.append(punch)
+    return punches
+
+
+def build_adjustments(day, *, adjustment_queryset=None) -> List[AttAdjustment]:
+    """Return ordered ``AttAdjustment`` instances for the day."""
+
+    if adjustment_queryset is None:
+        adjustment_queryset = AttAdjustment.objects.filter(
+            employee_id=day.employee_id, date=day.date
+        )
+    return list(adjustment_queryset.order_by("created_at", "id"))
+
+
+def get_day_context(
+    day,
+    *,
+    include_pairs: bool = True,
+    include_punches: bool = True,
+    include_adjustments: bool = True,
+    include_admin_urls: bool = False,
+    pair_queryset=None,
+    punch_queryset=None,
+    adjustment_queryset=None,
+) -> dict:
+    """Assemble the related context for a computed attendance day."""
+
+    context = {
+        "roster_overview": build_roster_overview(
+            day, include_admin_urls=include_admin_urls
+        )
+    }
+
+    if include_pairs:
+        context["pair_sessions"] = build_pair_sessions(
+            day,
+            pair_queryset=pair_queryset,
+            include_admin_urls=include_admin_urls,
+        )
+    else:
+        context["pair_sessions"] = []
+
+    if include_punches:
+        context["punch_events"] = build_punch_events(
+            day,
+            punch_queryset=punch_queryset,
+            include_admin_urls=include_admin_urls,
+        )
+    else:
+        context["punch_events"] = []
+
+    if include_adjustments:
+        context["adjustments"] = build_adjustments(
+            day, adjustment_queryset=adjustment_queryset
+        )
+    else:
+        context["adjustments"] = []
+
+    return context

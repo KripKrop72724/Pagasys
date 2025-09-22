@@ -242,6 +242,7 @@ class AttendanceCalendarAdminViewTests(TestCase):
         assert "roster_overview" in related
         assert related["roster_overview"]["shift"]["name"] == self.shift.name
         assert related["roster_overview"]["roster"]["id"] == self.roster_entry.id
+        assert related["roster_overview"]["shift"]["total_minutes"] == 480
 
         pairs = related["pair_sessions"]
         assert len(pairs) == 1
@@ -256,6 +257,7 @@ class AttendanceCalendarAdminViewTests(TestCase):
         response.render()
         context = response.context_data
         assert context["roster_overview"]["shift"]["name"] == self.shift.name
+        assert context["roster_overview"]["shift"]["total_minutes"] == 480
         assert context["pair_sessions"][0]["out_event_id"] == self.punch_out.id
         assert context["punch_events"][0]["device_label"] == str(self.device)
 

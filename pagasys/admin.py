@@ -841,9 +841,59 @@ class HolidayAuditLogAdmin(ScopedAdminMixin, admin.ModelAdmin):
 class ShiftTemplateAdmin(CleanSaveModelMixin, ScopedAdminMixin, admin.ModelAdmin):
     """Admin configuration for shift templates."""
 
-    list_display = ["name", "company", "start_time", "end_time", "cross_midnight"]
+    list_display = [
+        "name",
+        "company",
+        "start_time",
+        "end_time",
+        "cross_midnight",
+        "total_minutes_display",
+    ]
     list_filter = ["company", "cross_midnight"]
     search_fields = ["name", "company__name"]
+    readonly_fields = ("total_minutes_display",)
+
+    fieldsets = (
+        (
+            None,
+            {
+                "fields": (
+                    "company",
+                    "name",
+                    "start_time",
+                    "end_time",
+                    "cross_midnight",
+                    "break_minutes",
+                    "total_minutes_display",
+                )
+            },
+        ),
+        (
+            "Grace periods",
+            {
+                "fields": (
+                    "grace_in_min",
+                    "grace_out_min",
+                    "late_after_min",
+                    "early_leave_before_min",
+                )
+            },
+        ),
+        (
+            "Punch requirements",
+            {
+                "fields": (
+                    "rounding_min",
+                    "requires_face",
+                )
+            },
+        ),
+    )
+
+    @admin.display(description="Total minutes")
+    def total_minutes_display(self, obj):
+        value = obj.total_minutes
+        return value if value is not None else "—"
 
 
 @admin.register(ShiftRule)

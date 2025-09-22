@@ -51,14 +51,20 @@ class HolidaySerializer(CleanModelMixin, serializers.ModelSerializer):
         ref_name = "PolicyHoliday"
 
 class ShiftTemplateSerializer(CleanModelMixin, serializers.ModelSerializer):
+    total_minutes = serializers.IntegerField(
+        read_only=True,
+        help_text="Net scheduled minutes after unpaid breaks",
+    )
+
     class Meta:
         model = ShiftTemplate
         fields = [
             "id", "company", "name", "start_time", "end_time", "cross_midnight",
-            "break_minutes", "grace_in_min", "grace_out_min", "late_after_min",
-            "early_leave_before_min", "rounding_min", "requires_face",
+            "break_minutes", "total_minutes", "grace_in_min", "grace_out_min",
+            "late_after_min", "early_leave_before_min", "rounding_min",
+            "requires_face",
         ]
-        read_only_fields = ["company"]
+        read_only_fields = ["company", "total_minutes"]
         ref_name = "PolicyShiftTemplate"
 
 class ShiftRuleSerializer(CleanModelMixin, serializers.ModelSerializer):

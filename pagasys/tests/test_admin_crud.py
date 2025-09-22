@@ -34,6 +34,7 @@ def _create_image(name="img.png"):
     return SimpleUploadedFile(name, buf.read(), content_type="image/png")
 
 
+@override_settings(CELERY_TASK_ALWAYS_EAGER=True, CELERY_BROKER_URL="memory://")
 class AdminCRUDTests(ModelFactoryMixin, TestCase):
     """Verify basic CRUD flows for all admin models."""
 
@@ -328,6 +329,12 @@ class AdminCRUDTests(ModelFactoryMixin, TestCase):
         st = ShiftTemplate.objects.get(name="S1")
 
         change_url = reverse("admin:pagasys_shifttemplate_change", args=[st.id])
+        res = self.client.get(change_url)
+        self.assertEqual(res.status_code, 200)
+        self.assertContains(res, "Total minutes")
+        self.assertContains(res, "480")
+        self.assertNotIn('name="total_minutes_display"', res.content.decode())
+
         data_change = data | {"name": "S2"}
         res = self.client.post(change_url, data_change)
         self.assertEqual(res.status_code, 302)

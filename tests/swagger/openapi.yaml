@@ -1194,6 +1194,171 @@ paths:
                       face_required_no_match: 2
                   summary: Day with anomalies
           description: ''
+  /api/companies/{company_id}/att-days/{id}/full-context/:
+    get:
+      operationId: companies_att_days_full_context_retrieve
+      description: Return the computed attendance day together with roster metadata,
+        paired sessions, punch events, and manual adjustments. The payload matches
+        the Django admin "Daily attendance" view so clients can display anomalies,
+        roster status, and punch provenance without additional database lookups. Optional
+        query flags allow trimming specific sections when bandwidth is a concern.
+      summary: Fetch the full attendance-day context
+      parameters:
+      - in: path
+        name: company_id
+        schema:
+          type: string
+          pattern: ^\d+$
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this att day.
+        required: true
+      - in: query
+        name: include_adjustments
+        schema:
+          type: boolean
+        description: Include manual adjustments that were applied after computation.
+          Defaults to true.
+        examples:
+          AdjustmentsDisabled:
+            value: false
+            summary: Adjustments disabled
+            description: Skip manual deltas when consumers do not expose that UI.
+      - in: query
+        name: include_pairs
+        schema:
+          type: boolean
+        description: Include the ordered list of paired IN/OUT sessions derived from
+          punch events. Defaults to true.
+        examples:
+          PairsDisabled:
+            value: false
+            summary: Pairs disabled
+            description: Exclude paired sessions when only punch-level data is required.
+      - in: query
+        name: include_punches
+        schema:
+          type: boolean
+        description: Include raw punch events with device, exception, and geofence
+          metadata. Defaults to true.
+        examples:
+          PunchesDisabled:
+            value: false
+            summary: Punches disabled
+            description: Omit punch events to focus on computed sessions.
+      tags:
+      - Attendance
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttDayFullContext'
+              examples:
+                FullContext:
+                  value:
+                    day:
+                      id: 1
+                      employee: 123
+                      date: '2024-05-20'
+                      status: present
+                      work_min: 480
+                      ot_regular_min: 30
+                      locked: false
+                      anomalies:
+                        missing_out: 1
+                    roster_overview:
+                      employee:
+                        id: 123
+                        display: Alice Anderson
+                      date: '2024-05-20'
+                      status:
+                        code: present
+                        label: Present
+                      locked: false
+                      work_min: 480
+                      breaks:
+                        unpaid: 60
+                        paid: 0
+                      late_min: 5
+                      early_leave_min: 0
+                      overtime:
+                        regular: 30
+                        night: 0
+                        holiday: 0
+                      shift:
+                        id: 4
+                        name: Day
+                        start: 09:00:00
+                        end: '17:00:00'
+                        cross_midnight: false
+                        requires_face: true
+                        break_minutes: 60
+                        total_minutes: 420
+                      roster:
+                        id: 9
+                        is_rest_day: false
+                        is_holiday: false
+                        override_start: 09:00:00
+                        override_end: '17:00:00'
+                      anomalies:
+                      - key: missing_out
+                        count: 1
+                    pair_sessions:
+                    - id: 99
+                      in_ts: '2024-05-20T08:00:00+04:00'
+                      out_ts: '2024-05-20T17:00:00+04:00'
+                      duration_min: 540
+                      cross_midnight: false
+                      source:
+                        code: auto
+                        label: Automatic
+                      anomalies:
+                      - missing_out_closed_at_next_in
+                      in_event_id: 555
+                      out_event_id: 556
+                    punch_events:
+                    - id: 555
+                      device_ts: '2024-05-20T07:59:32+04:00'
+                      server_ts: '2024-05-20T08:00:01+04:00'
+                      action: in
+                      device:
+                        id: 42
+                        label: Main Gate
+                      face_matched: true
+                      requires_face: true
+                      geofence_ok: true
+                      geofence_rule_violation: false
+                      out_of_scope: false
+                      roster_fallback: false
+                      roster_date: '2024-05-20'
+                      exception: null
+                      notes: ''
+                    adjustments:
+                    - id: 7
+                      employee: 123
+                      date: '2024-05-20'
+                      delta_work_min: 30
+                      delta_unpaid_break_min: 0
+                      delta_paid_break_min: 0
+                      delta_ot_regular_min: 0
+                      delta_ot_night_min: 0
+                      delta_ot_holiday_min: 0
+                      override_status: present
+                      reason: Manager approved overtime
+                      created_by_id: 3
+                      created_at: '2024-05-21T09:00:00Z'
+                  summary: Full context
+          description: Full attendance-day context mirroring the admin detail view.
+        '403':
+          description: Requesting user cannot access the employee scope.
+        '404':
+          description: Attendance day not found for the given identifiers.
   /api/companies/{company_id}/att-days/late-comers-report/:
     get:
       operationId: companies_att_days_late_comers_report_retrieve
@@ -9695,6 +9860,246 @@ components:
       - status
       - unpaid_break_min
       - work_min
+    AttDayAnomaly:
+      type: object
+      properties:
+        key:
+          type: string
+          description: Canonical anomaly code
+        count:
+          type: integer
+          description: Occurrences of the anomaly
+      required:
+      - count
+      - key
+    AttDayBreakSummary:
+      type: object
+      properties:
+        unpaid:
+          type: integer
+          description: Unpaid break minutes deducted from work time
+        paid:
+          type: integer
+          description: Paid break minutes credited to the day
+      required:
+      - paid
+      - unpaid
+    AttDayCodeLabel:
+      type: object
+      properties:
+        code:
+          type: string
+          description: Machine-readable value used internally
+        label:
+          type: string
+          description: Human-friendly label exposed to users
+      required:
+      - code
+      - label
+    AttDayDeviceSummary:
+      type: object
+      properties:
+        id:
+          type: integer
+          nullable: true
+          description: Primary key for the capture device
+        label:
+          type: string
+          description: Display label for the capture device
+      required:
+      - id
+      - label
+    AttDayEmployeeSummary:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Employee identifier
+        display:
+          type: string
+          description: Display name rendered in the UI
+      required:
+      - display
+      - id
+    AttDayFullContext:
+      type: object
+      properties:
+        day:
+          $ref: '#/components/schemas/AttDay'
+        roster_overview:
+          $ref: '#/components/schemas/AttDayRosterOverview'
+        pair_sessions:
+          type: array
+          items:
+            $ref: '#/components/schemas/PairSessionContext'
+        punch_events:
+          type: array
+          items:
+            $ref: '#/components/schemas/PunchEventContext'
+        adjustments:
+          type: array
+          items:
+            $ref: '#/components/schemas/AttAdjustment'
+      required:
+      - adjustments
+      - day
+      - pair_sessions
+      - punch_events
+      - roster_overview
+    AttDayOvertimeSummary:
+      type: object
+      properties:
+        regular:
+          type: integer
+          description: Regular overtime minutes for the day
+        night:
+          type: integer
+          description: Night differential overtime minutes
+        holiday:
+          type: integer
+          description: Holiday overtime minutes
+      required:
+      - holiday
+      - night
+      - regular
+    AttDayPunchException:
+      type: object
+      properties:
+        kind:
+          type: string
+          description: Exception type raised during punch processing
+        details:
+          type: object
+          additionalProperties: {}
+          nullable: true
+          description: Structured payload describing the exception context
+      required:
+      - details
+      - kind
+    AttDayRosterAssignment:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Roster entry identifier
+        is_rest_day:
+          type: boolean
+          description: True when the roster marks the day as a rest day
+        is_holiday:
+          type: boolean
+          description: True when the roster marks the day as a holiday
+        override_start:
+          type: string
+          format: time
+          nullable: true
+          description: Override start time applied to this roster entry
+        override_end:
+          type: string
+          format: time
+          nullable: true
+          description: Override end time applied to this roster entry
+      required:
+      - id
+      - is_holiday
+      - is_rest_day
+      - override_end
+      - override_start
+    AttDayRosterOverview:
+      type: object
+      properties:
+        employee:
+          allOf:
+          - $ref: '#/components/schemas/AttDayEmployeeSummary'
+          readOnly: true
+        date:
+          type: string
+          format: date
+        status:
+          allOf:
+          - $ref: '#/components/schemas/AttDayCodeLabel'
+          readOnly: true
+        locked:
+          type: boolean
+        work_min:
+          type: integer
+        breaks:
+          allOf:
+          - $ref: '#/components/schemas/AttDayBreakSummary'
+          readOnly: true
+        late_min:
+          type: integer
+        early_leave_min:
+          type: integer
+        overtime:
+          allOf:
+          - $ref: '#/components/schemas/AttDayOvertimeSummary'
+          readOnly: true
+        shift:
+          allOf:
+          - $ref: '#/components/schemas/AttDayRosterShift'
+          nullable: true
+          readOnly: true
+        roster:
+          allOf:
+          - $ref: '#/components/schemas/AttDayRosterAssignment'
+          nullable: true
+          readOnly: true
+        anomalies:
+          type: array
+          items:
+            $ref: '#/components/schemas/AttDayAnomaly'
+          readOnly: true
+      required:
+      - anomalies
+      - breaks
+      - date
+      - early_leave_min
+      - employee
+      - late_min
+      - locked
+      - overtime
+      - roster
+      - shift
+      - status
+      - work_min
+    AttDayRosterShift:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Shift template identifier
+        name:
+          type: string
+          description: Shift template name
+        start:
+          type: string
+          format: time
+          description: Scheduled start time
+        end:
+          type: string
+          format: time
+          description: Scheduled end time
+        cross_midnight:
+          type: boolean
+          description: True when the shift spans midnight
+        requires_face:
+          type: boolean
+          description: Whether face match is required for punches
+        break_minutes:
+          type: integer
+          description: Total break minutes allocated to the shift
+        total_minutes:
+          type: integer
+          description: Net scheduled minutes after unpaid breaks are deducted
+      required:
+      - break_minutes
+      - cross_midnight
+      - end
+      - id
+      - name
+      - requires_face
+      - start
+      - total_minutes
     AttDayStatusEnum:
       enum:
       - present
@@ -12293,6 +12698,46 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/WorkCalendar'
+    PairSessionContext:
+      type: object
+      properties:
+        id:
+          type: integer
+        in_ts:
+          type: string
+          format: date-time
+        out_ts:
+          type: string
+          format: date-time
+          nullable: true
+        duration_min:
+          type: integer
+        cross_midnight:
+          type: boolean
+        source:
+          allOf:
+          - $ref: '#/components/schemas/AttDayCodeLabel'
+          readOnly: true
+        anomalies:
+          type: array
+          items:
+            type: string
+        in_event_id:
+          type: integer
+          nullable: true
+        out_event_id:
+          type: integer
+          nullable: true
+      required:
+      - anomalies
+      - cross_midnight
+      - duration_min
+      - id
+      - in_event_id
+      - in_ts
+      - out_event_id
+      - out_ts
+      - source
     PatchedAttAdjustment:
       type: object
       description: |-
@@ -13240,6 +13685,10 @@ components:
           minimum: 0
           format: int64
           description: Total unpaid break minutes (must be < shift duration)
+        total_minutes:
+          type: integer
+          readOnly: true
+          description: Net scheduled minutes after unpaid breaks
         grace_in_min:
           type: integer
           maximum: 9223372036854775807
@@ -13415,6 +13864,10 @@ components:
         id:
           type: integer
           readOnly: true
+        total_minutes:
+          type: integer
+          readOnly: true
+          description: Net scheduled minutes after unpaid breaks
         name:
           type: string
           description: Template name
@@ -13764,6 +14217,10 @@ components:
           minimum: 0
           format: int64
           description: Total unpaid break minutes (must be < shift duration)
+        total_minutes:
+          type: integer
+          readOnly: true
+          description: Net scheduled minutes after unpaid breaks
         grace_in_min:
           type: integer
           maximum: 9223372036854775807
@@ -13811,6 +14268,7 @@ components:
       - id
       - name
       - start_time
+      - total_minutes
     PolicyWorkCalendar:
       type: object
       description: Call model.full_clean() before saving to enforce model rules.
@@ -13992,6 +14450,62 @@ components:
       - geofence_rule_violation
       - id
       - matched_employee
+      - notes
+      - out_of_scope
+      - requires_face
+      - roster_date
+      - roster_fallback
+      - server_ts
+    PunchEventContext:
+      type: object
+      properties:
+        id:
+          type: integer
+        device_ts:
+          type: string
+          format: date-time
+        server_ts:
+          type: string
+          format: date-time
+        action:
+          type: string
+        device:
+          allOf:
+          - $ref: '#/components/schemas/AttDayDeviceSummary'
+          readOnly: true
+        face_matched:
+          type: boolean
+        requires_face:
+          type: boolean
+        geofence_ok:
+          type: boolean
+          nullable: true
+        geofence_rule_violation:
+          type: boolean
+        out_of_scope:
+          type: boolean
+        roster_fallback:
+          type: boolean
+        roster_date:
+          type: string
+          format: date
+          nullable: true
+        exception:
+          allOf:
+          - $ref: '#/components/schemas/AttDayPunchException'
+          nullable: true
+          readOnly: true
+        notes:
+          type: string
+      required:
+      - action
+      - device
+      - device_ts
+      - exception
+      - face_matched
+      - geofence_ok
+      - geofence_rule_violation
+      - id
       - notes
       - out_of_scope
       - requires_face
@@ -14475,6 +14989,10 @@ components:
         id:
           type: integer
           readOnly: true
+        total_minutes:
+          type: integer
+          readOnly: true
+          description: Net scheduled minutes after unpaid breaks
         name:
           type: string
           description: Template name
@@ -14546,6 +15064,7 @@ components:
       - id
       - name
       - start_time
+      - total_minutes
     ShiftTemplatePreview:
       type: object
       properties:

@@ -1,8 +1,9 @@
+from datetime import time
 from decimal import Decimal
 
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 from pagasys.models import (
     Company,
@@ -18,6 +19,7 @@ from pagasys.models import (
 )
 
 
+@override_settings(CELERY_TASK_ALWAYS_EAGER=True, CELERY_BROKER_URL="memory://")
 class PolicyModelTests(TestCase):
     def setUp(self):
         self.company = Company.objects.create(name="C1")
@@ -184,6 +186,37 @@ class PolicyModelTests(TestCase):
             rounding_min=5,
         )
         st_ok.full_clean()
+
+    def test_shift_template_total_minutes_subtracts_breaks(self):
+        st = ShiftTemplate.objects.create(
+            company=self.company,
+            name="Day",
+            start_time=time(9, 0),
+            end_time=time(17, 0),
+            break_minutes=60,
+        )
+        assert st.total_minutes == 420
+
+    def test_shift_template_total_minutes_cross_midnight(self):
+        st = ShiftTemplate.objects.create(
+            company=self.company,
+            name="Night",
+            start_time=time(22, 0),
+            end_time=time(6, 0),
+            cross_midnight=True,
+            break_minutes=0,
+        )
+        assert st.total_minutes == 480
+
+    def test_shift_template_total_minutes_handles_near_full_break(self):
+        st = ShiftTemplate.objects.create(
+            company=self.company,
+            name="Short",
+            start_time=time(8, 0),
+            end_time=time(9, 0),
+            break_minutes=59,
+        )
+        assert st.total_minutes == 1
 
     def test_shift_rule_active_dates_validation(self):
         st = ShiftTemplate.objects.create(
