@@ -1,3 +1,7 @@
+import logging
+from itertools import islice
+
+from django.db import transaction
 from django.db.models.signals import (
     m2m_changed,
     post_delete,
@@ -6,8 +10,82 @@ from django.db.models.signals import (
 )
 from django.dispatch import receiver
 
-from .models import Branch, Holiday, HolidayAuditLog, TradeLicense
+from attendance.tasks import compute_employee_day_task, pair_employee_day_task
+
+from .models import (
+    Branch,
+    Holiday,
+    HolidayAuditLog,
+    RosterEntry,
+    ShiftTemplate,
+    TradeLicense,
+)
 from .tasks import recalc_holiday_roster_entries
+
+
+logger = logging.getLogger(__name__)
+
+
+_ROSTER_REBUILD_BATCH_SIZE = 500
+
+
+def _chunked(iterator, size):
+    while True:
+        chunk = list(islice(iterator, size))
+        if not chunk:
+            break
+        yield chunk
+
+
+def _dispatch_rebuild_tasks(template_id: int, pairs):
+    for employee_id, roster_date in pairs:
+        day_iso = roster_date.isoformat()
+        try:
+            pair_employee_day_task.delay(employee_id, day_iso)
+        except Exception:  # pragma: no cover - defensive logging
+            logger.exception(
+                "Failed to enqueue pair task for employee %s on %s from template %s",
+                employee_id,
+                day_iso,
+                template_id,
+            )
+        try:
+            compute_employee_day_task.delay(employee_id, day_iso)
+        except Exception:  # pragma: no cover - defensive logging
+            logger.exception(
+                "Failed to enqueue compute task for employee %s on %s from template %s",
+                employee_id,
+                day_iso,
+                template_id,
+            )
+
+
+def _enqueue_shift_template_rebuild(template_id: int) -> None:
+    try:
+        qs = (
+            RosterEntry.objects.filter(shift_id=template_id)
+            .values_list("employee_id", "date")
+            .distinct()
+        )
+        iterator = qs.iterator(chunk_size=_ROSTER_REBUILD_BATCH_SIZE)
+        for chunk in _chunked(iterator, _ROSTER_REBUILD_BATCH_SIZE):
+            _dispatch_rebuild_tasks(template_id, chunk)
+    except Exception:  # pragma: no cover - defensive logging
+        logger.exception(
+            "Unable to enqueue roster rebuild for shift template %s", template_id
+        )
+
+
+@receiver(post_save, sender=ShiftTemplate)
+def trigger_recompute_on_shift_template_update(
+    sender, instance: ShiftTemplate, created, **kwargs
+):
+    if created:
+        return
+
+    template_id = instance.pk
+
+    transaction.on_commit(lambda: _enqueue_shift_template_rebuild(template_id))
 
 
 @receiver(m2m_changed, sender=TradeLicense.branches.through)
