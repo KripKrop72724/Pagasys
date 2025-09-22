@@ -4,7 +4,7 @@ from rest_framework.test import APIClient
 from django.contrib.auth.models import Group
 from django.core.management import call_command
 from django.db import connection
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.test.utils import CaptureQueriesContext
 from unittest.mock import patch
 from pagasys.models import (
@@ -20,6 +20,7 @@ from pagasys.models import (
     TradeLicense,
 )
 
+@override_settings(CELERY_TASK_ALWAYS_EAGER=True, CELERY_BROKER_URL="memory://")
 class PolicyApiTests(TestCase):
     def setUp(self):
         call_command("initgroups", verbosity=0)
@@ -215,6 +216,36 @@ class PolicyApiTests(TestCase):
         assert resp.status_code == 400
         assert "Validation" in resp.data["detail"]
         assert "end_time" in str(resp.data["errors"])
+
+    def test_shift_template_response_includes_total_minutes(self):
+        st = ShiftTemplate.objects.create(
+            company=self.company,
+            name="Day",
+            start_time="09:00",
+            end_time="17:00",
+            break_minutes=60,
+        )
+        resp = self.client.get(
+            f"/api/companies/{self.company.id}/shift-templates/{st.id}/"
+        )
+        assert resp.status_code == 200
+        assert resp.data["total_minutes"] == 420
+
+    def test_shift_template_total_minutes_is_read_only(self):
+        payload = {
+            "name": "WithTotal",
+            "start_time": "09:00",
+            "end_time": "17:00",
+            "break_minutes": 30,
+            "total_minutes": 999,
+        }
+        resp = self.client.post(
+            f"/api/companies/{self.company.id}/shift-templates/",
+            payload,
+            format="json",
+        )
+        assert resp.status_code == 201
+        assert resp.data["total_minutes"] == 450
 
     def test_shift_rule_validate_rejects_bad_weekday(self):
         st = ShiftTemplate.objects.create(

@@ -2,7 +2,11 @@ from rest_framework import serializers
 
 from django.db.models import Min
 
-from drf_spectacular.utils import OpenApiExample, extend_schema_serializer
+from drf_spectacular.utils import (
+    OpenApiExample,
+    extend_schema_field,
+    extend_schema_serializer,
+)
 
 from pagasys.models import Employee
 from .models import AttDay, AttPair, AttAdjustment, LeaveRequest, LeaveDay
@@ -21,6 +25,86 @@ CANONICAL_ANOMALY_KEYS = [
     "break_auto_deduct_*",
     "manual_adjustments_applied",
 ]
+
+
+class AttDayCodeLabelSerializer(serializers.Serializer):
+    code = serializers.CharField(help_text="Machine-readable value used internally")
+    label = serializers.CharField(help_text="Human-friendly label exposed to users")
+
+
+class AttDayEmployeeSummarySerializer(serializers.Serializer):
+    id = serializers.IntegerField(help_text="Employee identifier")
+    display = serializers.CharField(help_text="Display name rendered in the UI")
+
+
+class AttDayBreakSummarySerializer(serializers.Serializer):
+    unpaid = serializers.IntegerField(help_text="Unpaid break minutes deducted from work time")
+    paid = serializers.IntegerField(help_text="Paid break minutes credited to the day")
+
+
+class AttDayOvertimeSummarySerializer(serializers.Serializer):
+    regular = serializers.IntegerField(help_text="Regular overtime minutes for the day")
+    night = serializers.IntegerField(help_text="Night differential overtime minutes")
+    holiday = serializers.IntegerField(help_text="Holiday overtime minutes")
+
+
+class AttDayRosterShiftSerializer(serializers.Serializer):
+    id = serializers.IntegerField(help_text="Shift template identifier")
+    name = serializers.CharField(help_text="Shift template name")
+    start = serializers.TimeField(help_text="Scheduled start time")
+    end = serializers.TimeField(help_text="Scheduled end time")
+    cross_midnight = serializers.BooleanField(
+        help_text="True when the shift spans midnight"
+    )
+    requires_face = serializers.BooleanField(
+        help_text="Whether face match is required for punches"
+    )
+    break_minutes = serializers.IntegerField(
+        help_text="Total break minutes allocated to the shift"
+    )
+    total_minutes = serializers.IntegerField(
+        help_text="Net scheduled minutes after unpaid breaks are deducted"
+    )
+
+
+class AttDayRosterAssignmentSerializer(serializers.Serializer):
+    id = serializers.IntegerField(help_text="Roster entry identifier")
+    is_rest_day = serializers.BooleanField(
+        help_text="True when the roster marks the day as a rest day"
+    )
+    is_holiday = serializers.BooleanField(
+        help_text="True when the roster marks the day as a holiday"
+    )
+    override_start = serializers.TimeField(
+        allow_null=True,
+        help_text="Override start time applied to this roster entry",
+    )
+    override_end = serializers.TimeField(
+        allow_null=True,
+        help_text="Override end time applied to this roster entry",
+    )
+
+
+class AttDayAnomalySerializer(serializers.Serializer):
+    key = serializers.CharField(help_text="Canonical anomaly code")
+    count = serializers.IntegerField(help_text="Occurrences of the anomaly")
+
+
+class AttDayDeviceSummarySerializer(serializers.Serializer):
+    id = serializers.IntegerField(
+        allow_null=True, help_text="Primary key for the capture device"
+    )
+    label = serializers.CharField(
+        allow_blank=True, help_text="Display label for the capture device"
+    )
+
+
+class AttDayPunchExceptionSerializer(serializers.Serializer):
+    kind = serializers.CharField(help_text="Exception type raised during punch processing")
+    details = serializers.DictField(
+        allow_null=True,
+        help_text="Structured payload describing the exception context",
+    )
 
 @extend_schema_serializer(
     examples=[
@@ -226,6 +310,253 @@ class AttAdjustmentSerializer(serializers.ModelSerializer):
                 ) from exc
             attrs["delta_work_min"] = delta
         return attrs
+
+
+class PairSessionContextSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    in_ts = serializers.DateTimeField()
+    out_ts = serializers.DateTimeField(allow_null=True)
+    duration_min = serializers.IntegerField()
+    cross_midnight = serializers.BooleanField()
+    source = serializers.SerializerMethodField()
+    anomalies = serializers.ListField(child=serializers.CharField())
+    in_event_id = serializers.IntegerField(allow_null=True)
+    out_event_id = serializers.IntegerField(allow_null=True)
+
+    @extend_schema_field(AttDayCodeLabelSerializer)
+    def get_source(self, data):
+        return {
+            "code": data.get("source_value"),
+            "label": data.get("source"),
+        }
+
+
+class PunchEventContextSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    device_ts = serializers.DateTimeField()
+    server_ts = serializers.DateTimeField()
+    action = serializers.CharField()
+    device = serializers.SerializerMethodField()
+    face_matched = serializers.BooleanField()
+    requires_face = serializers.BooleanField()
+    geofence_ok = serializers.BooleanField(allow_null=True)
+    geofence_rule_violation = serializers.BooleanField()
+    out_of_scope = serializers.BooleanField()
+    roster_fallback = serializers.BooleanField()
+    roster_date = serializers.DateField(allow_null=True)
+    exception = serializers.SerializerMethodField()
+    notes = serializers.CharField(allow_blank=True)
+
+    @extend_schema_field(AttDayDeviceSummarySerializer)
+    def get_device(self, data):
+        return {
+            "id": data.get("device_id"),
+            "label": data.get("device_label"),
+        }
+
+    @extend_schema_field(AttDayPunchExceptionSerializer(allow_null=True))
+    def get_exception(self, data):
+        exception = data.get("exception")
+        if not exception:
+            return None
+        return {
+            "kind": exception.get("kind"),
+            "details": exception.get("details"),
+        }
+
+
+class AttDayRosterOverviewSerializer(serializers.Serializer):
+    employee = serializers.SerializerMethodField()
+    date = serializers.DateField()
+    status = serializers.SerializerMethodField()
+    locked = serializers.BooleanField()
+    work_min = serializers.IntegerField()
+    breaks = serializers.SerializerMethodField()
+    late_min = serializers.IntegerField()
+    early_leave_min = serializers.IntegerField()
+    overtime = serializers.SerializerMethodField()
+    shift = serializers.SerializerMethodField()
+    roster = serializers.SerializerMethodField()
+    anomalies = serializers.SerializerMethodField()
+
+    @extend_schema_field(AttDayEmployeeSummarySerializer)
+    def get_employee(self, data):
+        return {
+            "id": data.get("employee_id"),
+            "display": data.get("employee_display"),
+        }
+
+    @extend_schema_field(AttDayCodeLabelSerializer)
+    def get_status(self, data):
+        return {
+            "code": data.get("status_value"),
+            "label": data.get("status"),
+        }
+
+    @extend_schema_field(AttDayBreakSummarySerializer)
+    def get_breaks(self, data):
+        return {
+            "unpaid": data.get("unpaid_break_min"),
+            "paid": data.get("paid_break_min"),
+        }
+
+    @extend_schema_field(AttDayOvertimeSummarySerializer)
+    def get_overtime(self, data):
+        return {
+            "regular": data.get("ot_regular_min"),
+            "night": data.get("ot_night_min"),
+            "holiday": data.get("ot_holiday_min"),
+        }
+
+    @extend_schema_field(AttDayRosterShiftSerializer(allow_null=True))
+    def get_shift(self, data):
+        shift = data.get("shift")
+        if not shift:
+            return None
+        return {
+            "id": shift.get("id"),
+            "name": shift.get("name"),
+            "start": shift.get("start_time"),
+            "end": shift.get("end_time"),
+            "cross_midnight": shift.get("cross_midnight"),
+            "requires_face": shift.get("requires_face"),
+            "break_minutes": shift.get("break_minutes"),
+            "total_minutes": shift.get("total_minutes"),
+        }
+
+    @extend_schema_field(AttDayRosterAssignmentSerializer(allow_null=True))
+    def get_roster(self, data):
+        roster = data.get("roster")
+        if not roster:
+            return None
+        return {
+            "id": roster.get("id"),
+            "is_rest_day": roster.get("is_rest_day"),
+            "is_holiday": roster.get("is_holiday"),
+            "override_start": roster.get("override_start"),
+            "override_end": roster.get("override_end"),
+        }
+
+    @extend_schema_field(AttDayAnomalySerializer(many=True))
+    def get_anomalies(self, data):
+        anomalies = data.get("anomalies") or []
+        return [
+            {"key": entry.get("key", entry.get("name")), "count": entry.get("count")}
+            for entry in anomalies
+        ]
+
+
+ATT_DAY_FULL_CONTEXT_EXAMPLE = {
+    "day": {
+        "id": 1,
+        "employee": 123,
+        "date": "2024-05-20",
+        "status": "present",
+        "work_min": 480,
+        "ot_regular_min": 30,
+        "locked": False,
+        "anomalies": {"missing_out": 1},
+    },
+    "roster_overview": {
+        "employee": {"id": 123, "display": "Alice Anderson"},
+        "date": "2024-05-20",
+        "status": {"code": "present", "label": "Present"},
+        "locked": False,
+        "work_min": 480,
+        "breaks": {"unpaid": 60, "paid": 0},
+        "late_min": 5,
+        "early_leave_min": 0,
+        "overtime": {"regular": 30, "night": 0, "holiday": 0},
+        "shift": {
+            "id": 4,
+            "name": "Day",
+            "start": "09:00:00",
+            "end": "17:00:00",
+            "cross_midnight": False,
+            "requires_face": True,
+            "break_minutes": 60,
+            "total_minutes": 420,
+        },
+        "roster": {
+            "id": 9,
+            "is_rest_day": False,
+            "is_holiday": False,
+            "override_start": "09:00:00",
+            "override_end": "17:00:00",
+        },
+        "anomalies": [
+            {"key": "missing_out", "count": 1},
+        ],
+    },
+    "pair_sessions": [
+        {
+            "id": 99,
+            "in_ts": "2024-05-20T08:00:00+04:00",
+            "out_ts": "2024-05-20T17:00:00+04:00",
+            "duration_min": 540,
+            "cross_midnight": False,
+            "source": {"code": "auto", "label": "Automatic"},
+            "anomalies": ["missing_out_closed_at_next_in"],
+            "in_event_id": 555,
+            "out_event_id": 556,
+        }
+    ],
+    "punch_events": [
+        {
+            "id": 555,
+            "device_ts": "2024-05-20T07:59:32+04:00",
+            "server_ts": "2024-05-20T08:00:01+04:00",
+            "action": "in",
+            "device": {"id": 42, "label": "Main Gate"},
+            "face_matched": True,
+            "requires_face": True,
+            "geofence_ok": True,
+            "geofence_rule_violation": False,
+            "out_of_scope": False,
+            "roster_fallback": False,
+            "roster_date": "2024-05-20",
+            "exception": None,
+            "notes": "",
+        }
+    ],
+    "adjustments": [
+        {
+            "id": 7,
+            "employee": 123,
+            "date": "2024-05-20",
+            "delta_work_min": 30,
+            "delta_unpaid_break_min": 0,
+            "delta_paid_break_min": 0,
+            "delta_ot_regular_min": 0,
+            "delta_ot_night_min": 0,
+            "delta_ot_holiday_min": 0,
+            "override_status": "present",
+            "reason": "Manager approved overtime",
+            "created_by_id": 3,
+            "created_at": "2024-05-21T09:00:00Z",
+        }
+    ],
+}
+
+
+@extend_schema_serializer(
+    examples=[
+        OpenApiExample(
+            "Attendance day full context",
+            value=ATT_DAY_FULL_CONTEXT_EXAMPLE,
+            response_only=True,
+        )
+    ]
+)
+class AttDayFullContextSerializer(serializers.Serializer):
+    day = AttDaySerializer()
+    roster_overview = AttDayRosterOverviewSerializer()
+    pair_sessions = PairSessionContextSerializer(many=True)
+    punch_events = PunchEventContextSerializer(many=True)
+    adjustments = AttAdjustmentSerializer(many=True)
+
+    class Meta:
+        example = ATT_DAY_FULL_CONTEXT_EXAMPLE
 
 
 class RecomputeRangeSerializer(serializers.Serializer):

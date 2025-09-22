@@ -907,6 +907,17 @@ class ShiftTemplate(models.Model):
     def __str__(self) -> str:
         return f"{self.name} - {self.company.name}"
 
+    @property
+    def total_minutes(self) -> int | None:
+        """Net scheduled minutes for the shift after unpaid breaks."""
+
+        if self.start_time is None or self.end_time is None:
+            return None
+
+        minutes = _minutes_between(self.start_time, self.end_time, self.cross_midnight)
+        break_minutes = int(self.break_minutes or 0)
+        return max(minutes - break_minutes, 0)
+
 
 class ShiftRule(models.Model):
     """Policy rule applied to a shift template."""

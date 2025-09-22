@@ -23,10 +23,11 @@ from drf_spectacular.utils import (
 )
 
 from pagasys.openapi_utils import document_filters
-from pagasys.utils import scope_queryset
+from pagasys.utils import ensure_in_scope, scope_queryset
 from pagasys.models import Employee, Company, Branch, Department, Project
 from pagasys.pagination import AllRecordsMixin
 from django.http import HttpResponse
+from capture.models import PunchEvent
 
 from .models import AttDay, AttPair, AttAdjustment
 from .services import build_monthly_calendar
@@ -38,6 +39,7 @@ from .reports import (
 )
 from .serializers import (
     AttDaySerializer,
+    AttDayFullContextSerializer,
     AttPairSerializer,
     ManualAttPairSerializer,
     RecomputeRangeSerializer,
@@ -50,6 +52,7 @@ from .tasks import (
     pair_employee_day_task,
     compute_employee_day_task,
 )
+from .services_helpers import get_day_context
 
 MAX_RANGE_DAYS = 31
 MAX_EMPLOYEES = 50
@@ -467,7 +470,9 @@ class MonthlyAttendancePDFRenderer(BaseRenderer):
 class AttDayViewSet(viewsets.ReadOnlyModelViewSet):
     """Expose computed daily attendance summaries."""
 
-    queryset = AttDay.objects.all().select_related("employee", "shift", "roster")
+    queryset = AttDay.objects.all().select_related(
+        "employee", "shift", "roster", "roster__shift"
+    )
     serializer_class = AttDaySerializer
     filter_backends = [DjangoFilterBackend]
     filterset_class = AttDayFilter
@@ -555,6 +560,150 @@ class AttDayViewSet(viewsets.ReadOnlyModelViewSet):
         with transaction.atomic():
             qs.update(locked=data.get("locked", True))
         return Response({"updated": qs.count()})
+
+    @extend_schema(
+        summary="Fetch the full attendance-day context",
+        description=(
+            "Return the computed attendance day together with roster metadata, "
+            "paired sessions, punch events, and manual adjustments. The payload "
+            "matches the Django admin \"Daily attendance\" view so clients can "
+            "display anomalies, roster status, and punch provenance without "
+            "additional database lookups. Optional query flags allow trimming "
+            "specific sections when bandwidth is a concern."
+        ),
+        parameters=[
+            OpenApiParameter(
+                name="include_pairs",
+                type=OpenApiTypes.BOOL,
+                location=OpenApiParameter.QUERY,
+                description=(
+                    "Include the ordered list of paired IN/OUT sessions derived "
+                    "from punch events. Defaults to true."
+                ),
+                examples=[
+                    OpenApiExample(
+                        "Pairs disabled",
+                        value=False,
+                        description="Exclude paired sessions when only punch-level data is required.",
+                    )
+                ],
+            ),
+            OpenApiParameter(
+                name="include_punches",
+                type=OpenApiTypes.BOOL,
+                location=OpenApiParameter.QUERY,
+                description=(
+                    "Include raw punch events with device, exception, and "
+                    "geofence metadata. Defaults to true."
+                ),
+                examples=[
+                    OpenApiExample(
+                        "Punches disabled",
+                        value=False,
+                        description="Omit punch events to focus on computed sessions.",
+                    )
+                ],
+            ),
+            OpenApiParameter(
+                name="include_adjustments",
+                type=OpenApiTypes.BOOL,
+                location=OpenApiParameter.QUERY,
+                description=(
+                    "Include manual adjustments that were applied after "
+                    "computation. Defaults to true."
+                ),
+                examples=[
+                    OpenApiExample(
+                        "Adjustments disabled",
+                        value=False,
+                        description="Skip manual deltas when consumers do not expose that UI.",
+                    )
+                ],
+            ),
+        ],
+        responses={
+            200: OpenApiResponse(
+                response=AttDayFullContextSerializer,
+                description="Full attendance-day context mirroring the admin detail view.",
+            ),
+            403: OpenApiResponse(description="Requesting user cannot access the employee scope."),
+            404: OpenApiResponse(description="Attendance day not found for the given identifiers."),
+        },
+        examples=[
+            OpenApiExample(
+                "Full context",
+                value=AttDayFullContextSerializer.Meta.example,
+                response_only=True,
+            )
+        ],
+    )
+    @action(detail=True, methods=["get"], url_path="full-context")
+    def full_context(self, request, pk=None, company_id=None):
+        day = self.get_object()
+        company_id_int = None
+        if company_id is not None:
+            try:
+                company_id_int = int(company_id)
+            except (TypeError, ValueError):
+                raise NotFound("Invalid company identifier")
+            employee_company = getattr(day.employee, "company", None)
+            if not employee_company or employee_company.id != company_id_int:
+                raise NotFound("Attendance day not found")
+
+        ensure_in_scope(day.employee, request.user, "employee")
+
+        include_pairs = parse_bool(
+            request.query_params.get("include_pairs"), default=True
+        )
+        include_punches = parse_bool(
+            request.query_params.get("include_punches"), default=True
+        )
+        include_adjustments = parse_bool(
+            request.query_params.get("include_adjustments"), default=True
+        )
+
+        pair_queryset = None
+        if include_pairs:
+            pair_queryset = AttPair.objects.filter(
+                employee_id=day.employee_id, date=day.date
+            ).order_by("in_ts")
+            pair_queryset = scope_queryset(pair_queryset, request.user)
+
+        punch_queryset = None
+        if include_punches:
+            punch_queryset = PunchEvent.objects.filter(
+                Q(employee_id=day.employee_id)
+                | Q(matched_employee_id=day.employee_id)
+            )
+            punch_queryset = punch_queryset.filter(
+                Q(roster_date=day.date) | Q(device_ts__date=day.date)
+            )
+            if company_id_int is not None:
+                punch_queryset = punch_queryset.filter(company_id=company_id_int)
+            punch_queryset = punch_queryset.select_related("device", "exception")
+            punch_queryset = scope_queryset(punch_queryset, request.user)
+
+        adjustment_queryset = None
+        if include_adjustments:
+            adjustment_queryset = AttAdjustment.objects.filter(
+                employee_id=day.employee_id, date=day.date
+            ).order_by("created_at", "id")
+            adjustment_queryset = scope_queryset(adjustment_queryset, request.user)
+
+        context = get_day_context(
+            day,
+            include_pairs=include_pairs,
+            include_punches=include_punches,
+            include_adjustments=include_adjustments,
+            include_admin_urls=False,
+            pair_queryset=pair_queryset,
+            punch_queryset=punch_queryset,
+            adjustment_queryset=adjustment_queryset,
+        )
+        serializer = AttDayFullContextSerializer(
+            {"day": day, **context}, context=self.get_serializer_context()
+        )
+        return Response(serializer.data)
 
     @extend_schema(
         description="Render a PDF report of late arrivals.",

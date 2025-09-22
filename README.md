@@ -210,6 +210,131 @@ to warn UI clients that adjustments are prohibited. Because adjustments cannot
 touch locked days, callers should respect this flag before opening edit modals.
 
 
+### Attendance day full-context API
+
+Consumers that need to mirror the Django admin "Daily attendance" view can call
+`GET /api/companies/{company_id}/att-days/{id}/full-context/`. The response
+embeds every data block that payroll and troubleshooting workflows rely on:
+
+* `day` – the canonical `AttDaySerializer` output with computed minutes, lock
+  state, leave flags, and anomaly counts.
+* `roster_overview` – roster and shift metadata including anomaly rollups,
+  overtime buckets, helper summaries for UI chips, and net shift minutes.
+* `pair_sessions` – ordered IN/OUT pairs with anomaly labels and the punch event
+  IDs that created the session.
+* `punch_events` – raw capture events with device details, geofence status,
+  roster fallbacks, and exception payloads.
+* `adjustments` – manual `AttAdjustment` rows applied after computation.
+
+Optional query parameters let clients trim heavy sections when a lighter payload
+is preferred:
+
+* `include_pairs=false` omits the paired session list.
+* `include_punches=false` drops raw punch events.
+* `include_adjustments=false` removes manual adjustments.
+
+The endpoint enforces the same scope checks as the admin; branch, department,
+and project managers can only access employees within their remit. Punch events
+are additionally restricted to the company's punches for the target employee.
+
+Example response:
+
+```json
+{
+  "day": {
+    "id": 42,
+    "employee": 123,
+    "date": "2024-05-20",
+    "status": "present",
+    "work_min": 480,
+    "unpaid_break_min": 60,
+    "paid_break_min": 0,
+    "late_min": 5,
+    "early_leave_min": 0,
+    "ot_regular_min": 30,
+    "ot_night_min": 0,
+    "ot_holiday_min": 0,
+    "locked": false,
+    "on_leave": false,
+    "leave_portion": 0.0,
+    "anomalies": {"missing_out": 1}
+  },
+  "roster_overview": {
+    "employee": {"id": 123, "display": "Alice Anderson"},
+    "date": "2024-05-20",
+    "status": {"code": "present", "label": "Present"},
+    "locked": false,
+    "work_min": 480,
+    "breaks": {"unpaid": 60, "paid": 0},
+    "late_min": 5,
+    "early_leave_min": 0,
+    "overtime": {"regular": 30, "night": 0, "holiday": 0},
+    "shift": {
+      "id": 9,
+      "name": "Day shift",
+      "start": "09:00:00",
+      "end": "17:00:00",
+      "cross_midnight": false,
+      "requires_face": true,
+      "break_minutes": 60,
+      "total_minutes": 420
+    },
+    "roster": {
+      "id": 55,
+      "is_rest_day": false,
+      "is_holiday": false,
+      "override_start": null,
+      "override_end": null
+    },
+    "anomalies": [{"key": "missing_out", "count": 1}]
+  },
+  "pair_sessions": [
+    {
+      "id": 401,
+      "in_ts": "2024-05-20T08:00:00+04:00",
+      "out_ts": "2024-05-20T17:00:00+04:00",
+      "duration_min": 540,
+      "cross_midnight": false,
+      "source": {"code": "auto", "label": "Automatic"},
+      "anomalies": ["missing_out_closed_at_next_in"],
+      "in_event_id": 555,
+      "out_event_id": 556
+    }
+  ],
+  "punch_events": [
+    {
+      "id": 555,
+      "device_ts": "2024-05-20T07:59:32+04:00",
+      "server_ts": "2024-05-20T08:00:01+04:00",
+      "action": "in",
+      "device": {"id": 42, "label": "Main Gate"},
+      "face_matched": true,
+      "requires_face": true,
+      "geofence_ok": true,
+      "geofence_rule_violation": false,
+      "out_of_scope": false,
+      "roster_fallback": false,
+      "roster_date": "2024-05-20",
+      "exception": null,
+      "notes": ""
+    }
+  ],
+  "adjustments": [
+    {
+      "id": 77,
+      "employee": 123,
+      "date": "2024-05-20",
+      "delta_work_min": 30,
+      "override_status": "present",
+      "reason": "Manager approved overtime",
+      "created_by_id": 3,
+      "created_at": "2024-05-21T09:00:00Z"
+    }
+  ]
+}
+```
+
+
 ### Roster scheduling
 
 Use `/api/companies/{cid}/roster/schedule-range/` to assign shifts to an entire
