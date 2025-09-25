@@ -1,3 +1,4 @@
+import logging
 import secrets
 
 from django.conf import settings
@@ -6,6 +7,9 @@ from django.core.exceptions import ValidationError
 from django.utils import timezone
 from pagasys.models import Company, Branch, Department, Project, Employee
 from .aws import delete_all_employee_faces
+
+
+logger = logging.getLogger(__name__)
 
 
 class AttendanceDevice(models.Model):
@@ -138,7 +142,14 @@ class FaceEnrollment(models.Model):
         AWS which allowed recognition to continue. Purging the collection here
         guarantees complete removal regardless of how the record is deleted.
         """
-        delete_all_employee_faces(self.employee.company.id, self.employee_id)
+        company = self.employee.company
+        if company is None:
+            logger.warning(
+                "Skipping Rekognition face purge for employee %s without assignment company",
+                self.employee_id,
+            )
+        else:
+            delete_all_employee_faces(company.id, self.employee_id)
         super().delete(*args, **kwargs)
 
 

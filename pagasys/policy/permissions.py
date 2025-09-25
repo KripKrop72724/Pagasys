@@ -1,9 +1,18 @@
+import logging
+
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import BasePermission, SAFE_METHODS
-from django.db import models
+
+from pagasys.utils import employee_company_q
+
+
+logger = logging.getLogger(__name__)
 
 
 class IsCompanyMember(BasePermission):
     """Allow access only to users belonging to the company in the URL."""
+
+    message = "User does not belong to the requested company."
 
     def has_permission(self, request, view):
         user = getattr(request, "user", None)
@@ -14,17 +23,18 @@ class IsCompanyMember(BasePermission):
         company_id = view.kwargs.get("company_id")
         if company_id is None:
             return True
-        user_company_id = None
-        dept = getattr(user, "department", None)
-        if dept and getattr(dept, "branch", None):
-            user_company_id = dept.branch.company_id
-        lic = getattr(user, "trade_license", None)
-        if user_company_id is None and lic:
-            user_company_id = lic.company_id
-        proj = getattr(user, "project", None)
-        if user_company_id is None and proj and getattr(proj, "branch", None):
-            user_company_id = proj.branch.company_id
-        return str(user_company_id) == str(company_id)
+        company = getattr(user, "assignment_company", None)
+        if company is None:
+            self.message = "No department/project assignment available for company scoping."
+            identifier = getattr(user, "pk", None) or getattr(user, "username", None) or "unknown"
+            logger.warning(
+                "Denying company access for user %s due to missing organisational assignment", identifier
+            )
+            return False
+        if str(company.id) != str(company_id):
+            self.message = "User does not belong to the requested company."
+            return False
+        return True
 
 class CompanyScopedQuerysetMixin:
     """Restrict queryset to the company inferred from URL or request.user."""
@@ -40,7 +50,18 @@ class CompanyScopedQuerysetMixin:
                 self._company_cache = Company.objects.get(pk=cid)
             else:
                 user = getattr(self.request, "user", None)
-                self._company_cache = getattr(user, "company", None)
+                if not (user and user.is_authenticated):
+                    raise PermissionDenied("Authentication required to resolve company scope.")
+                company = getattr(user, "assignment_company", None)
+                if company is None:
+                    identifier = getattr(user, "pk", None) or getattr(user, "username", None) or "unknown"
+                    logger.warning(
+                        "Unable to resolve company for user %s without organisational assignment", identifier
+                    )
+                    raise PermissionDenied(
+                        "No department/project assignment available for company scoping."
+                    )
+                self._company_cache = company
         return self._company_cache
 
     def get_queryset(self):
@@ -59,11 +80,7 @@ class CompanyScopedQuerysetMixin:
         if model is ShiftRule:
             return qs.filter(shift__company=company)
         if model is RosterEntry:
-            return qs.filter(
-                models.Q(employee__trade_license__company=company)
-                | models.Q(employee__department__branch__company=company)
-                | models.Q(employee__project__branch__company=company)
-            )
+            return qs.filter(employee_company_q(company, field_prefix="employee"))
         return qs
 
 BRANCH_MANAGER = "Branch Manager"

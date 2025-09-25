@@ -4,11 +4,11 @@ from datetime import date
 
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
-from django.db.models import Q
 from django.utils.dateparse import parse_date
 
 from attendance.models import AttDay, AttPair
 from attendance.services import build_pairs_for, compute_att_day
+from pagasys.utils import employee_company_q
 
 
 class Command(BaseCommand):
@@ -40,13 +40,11 @@ class Command(BaseCommand):
         employee_ids = options.get("employee_ids") or []
         company_ids = options.get("company_ids") or []
 
-        company_filter: Q | None = None
+        company_filter = None
         if company_ids:
-            company_filter = (
-                Q(employee__trade_license__company_id__in=company_ids)
-                | Q(employee__department__branch__company_id__in=company_ids)
-                | Q(employee__project__branch__company_id__in=company_ids)
-            )
+            for cid in company_ids:
+                clause = employee_company_q(cid, field_prefix="employee")
+                company_filter = clause if company_filter is None else company_filter | clause
 
         day_qs = AttDay.objects.filter(date__gte=start, date__lte=end, late_min__gt=0)
         if employee_ids:

@@ -530,7 +530,6 @@ class AttDayAdmin(ScopedAdminMixin, admin.ModelAdmin):
             "employee",
             "employee__department__branch__company",
             "employee__project__branch__company",
-            "employee__trade_license__company",
         )
 
     def _build_day_related_context(self, day):

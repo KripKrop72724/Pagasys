@@ -231,7 +231,6 @@ class RosterViewSet(BasePolicyViewSet):
         "shift",
         "employee__department__branch__company",
         "employee__project__branch__company",
-        "employee__trade_license__company",
     )
     serializer_class = RosterEntrySerializer
     filterset_class = RosterFilter

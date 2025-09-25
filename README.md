@@ -34,6 +34,9 @@ comprehensive automated test suite.
   may be either branch‑scoped or global: leave `branches` empty to serve all
   employees in the company or specify branches to limit usage to those
   locations.
+* **Assignment-based scoping** – Company membership derives strictly from the
+  employee's department or project assignment. Trade licences remain a
+  compliance cross-check but no longer drive queryset scoping or permissions.
 * **Company bank accounts** – Each company can record a bank account number for
   payroll deposits. The field is exposed through the API and a dedicated
   "Financial details" section in the admin.
@@ -65,6 +68,17 @@ comprehensive automated test suite.
   monthly attendance grids via the API or admin interface. See
   [docs/attendance_reports.md](docs/attendance_reports.md) for usage and query
   parameters.
+
+### Company scoping
+
+Company-aware helpers (`Employee.assignment_company`, `scope_queryset`,
+`employee_company_q`) and permissions (`IsCompanyMember`,
+`CompanyScopedQuerysetMixin`) resolve an employee's company by following the
+department → branch → company chain or, when assigned, a project. Trade
+licences still validate branch assignments but they no longer change which
+records a user can see. When a user lacks both department and project
+placements, the helpers return `None` and log a warning so administrators can
+correct the data without exposing cross-company information.
 
 ### Attendance calendar API
 

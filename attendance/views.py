@@ -23,7 +23,7 @@ from drf_spectacular.utils import (
 )
 
 from pagasys.openapi_utils import document_filters
-from pagasys.utils import ensure_in_scope, scope_queryset
+from pagasys.utils import ensure_in_scope, scope_queryset, employee_company_q
 from pagasys.models import Employee, Company, Branch, Department, Project
 from pagasys.pagination import AllRecordsMixin
 from django.http import HttpResponse
@@ -980,8 +980,9 @@ class AttendanceCalendarViewSet(viewsets.GenericViewSet):
             .get_queryset()
             .select_related(
                 "department__branch",
+                "department__branch__company",
                 "project__branch",
-                "trade_license__company",
+                "project__branch__company",
             )
         )
         return scope_queryset(qs, self.request.user)
@@ -989,11 +990,7 @@ class AttendanceCalendarViewSet(viewsets.GenericViewSet):
     def _filter_employees(self, queryset, request, company_id):
         queryset = queryset.filter(is_superuser=False)
         if company_id:
-            queryset = queryset.filter(
-                Q(trade_license__company_id=company_id)
-                | Q(department__branch__company_id=company_id)
-                | Q(project__branch__company_id=company_id)
-            )
+            queryset = queryset.filter(employee_company_q(company_id))
 
         employee_ids = parse_int_list(request.query_params.getlist("employee"))
         if employee_ids:
@@ -1351,9 +1348,7 @@ class AttendanceCalendarViewSet(viewsets.GenericViewSet):
         queryset = AttDay.objects.filter(date__range=(start, end))
         if company_id:
             queryset = queryset.filter(
-                Q(employee__trade_license__company_id=company_id)
-                | Q(employee__department__branch__company_id=company_id)
-                | Q(employee__project__branch__company_id=company_id)
+                employee_company_q(company_id, field_prefix="employee")
             )
         if employee_ids:
             queryset = queryset.filter(employee_id__in=employee_ids)
@@ -1402,11 +1397,7 @@ class AttendanceCalendarViewSet(viewsets.GenericViewSet):
         employee = serializer.validated_data["employee"]
         scoped_employee = scope_queryset(Employee.objects.filter(pk=employee.pk), request.user)
         if company_id:
-            scoped_employee = scoped_employee.filter(
-                Q(trade_license__company_id=company_id)
-                | Q(department__branch__company_id=company_id)
-                | Q(project__branch__company_id=company_id)
-            )
+            scoped_employee = scoped_employee.filter(employee_company_q(company_id))
         if not scoped_employee.exists():
             raise serializers.ValidationError({"detail": "Employee outside allowed scope"})
         adjustment = serializer.save(created_by_id=request.user.id)
