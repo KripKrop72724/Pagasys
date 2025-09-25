@@ -6,7 +6,15 @@ from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from pagasys.models import Company, Branch, Department, Project, Employee, ShiftTemplate
+from pagasys.models import (
+    Company,
+    Branch,
+    Department,
+    Project,
+    Employee,
+    ShiftTemplate,
+    TradeLicense,
+)
 from attendance.models import AttDay, AttPair, AttAdjustment
 
 from attendance.services import PDF_DAY_COLUMNS, build_monthly_calendar
@@ -162,6 +170,25 @@ class AttendanceCalendarViewSetTests(TestCase):
         assert summary["absent"] == 1
         assert summary["locked_days"] == 1
         assert summary["total_ot_min"] == 60
+
+    def test_calendar_list_includes_employee_with_conflicting_license(self):
+        other_company = Company.objects.create(name="OtherCo")
+        license_obj = TradeLicense.objects.create(
+            company=other_company,
+            license_no="OTHER-999",
+            max_visas=5,
+        )
+        Employee.objects.filter(pk=self.admin.pk).update(
+            visa_type="company", trade_license=license_obj
+        )
+        self.admin.refresh_from_db()
+
+        response = self.client.get(self._list_url(), {"month": "2024-05"})
+        assert response.status_code == 200
+        payload = response.json()
+        employee_ids = {item["id"] for item in payload["employees"]}
+        assert self.employee_dept.id in employee_ids
+        assert self.employee_proj.id in employee_ids
 
     def test_calendar_list_includes_pairs_and_adjustments_when_requested(self):
         response = self.client.get(

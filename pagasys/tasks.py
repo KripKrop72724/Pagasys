@@ -42,7 +42,6 @@ def recalc_holiday_roster_entries(calendar_id: int, dates: Iterable[str]) -> int
                 "employee__department__branch__company",
                 "employee__project__branch__work_calendar",
                 "employee__project__branch__company",
-                "employee__trade_license__company",
             )
         )
         updated = []

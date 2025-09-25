@@ -1,5 +1,6 @@
 """Core HR models used throughout the application."""
 
+import logging
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 
@@ -12,6 +13,9 @@ from django.db.models.functions import Lower
 from django.utils import timezone
 from django_countries.fields import CountryField
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+
+logger = logging.getLogger(__name__)
 
 
 class Company(models.Model):
@@ -500,15 +504,25 @@ class Employee(AbstractUser):
     )
 
     @property
-    def company(self):
-        """Convenience access to the employee's company."""
-        if self.trade_license:
-            return self.trade_license.company
-        if self.department:
+    def assignment_company(self):
+        """Company derived from the employee's organisational assignment."""
+        if self.department_id:
             return self.department.branch.company
-        if self.project:
+        if self.project_id:
             return self.project.branch.company
         return None
+
+    @property
+    def company(self):
+        """Convenience access to the employee's company."""
+        company = self.assignment_company
+        if company is None:
+            identifier = getattr(self, "pk", None) or getattr(self, "username", None) or "unsaved"
+            logger.warning(
+                "Employee %s lacks department/project assignment for company resolution",
+                identifier,
+            )
+        return company
 
     @property
     def branch(self):
@@ -631,10 +645,10 @@ class Employee(AbstractUser):
             part for part in [self.first_name, self.middle_name, self.last_name] if part
         )
         parts = [name]
-        if self.trade_license:
-            parts.append(self.trade_license.company.name)
-        elif self.branch:
+        if self.branch:
             parts.append(self.branch.company.name)
+        elif self.trade_license:
+            parts.append(self.trade_license.company.name)
         if self.department:
             parts.append(self.department.branch.name)
             parts.append(self.department.name)
@@ -1190,12 +1204,12 @@ class RosterEntry(models.Model):
 
         # Ensure shift company matches employee company
         employee_company = None
-        if self.employee.trade_license_id:
-            employee_company = self.employee.trade_license.company_id
-        elif self.employee.department_id:
+        if self.employee.department_id:
             employee_company = self.employee.department.branch.company_id
         elif self.employee.project_id:
             employee_company = self.employee.project.branch.company_id
+        elif self.employee.trade_license_id:
+            employee_company = self.employee.trade_license.company_id
         if employee_company and self.shift.company_id != employee_company:
             raise ValidationError("Shift company must match employee company")
 

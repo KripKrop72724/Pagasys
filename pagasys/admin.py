@@ -338,20 +338,27 @@ class EmployeeAdminForm(UserChangeForm):
 
     def _derive_company(self):
         data = self.data or self.initial
-        if data.get("trade_license"):
-            return TradeLicense.objects.filter(pk=data["trade_license"]).values_list("company_id", flat=True).first()
-        if data.get("department"):
-            return Department.objects.filter(pk=data["department"]).values_list("branch__company_id", flat=True).first()
-        if data.get("project"):
-            return Project.objects.filter(pk=data["project"]).values_list("branch__company_id", flat=True).first()
+        department_value = data.get("department") if data else None
+        if department_value:
+            department_id = getattr(department_value, "pk", department_value)
+            return (
+                Department.objects.filter(pk=department_id)
+                .values_list("branch__company_id", flat=True)
+                .first()
+            )
+        project_value = data.get("project") if data else None
+        if project_value:
+            project_id = getattr(project_value, "pk", project_value)
+            return (
+                Project.objects.filter(pk=project_id)
+                .values_list("branch__company_id", flat=True)
+                .first()
+            )
         inst = getattr(self, "instance", None)
         if inst:
-            if inst.trade_license_id:
-                return inst.trade_license.company_id
-            if inst.department_id:
-                return inst.department.branch.company_id
-            if inst.project_id:
-                return inst.project.branch.company_id
+            company = inst.assignment_company
+            if company:
+                return company.pk
         return None
 
 
@@ -411,12 +418,22 @@ class EmployeeAdminCreationForm(AdminUserCreationForm):
 
     def _derive_company(self):
         data = self.data
-        if data.get("trade_license"):
-            return TradeLicense.objects.filter(pk=data["trade_license"]).values_list("company_id", flat=True).first()
-        if data.get("department"):
-            return Department.objects.filter(pk=data["department"]).values_list("branch__company_id", flat=True).first()
-        if data.get("project"):
-            return Project.objects.filter(pk=data["project"]).values_list("branch__company_id", flat=True).first()
+        department_value = data.get("department") if data else None
+        if department_value:
+            department_id = getattr(department_value, "pk", department_value)
+            return (
+                Department.objects.filter(pk=department_id)
+                .values_list("branch__company_id", flat=True)
+                .first()
+            )
+        project_value = data.get("project") if data else None
+        if project_value:
+            project_id = getattr(project_value, "pk", project_value)
+            return (
+                Project.objects.filter(pk=project_id)
+                .values_list("branch__company_id", flat=True)
+                .first()
+            )
         return None
 
 
@@ -563,7 +580,6 @@ class EmployeeAdmin(CleanSaveModelMixin, ScopedAdminMixin, UserAdmin):
     def download_enrollment_links_csv(self, request, queryset):
         employees = list(
             queryset.select_related(
-                "trade_license__company",
                 "department__branch__company",
                 "project__branch__company",
             )

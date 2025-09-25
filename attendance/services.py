@@ -9,7 +9,7 @@ from django.utils import timezone
 from capture.models import PunchEvent, PunchException
 from .models import AttPair, AttDay, LeaveDay, AttAdjustment
 from .serializers import AttPairSerializer, AttAdjustmentSerializer
-from pagasys.models import RosterEntry, ShiftRule
+from pagasys.models import Employee, RosterEntry, ShiftRule
 from pagasys.utils import scope_queryset
 from .services_helpers import (
     _close_open_pairs_with_shift,
@@ -143,6 +143,19 @@ def _eligible(ev: PunchEvent):
     return True, warn
 
 
+def _load_employee_with_company(employee_id: int):
+    """Return an employee with assignment-linked companies eager loaded."""
+
+    return (
+        Employee.objects.select_related(
+            "department__branch__company",
+            "project__branch__company",
+        )
+        .filter(id=employee_id)
+        .first()
+    )
+
+
 @transaction.atomic
 def build_pairs_for(employee_id: int, day: date, shift=None, tz=None) -> int:
     """Construct AttPair records for an employee/day if not locked."""
@@ -150,22 +163,21 @@ def build_pairs_for(employee_id: int, day: date, shift=None, tz=None) -> int:
         return 0
     roster = (
         RosterEntry.objects.select_related(
-            "shift__company", "employee__trade_license__company"
+            "shift__company",
+            "employee__department__branch__company",
+            "employee__project__branch__company",
         )
         .filter(employee_id=employee_id, date=day)
         .first()
     )
+    employee = roster.employee if roster else _load_employee_with_company(employee_id)
     if shift is None:
         shift = roster.shift if roster else None
     if tz is None:
         if shift and getattr(shift, "company", None):
             tz_str = shift.company.timezone
         else:
-            company = (
-                roster.employee.trade_license.company
-                if roster and getattr(roster.employee, "trade_license", None)
-                else None
-            )
+            company = employee.company if employee else None
             tz_str = company.timezone if company else None
         tz = ZoneInfo(tz_str) if tz_str else timezone.get_default_timezone()
     rules = active_rules(shift, day)
@@ -284,11 +296,14 @@ def compute_att_day(employee_id: int, day: date) -> int:
             "shift",
             "employee__work_calendar",
             "employee__department__branch__work_calendar",
-            "employee__trade_license__company",
+            "employee__department__branch__company",
+            "employee__project__branch__work_calendar",
+            "employee__project__branch__company",
         )
         .filter(employee_id=employee_id, date=day)
         .first()
     )
+    employee = roster.employee if roster else _load_employee_with_company(employee_id)
     pairs = list(
         AttPair.objects.filter(employee_id=employee_id, date=day).order_by("in_ts")
     )
@@ -303,11 +318,7 @@ def compute_att_day(employee_id: int, day: date) -> int:
         return 0
 
     shift = roster.shift if roster else None
-    company = (
-        roster.employee.trade_license.company
-        if roster and getattr(roster.employee, "trade_license", None)
-        else None
-    )
+    company = employee.company if employee else None
     if shift and getattr(shift, "company", None):
         tz_str = shift.company.timezone
     else:

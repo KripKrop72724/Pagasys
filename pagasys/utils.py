@@ -46,6 +46,24 @@ ROLE_PRIORITY = [
 ]
 
 
+def _company_id_value(company_or_id):
+    """Normalize a company object or PK to a primary key value."""
+    if company_or_id is None:
+        return None
+    return getattr(company_or_id, "pk", company_or_id)
+
+
+def employee_company_q(company_or_id, *, field_prefix=""):
+    """Return a Q filtering employees linked to the given company."""
+    company_id = _company_id_value(company_or_id)
+    if company_id is None:
+        return models.Q(pk__in=[])
+    prefix = f"{field_prefix}__" if field_prefix else ""
+    return models.Q(**{f"{prefix}department__branch__company_id": company_id}) | models.Q(
+        **{f"{prefix}project__branch__company_id": company_id}
+    )
+
+
 def user_role(user):
     """Determine the highest priority role for a user."""
     if user.is_superuser:
@@ -114,7 +132,9 @@ def scope_queryset(queryset, user):
         if not user.is_superuser:
             queryset = queryset.filter(is_superuser=False)
         if role in ("company_admin", "payroll_manager"):
-            return queryset.filter(trade_license__company=company)
+            if company:
+                return queryset.filter(employee_company_q(company))
+            return queryset.none()
         if role == "branch_manager" and branch:
             return queryset.filter(
                 models.Q(department__branch=branch) | models.Q(project__branch=branch)
@@ -147,7 +167,7 @@ def scope_queryset(queryset, user):
 
     if model is RosterEntry:
         if role in ("company_admin", "payroll_manager") and company:
-            return queryset.filter(employee__trade_license__company=company)
+            return queryset.filter(employee_company_q(company, field_prefix="employee"))
         if role == "branch_manager" and branch:
             return queryset.filter(
                 models.Q(employee__department__branch=branch)
