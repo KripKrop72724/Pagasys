@@ -265,6 +265,19 @@ def build_pairs_for(employee_id: int, day: date, shift=None, tz=None) -> int:
     if open_in:
         pairs.append((open_in, None, 0, {"missing_out": True}))
 
+    def _is_cross_midnight(pin, pout):
+        if not (pin and pout):
+            return False
+        start = getattr(pin, "device_ts", None)
+        end = getattr(pout, "device_ts", None)
+        if start and end:
+            return end.date() != start.date()
+        start_local = getattr(pin, "local_ts", None)
+        end_local = getattr(pout, "local_ts", None)
+        if start_local and end_local:
+            return end_local.date() != start_local.date()
+        return False
+
     saved = 0
     for pin, pout, dur, anomaly in pairs:
         in_id = pin.id if pin else 0
@@ -277,9 +290,7 @@ def build_pairs_for(employee_id: int, day: date, shift=None, tz=None) -> int:
                 in_ts=pin.local_ts if pin else None,
                 out_ts=pout.local_ts if pout else None,
                 duration_min=dur,
-                cross_midnight=bool(
-                    pin and pout and (pout.local_ts.date() != pin.local_ts.date())
-                ),
+                cross_midnight=_is_cross_midnight(pin, pout),
                 anomaly=anomaly,
             ),
         )
