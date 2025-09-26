@@ -71,6 +71,27 @@ def employee_company_q(company_or_id, *, field_prefix=""):
     return company_q
 
 
+def _license_only_employee_q(branch, *, field_prefix=""):
+    """Employees without assignments whose trade license covers the branch."""
+
+    if branch is None:
+        return models.Q(pk__in=[])
+
+    prefix = f"{field_prefix}__" if field_prefix else ""
+    return (
+        models.Q(**{f"{prefix}department__isnull": True})
+        & models.Q(**{f"{prefix}project__isnull": True})
+        & models.Q(**{f"{prefix}trade_license__isnull": False})
+        & (
+            models.Q(**{f"{prefix}trade_license__branches": branch})
+            | (
+                models.Q(**{f"{prefix}trade_license__branches__isnull": True})
+                & models.Q(**{f"{prefix}trade_license__company": branch.company})
+            )
+        )
+    )
+
+
 def user_role(user):
     """Determine the highest priority role for a user."""
     if user.is_superuser:
@@ -146,24 +167,13 @@ def scope_queryset(queryset, user):
         if role == "branch_manager" and branch:
             if company_scope is None:
                 return queryset.none()
-            licence_scope = (
-                models.Q(department__isnull=True)
-                & models.Q(project__isnull=True)
-                & (
-                    models.Q(trade_license__branches=branch)
-                    | (
-                        models.Q(trade_license__branches__isnull=True)
-                        & models.Q(trade_license__company=branch.company)
-                    )
-                )
+            assigned_scope = models.Q(department__branch=branch) | models.Q(
+                project__branch=branch
             )
+            licence_scope = _license_only_employee_q(branch)
             return (
                 queryset.filter(employee_company_q(company_scope))
-                .filter(
-                    models.Q(department__branch=branch)
-                    | models.Q(project__branch=branch)
-                    | licence_scope
-                )
+                .filter(assigned_scope | licence_scope)
                 .distinct()
             )
         if role == "department_manager" and user.department:
@@ -202,22 +212,12 @@ def scope_queryset(queryset, user):
         if role in ("company_admin", "payroll_manager"):
             return queryset
         if role == "branch_manager" and branch:
-            licence_scope = (
-                models.Q(employee__department__isnull=True)
-                & models.Q(employee__project__isnull=True)
-                & (
-                    models.Q(employee__trade_license__branches=branch)
-                    | (
-                        models.Q(employee__trade_license__branches__isnull=True)
-                        & models.Q(employee__trade_license__company=branch.company)
-                    )
-                )
-            )
-            return queryset.filter(
+            assigned_scope = (
                 models.Q(employee__department__branch=branch)
                 | models.Q(employee__project__branch=branch)
-                | licence_scope
-            ).distinct()
+            )
+            licence_scope = _license_only_employee_q(branch, field_prefix="employee")
+            return queryset.filter(assigned_scope | licence_scope).distinct()
         if role == "department_manager" and user.department:
             return queryset.filter(employee__department=user.department)
         if role == "project_manager" and user.project:
