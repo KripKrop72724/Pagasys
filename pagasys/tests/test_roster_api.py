@@ -66,7 +66,7 @@ class RosterEntryApiTests(TestCase):
         # second branch and employee for branch filtering
         self.branch2 = Branch.objects.create(company=self.company, name="B2")
         dept2 = Department.objects.create(branch=self.branch2, name="D2")
-        user2 = Employee.objects.create_user(
+        self.user2 = Employee.objects.create_user(
             username="u2",
             password="pass",
             department=dept2,
@@ -76,7 +76,7 @@ class RosterEntryApiTests(TestCase):
             visa_type="company",
         )
         RosterEntry.objects.create(
-            employee=user2, shift=self.shift, date="2024-07-01"
+            employee=self.user2, shift=self.shift, date="2024-07-01"
         )
 
     def test_filter_date_range(self):
@@ -97,6 +97,19 @@ class RosterEntryApiTests(TestCase):
         resp = self.client.get(f"/api/roster-entries/?branch={self.branch2.id}")
         assert resp.status_code == 200
         assert len(resp.data["results"]) == 1
+
+    def test_filter_branch_prefers_assignment_over_license(self):
+        self.license.branches.add(self.branch2)
+        resp = self.client.get(f"/api/roster-entries/?branch={self.branch.id}")
+        assert resp.status_code == 200
+        assert {entry["employee"] for entry in resp.data["results"]} == {
+            self.user.id
+        }
+        resp = self.client.get(f"/api/roster-entries/?branch={self.branch2.id}")
+        assert resp.status_code == 200
+        assert {entry["employee"] for entry in resp.data["results"]} == {
+            self.user2.id
+        }
 
     def test_ordering(self):
         resp = self.client.get("/api/roster-entries/?ordering=-date")
