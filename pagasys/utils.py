@@ -146,16 +146,23 @@ def scope_queryset(queryset, user):
         if role == "branch_manager" and branch:
             if company_scope is None:
                 return queryset.none()
+            licence_scope = (
+                models.Q(department__isnull=True)
+                & models.Q(project__isnull=True)
+                & (
+                    models.Q(trade_license__branches=branch)
+                    | (
+                        models.Q(trade_license__branches__isnull=True)
+                        & models.Q(trade_license__company=branch.company)
+                    )
+                )
+            )
             return (
                 queryset.filter(employee_company_q(company_scope))
                 .filter(
                     models.Q(department__branch=branch)
                     | models.Q(project__branch=branch)
-                    | models.Q(trade_license__branches=branch)
-                    | (
-                        models.Q(trade_license__branches__isnull=True)
-                        & models.Q(trade_license__company=branch.company)
-                    )
+                    | licence_scope
                 )
                 .distinct()
             )
@@ -195,14 +202,21 @@ def scope_queryset(queryset, user):
         if role in ("company_admin", "payroll_manager"):
             return queryset
         if role == "branch_manager" and branch:
+            licence_scope = (
+                models.Q(employee__department__isnull=True)
+                & models.Q(employee__project__isnull=True)
+                & (
+                    models.Q(employee__trade_license__branches=branch)
+                    | (
+                        models.Q(employee__trade_license__branches__isnull=True)
+                        & models.Q(employee__trade_license__company=branch.company)
+                    )
+                )
+            )
             return queryset.filter(
                 models.Q(employee__department__branch=branch)
                 | models.Q(employee__project__branch=branch)
-                | models.Q(employee__trade_license__branches=branch)
-                | (
-                    models.Q(employee__trade_license__branches__isnull=True)
-                    & models.Q(employee__trade_license__company=branch.company)
-                )
+                | licence_scope
             ).distinct()
         if role == "department_manager" and user.department:
             return queryset.filter(employee__department=user.department)
