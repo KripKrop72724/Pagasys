@@ -393,6 +393,42 @@ class PolicyApiTests(TestCase):
         assert len(resp.data["results"]) == 1
         assert resp.data["results"][0]["employee"] == emp2.id
 
+    def test_roster_list_filters_branch_via_trade_license(self):
+        st = ShiftTemplate.objects.create(
+            company=self.company,
+            name="Shift",
+            start_time="09:00",
+            end_time="17:00",
+        )
+        branch2 = Branch.objects.create(company=self.company, name="B2")
+        license2 = TradeLicense.objects.create(
+            company=self.company,
+            license_no="L2",
+            issued_date="2024-01-01",
+            expiry_date="2099-01-01",
+            max_visas=5,
+        )
+        license2.branches.set([branch2])
+        emp2 = Employee.objects.create_user(
+            username="u2",
+            password="pass",
+            department=self.department,
+            trade_license=license2,
+            hire_date="2024-01-01",
+            employment_type="permanent",
+            visa_type="company",
+        )
+        RosterEntry.objects.create(employee=emp2, date="2024-06-02", shift=st)
+        url = (
+            f"/api/companies/{self.company.id}/roster/"
+            "?date_from=2024-06-02&date_to=2024-06-02"
+            f"&branch={branch2.id}"
+        )
+        resp = self.client.get(url)
+        assert resp.status_code == 200
+        assert len(resp.data["results"]) == 1
+        assert resp.data["results"][0]["employee"] == emp2.id
+
     def test_leave_type_unique_code(self):
         payload = {"code": "VAC", "name": "Vacation"}
         resp1 = self.client.post(
