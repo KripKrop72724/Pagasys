@@ -80,7 +80,11 @@ class RosterFilter(df.FilterSet):
         return qs.filter(
             Q(employee__department__branch_id=value)
             | Q(employee__project__branch_id=value)
-            | Q(employee__trade_license__branches__id=value)
+            | Q(
+                employee__department__branch_id__isnull=True,
+                employee__project__branch_id__isnull=True,
+                employee__trade_license__branches__id=value,
+            )
         )
 
     class Meta:

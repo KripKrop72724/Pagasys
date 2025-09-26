@@ -59,9 +59,16 @@ def employee_company_q(company_or_id, *, field_prefix=""):
     if company_id is None:
         return models.Q(pk__in=[])
     prefix = f"{field_prefix}__" if field_prefix else ""
-    return models.Q(**{f"{prefix}department__branch__company_id": company_id}) | models.Q(
-        **{f"{prefix}project__branch__company_id": company_id}
-    )
+    lookups = [
+        f"{prefix}department__branch__company_id",
+        f"{prefix}project__branch__company_id",
+        f"{prefix}trade_license__company_id",
+        f"{prefix}trade_license__branches__company_id",
+    ]
+    company_q = models.Q()
+    for path in lookups:
+        company_q |= models.Q(**{path: company_id})
+    return company_q
 
 
 def user_role(user):
@@ -131,13 +138,33 @@ def scope_queryset(queryset, user):
     if model is Employee:
         if not user.is_superuser:
             queryset = queryset.filter(is_superuser=False)
+        company_scope = company or getattr(branch, "company", None)
         if role in ("company_admin", "payroll_manager"):
-            if company:
-                return queryset.filter(employee_company_q(company))
+            if company_scope:
+                return queryset.filter(employee_company_q(company_scope)).distinct()
             return queryset.none()
         if role == "branch_manager" and branch:
-            return queryset.filter(
-                models.Q(department__branch=branch) | models.Q(project__branch=branch)
+            if company_scope is None:
+                return queryset.none()
+            licence_scope = (
+                models.Q(department__isnull=True)
+                & models.Q(project__isnull=True)
+                & (
+                    models.Q(trade_license__branches=branch)
+                    | (
+                        models.Q(trade_license__branches__isnull=True)
+                        & models.Q(trade_license__company=branch.company)
+                    )
+                )
+            )
+            return (
+                queryset.filter(employee_company_q(company_scope))
+                .filter(
+                    models.Q(department__branch=branch)
+                    | models.Q(project__branch=branch)
+                    | licence_scope
+                )
+                .distinct()
             )
         if role == "department_manager" and user.department:
             return queryset.filter(department=user.department)
@@ -166,13 +193,31 @@ def scope_queryset(queryset, user):
         return queryset.none()
 
     if model is RosterEntry:
-        if role in ("company_admin", "payroll_manager") and company:
-            return queryset.filter(employee_company_q(company, field_prefix="employee"))
+        company_scope = company or getattr(branch, "company", None)
+        if company_scope is None:
+            return queryset.none()
+        queryset = queryset.filter(
+            employee_company_q(company_scope, field_prefix="employee")
+        ).distinct()
+        if role in ("company_admin", "payroll_manager"):
+            return queryset
         if role == "branch_manager" and branch:
+            licence_scope = (
+                models.Q(employee__department__isnull=True)
+                & models.Q(employee__project__isnull=True)
+                & (
+                    models.Q(employee__trade_license__branches=branch)
+                    | (
+                        models.Q(employee__trade_license__branches__isnull=True)
+                        & models.Q(employee__trade_license__company=branch.company)
+                    )
+                )
+            )
             return queryset.filter(
                 models.Q(employee__department__branch=branch)
                 | models.Q(employee__project__branch=branch)
-            )
+                | licence_scope
+            ).distinct()
         if role == "department_manager" and user.department:
             return queryset.filter(employee__department=user.department)
         if role == "project_manager" and user.project:

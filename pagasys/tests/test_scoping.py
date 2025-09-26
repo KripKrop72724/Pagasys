@@ -3,6 +3,7 @@ from datetime import date, time
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.management import call_command
+from django.db import connection
 from django.test import TestCase
 
 from rest_framework.request import Request
@@ -70,6 +71,12 @@ class CompanyScopedQuerysetTests(TestCase):
         admin_group = Group.objects.get(name="Company Admin")
         self.company_admin.groups.add(admin_group)
 
+        self.company_license = TradeLicense.objects.create(
+            company=self.company,
+            license_no="COMP-LIC-001",
+            max_visas=5,
+        )
+
         self.department_employee = self.User.objects.create_user(
             username="dept-emp",
             password="pass",
@@ -94,6 +101,24 @@ class CompanyScopedQuerysetTests(TestCase):
             employment_type="permanent",
             visa_type="personal",
         )
+        self.trade_license_employee = None
+        if connection.vendor == "sqlite":
+            with connection.cursor() as cursor:
+                cursor.execute("PRAGMA ignore_check_constraints = ON")
+            try:
+                self.trade_license_employee = self.User.objects.create_user(
+                    username="license-emp",
+                    password="pass",
+                    hire_date=date(2024, 1, 5),
+                    employment_type="permanent",
+                    visa_type="company",
+                    trade_license=self.company_license,
+                    department=None,
+                    project=None,
+                )
+            finally:
+                with connection.cursor() as cursor:
+                    cursor.execute("PRAGMA ignore_check_constraints = OFF")
 
         self.department_roster = RosterEntry(
             employee=self.department_employee,
@@ -119,6 +144,16 @@ class CompanyScopedQuerysetTests(TestCase):
         self.other_roster.full_clean()
         self.other_roster.save()
 
+        self.license_roster = None
+        if self.trade_license_employee:
+            self.license_roster = RosterEntry(
+                employee=self.trade_license_employee,
+                shift=self.shift,
+                date=date(2024, 1, 13),
+            )
+            self.license_roster.full_clean()
+            self.license_roster.save()
+
         self.factory = APIRequestFactory()
         self.company_view = type("View", (), {"kwargs": {"company_id": str(self.company.id)}})()
         self.other_company_view = type(
@@ -143,16 +178,20 @@ class CompanyScopedQuerysetTests(TestCase):
         view.action = "list"
         return view.filter_queryset(view.get_queryset())
 
-    def test_company_admin_sees_department_and_project_employees(self):
+    def test_company_admin_sees_department_project_and_license_employees(self):
         qs = scope_queryset(self.User.objects.all(), self.company_admin)
         self.assertIn(self.department_employee, qs)
         self.assertIn(self.project_employee, qs)
+        if self.trade_license_employee:
+            self.assertIn(self.trade_license_employee, qs)
         self.assertNotIn(self.other_employee, qs)
 
     def test_company_admin_sees_roster_entries_for_all_assignments(self):
         qs = scope_queryset(RosterEntry.objects.all(), self.company_admin)
         self.assertIn(self.department_roster, qs)
         self.assertIn(self.project_roster, qs)
+        if self.license_roster:
+            self.assertIn(self.license_roster, qs)
         self.assertNotIn(self.other_roster, qs)
 
     def test_company_admin_roster_api_includes_trade_license_conflict(self):
@@ -177,6 +216,8 @@ class CompanyScopedQuerysetTests(TestCase):
             self.department_employee,
             self.project_employee,
         }
+        if self.trade_license_employee:
+            expected.add(self.trade_license_employee)
         self.assertSetEqual(
             set(self.User.objects.filter(employee_company_q(self.company))),
             expected,
@@ -185,6 +226,22 @@ class CompanyScopedQuerysetTests(TestCase):
             set(self.User.objects.filter(employee_company_q(self.company.id))),
             expected,
         )
+
+    def test_company_admin_roster_api_includes_trade_license_employee(self):
+        if not self.license_roster:
+            self.skipTest(
+                "Requires SQLite constraint override to create trade-licence-only employee"
+            )
+        qs = self._roster_queryset_for(self.company_admin)
+        self.assertIn(self.license_roster, qs)
+
+    def test_company_admin_employee_api_includes_trade_license_employee(self):
+        if not self.trade_license_employee:
+            self.skipTest(
+                "Requires SQLite constraint override to create trade-licence-only employee"
+            )
+        qs = self._employee_queryset_for(self.company_admin)
+        self.assertIn(self.trade_license_employee, qs)
 
     def test_employee_company_ignores_trade_license_when_assignment_present(self):
         mismatch_license = TradeLicense.objects.create(
