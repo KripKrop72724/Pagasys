@@ -80,8 +80,11 @@ def test_delete_all_employee_faces_missing_collection(monkeypatch):
             return FakeClient()
 
     monkeypatch.setattr(aws, "_get_session", lambda: DummySession())
-    delete_all_employee_faces(5, 1)
-    assert called["delete"] is False
+    try:
+        delete_all_employee_faces(5, 1)
+        assert called["delete"] is False
+    finally:
+        aws.reset_clients()
 
 
 @pytest.mark.django_db

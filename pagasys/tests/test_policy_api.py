@@ -457,8 +457,33 @@ class PolicyApiTests(TestCase):
         )
         resp = self.client.get(url)
         assert resp.status_code == 200
-        assert len(resp.data["results"]) == 1
-        assert resp.data["results"][0]["employee"] == emp2.id
+        assert resp.data["results"] == []
+
+        if connection.vendor != "sqlite":
+            self.skipTest("Test requires SQLite check-constraint override")
+        with connection.cursor() as cursor:
+            cursor.execute("PRAGMA ignore_check_constraints = ON")
+        try:
+            license_only = Employee.objects.create_user(
+                username="licensed",
+                password="pass",
+                department=None,
+                project=None,
+                trade_license=license2,
+                hire_date="2024-01-01",
+                employment_type="permanent",
+                visa_type="company",
+            )
+        finally:
+            with connection.cursor() as cursor:
+                cursor.execute("PRAGMA ignore_check_constraints = OFF")
+
+        RosterEntry.objects.create(employee=license_only, date="2024-06-02", shift=st)
+        resp = self.client.get(url)
+        assert resp.status_code == 200
+        employees = [row["employee"] for row in resp.data["results"]]
+        assert license_only.id in employees
+        assert emp2.id not in employees
 
     def test_leave_type_unique_code(self):
         payload = {"code": "VAC", "name": "Vacation"}
