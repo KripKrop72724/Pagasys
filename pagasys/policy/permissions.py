@@ -80,7 +80,9 @@ class CompanyScopedQuerysetMixin:
         if model is ShiftRule:
             return qs.filter(shift__company=company)
         if model is RosterEntry:
-            return qs.filter(employee_company_q(company, field_prefix="employee"))
+            return qs.filter(
+                employee_company_q(company, field_prefix="employee")
+            ).distinct()
         return qs
 
 BRANCH_MANAGER = "Branch Manager"

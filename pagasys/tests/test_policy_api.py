@@ -193,6 +193,37 @@ class PolicyApiTests(TestCase):
         rest_days = sum(item["rest_days"] for item in resp.data)
         assert days == 2 and rest_days == 1
 
+    def test_roster_list_includes_trade_license_only_employee(self):
+        shift = ShiftTemplate.objects.create(
+            company=self.company,
+            name="Shift",
+            start_time="09:00",
+            end_time="17:00",
+        )
+        if connection.vendor != "sqlite":
+            self.skipTest("Test requires SQLite check-constraint override")
+        with connection.cursor() as cursor:
+            cursor.execute("PRAGMA ignore_check_constraints = ON")
+        try:
+            license_only = Employee.objects.create_user(
+                username="licensed", password="pass", trade_license=self.license,
+                department=None, project=None,
+                hire_date="2024-01-01", employment_type="permanent",
+                visa_type="company",
+            )
+        finally:
+            with connection.cursor() as cursor:
+                cursor.execute("PRAGMA ignore_check_constraints = OFF")
+        RosterEntry.objects.create(
+            employee=license_only,
+            date="2024-03-15",
+            shift=shift,
+        )
+        resp = self.client.get(f"/api/companies/{self.company.id}/roster/")
+        assert resp.status_code == 200
+        employees = [entry["employee"] for entry in resp.data["results"]]
+        assert license_only.id in employees
+
     def test_error_shape_from_bulk_upsert(self):
         resp = self.client.post(
             f"/api/companies/{self.company.id}/roster/bulk-upsert/",
